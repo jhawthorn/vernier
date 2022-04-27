@@ -13,7 +13,7 @@ gem 'vernier'
 Record a flamegraph of all **retained** allocations from requiring `irb`.
 
 ```
-ruby -r vernier -e 'Vernier.trace_retained { require "irb" }'
+ruby -r vernier -e 'Vernier.trace_retained(out: "irb.stackcollapse") { require "irb" }'
 ```
 
 The output can then be viewed in speedscope or other flamegraph tools

@@ -2,6 +2,7 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <sstream>
 #include <unordered_map>
 
 #include "vernier.hh"
@@ -93,9 +94,8 @@ trace_retained_stop(VALUE self) {
     rb_tracepoint_disable(tp_freeobj);
 
     retained_collector *collector = &_collector;
-    VALUE hash = rb_hash_new();
-    rb_hash_aset(hash, sym("allocated_objects"), INT2NUM(collector->allocated_objects));
-    rb_hash_aset(hash, sym("freed_objects"), INT2NUM(collector->freed_objects));
+
+    std::stringstream ss;
 
     for (auto& it: collector->object_frames) {
         VALUE obj = it.first;
@@ -103,14 +103,16 @@ trace_retained_stop(VALUE self) {
 
         for (int i = stack.size() - 1; i >= 0; i--) {
             const Frame &frame = stack.frame(i);
-            cout << frame;
-            if (i > 0) cout << ";";
+            ss << frame;
+            if (i > 0) ss << ";";
         }
-        cout << " " << rb_obj_memsize_of(obj) << endl;
-        //cout << stack << endl;
+        ss << " " << rb_obj_memsize_of(obj) << endl;
     }
 
-    return hash;
+    std::string s = ss.str();
+    VALUE str = rb_str_new(s.c_str(), s.size());
+
+    return str;
 }
 
 static void
