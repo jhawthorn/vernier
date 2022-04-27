@@ -20,6 +20,7 @@ static VALUE rb_mVernier;
 struct retained_collector {
     int allocated_objects = 0;
     int freed_objects = 0;
+    bool ignore_lines = true;
 
     std::unordered_set<VALUE> unique_frames;
     std::unordered_map<VALUE, std::unique_ptr<Stack>> object_frames;
@@ -59,6 +60,10 @@ newobj_i(VALUE tpval, void *data) {
 
     for (int i = 0; i < n; i++) {
         collector->unique_frames.insert(frames_buffer[i]);
+    }
+
+    if (collector->ignore_lines) {
+        fill_n(lines_buffer, n, 0);
     }
 
     collector->object_frames.emplace(
