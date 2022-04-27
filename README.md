@@ -1,8 +1,6 @@
 # Vernier
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/vernier`. To experiment with that code, run `bin/console` for an interactive prompt.
-
-TODO: Delete this and the text above, and describe your gem
+Experimental Ruby profiling tool
 
 ## Installation
 
@@ -22,7 +20,16 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+Record a flamegraph of all **retained** allocations from requiring `irb`.
+
+```
+ruby -r vernier -e 'Vernier.trace_retained { require "irb" }'
+```
+
+The output can then be viewed in speedscope or other flamegraph tools
+
+<img width="1082" alt="Screen Shot 2022-04-26 at 8 11 19 PM" src="https://user-images.githubusercontent.com/131752/165440422-3a11f5cc-3018-4455-8918-887c2afa6d6e.png">
+
 
 ## Development
 
