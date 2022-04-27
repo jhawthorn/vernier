@@ -7,7 +7,12 @@ class TestVernier < Minitest::Test
     refute_nil ::Vernier::VERSION
   end
 
-  def test_it_does_something_useful
-    assert false
+  def test_tracing_retained_objects
+    Vernier.trace_retained_start
+
+    100.times { Object.new }
+
+    result = Vernier.trace_retained_stop
+    p result
   end
 end
