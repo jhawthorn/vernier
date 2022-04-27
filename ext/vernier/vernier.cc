@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 #include "vernier.hh"
 #include "stack.hh"
@@ -19,6 +20,7 @@ struct retained_collector {
     int allocated_objects = 0;
     int freed_objects = 0;
 
+    std::unordered_set<VALUE> unique_frames;
     std::unordered_map<VALUE, std::unique_ptr<Stack>> object_frames;
 };
 
@@ -53,6 +55,10 @@ newobj_i(VALUE tpval, void *data) {
     VALUE frames_buffer[2048];
     int lines_buffer[2048];
     int n = rb_profile_frames(0, 2048, frames_buffer, lines_buffer);
+
+    for (int i = 0; i < n; i++) {
+        collector->unique_frames.insert(frames_buffer[i]);
+    }
 
     collector->object_frames.emplace(
             tp.obj,
@@ -166,12 +172,8 @@ retained_collector_mark(void *data) {
     // We don't mark the objects, but we MUST mark the frames, otherwise they
     // can be garbage collected.
     // This may lead to method entries being unnecessarily retained.
-    for (auto& it: collector->object_frames) {
-        const Stack &stack = *it.second;
-
-        for (int i = 0; i < stack.size(); i++) {
-            rb_gc_mark(stack.frames[i]);
-        }
+    for (VALUE frame: collector->unique_frames) {
+        rb_gc_mark(frame);
     }
 }
 
