@@ -8,11 +8,16 @@ class TestVernier < Minitest::Test
   end
 
   def test_tracing_retained_objects
-    Vernier.trace_retained_start
+    retained = []
 
-    100.times { Object.new }
+    result = Vernier.trace_retained do
+      100.times {
+        Object.new
 
-    result = Vernier.trace_retained_stop
+        retained << Object.new
+      }
+    end
+
     p result
   end
 end

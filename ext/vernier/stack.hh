@@ -36,10 +36,14 @@ struct Frame {
 struct Stack {
     std::unique_ptr<VALUE[]> frames;
     std::unique_ptr<int[]> lines;
-    int size;
+    int _size = 0;
+
+    int size() const {
+        return _size;
+    }
 
     Stack(const VALUE *_frames, const int *_lines, int size) :
-        size(size),
+        _size(size),
         frames(std::make_unique<VALUE[]>(size)),
         lines(std::make_unique<int[]>(size))
     {
@@ -48,6 +52,7 @@ struct Stack {
     }
 
     Frame frame(int i) const {
+        if (i >= size()) throw std::out_of_range("nope");
         return Frame{frames[i], lines[i]};
     }
 };
@@ -63,7 +68,7 @@ std::ostream& operator<<(std::ostream& os, const Frame& frame)
 
 std::ostream& operator<<(std::ostream& os, const Stack& stack)
 {
-    for (int i = 0; i < stack.size; i++) {
+    for (int i = 0; i < stack.size(); i++) {
         Frame frame = stack.frame(i);
         os << frame << "\n";
     }

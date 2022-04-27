@@ -5,5 +5,12 @@ require_relative "vernier/vernier"
 
 module Vernier
   class Error < StandardError; end
-  # Your code goes here...
+
+  def self.trace_retained(gc: true)
+    3.times { GC.start } if gc
+    Vernier.trace_retained_start
+    yield
+    3.times { GC.start } if gc
+    Vernier.trace_retained_stop
+  end
 end
