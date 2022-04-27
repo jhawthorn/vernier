@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iomanip>
 #include <vector>
 #include <memory>
 #include <algorithm>
@@ -137,17 +138,20 @@ ruby_object_type_name(VALUE obj) {
 #undef TYPE_CASE
 }
 
-class FrameCache {
-    std::unordered_map<Frame, std::string> map;
+struct FrameList {
+    std::unordered_map<Frame, int> map;
+    std::vector<std::string> list;
 
-    public:
-    const std::string &stringify(Frame frame) {
+    int index(Frame frame) {
         auto it = map.find(frame);
         if (it == map.end()) {
             std::stringstream ss;
             ss << frame;
 
-            auto result = map.insert({frame, ss.str()});
+            list.push_back(ss.str());
+            int idx = list.size() - 1;
+
+            auto result = map.insert({frame, idx});
             it = result.first;
         }
 
@@ -162,23 +166,75 @@ trace_retained_stop(VALUE self) {
 
     retained_collector *collector = &_collector;
 
-    FrameCache stringifier;
+    FrameList frame_list;
+    std::vector<size_t> weights;
 
     std::stringstream ss;
 
+    ss << "{\n";
+    ss << R"(  "exporter": "speedscope@0.6.0",)" << "\n";
+    ss << R"(  "$schema": "https://www.speedscope.app/file-format-schema.json",)" << "\n";
+
+    ss << R"(  "profiles": [)" << "\n";
+    ss << R"(    {)" << "\n";
+    ss << R"(      "type":"sampled",)" << "\n";
+    ss << R"(      "name":"retained",)" << "\n";
+    ss << R"(      "unit":"bytes",)" << "\n";
+    ss << R"(      "startValue":0,)" << "\n";
+    ss << R"(      "endValue":0,)" << "\n";
+    ss << R"(      "samples":[)" << "\n";
+
+    bool first = true;
     for (auto& it: collector->object_frames) {
+
         VALUE obj = it.first;
         const Stack &stack = *it.second;
 
+        ss << (first ? "[" : ",\n[");
         for (int i = stack.size() - 1; i >= 0; i--) {
             const Frame &frame = stack.frame(i);
-            const string &str = stringifier.stringify(frame);
-            ss << str;
-            if (i > 0) ss << ";";
+            int index = frame_list.index(frame);
+            ss << index;
+            if (i > 0) ss << ",";
         }
-        ss << ";" << ruby_object_type_name(obj);
-        ss << " " << rb_obj_memsize_of(obj) << endl;
+        ss << "]";
+
+        size_t memsize = rb_obj_memsize_of(obj);
+        //ss << ";" << ruby_object_type_name(obj);
+        weights.push_back(memsize);
+
+        first = false;
     }
+
+    ss << "\n";
+    ss << R"(      ],)" << "\n";
+    ss << R"(      "weights":[)" << "\n";
+
+    first = true;
+    for (size_t w : weights) {
+        if (!first) ss << "," ;
+        ss << w;
+        first = false;
+    }
+
+    ss << "\n";
+    ss << R"(      ])" << "\n";
+    ss << R"(    })" << "\n"; // sample object
+    ss << R"(  ],)" << "\n";   // samples array
+    ss << R"(  "shared": {)" << "\n";   // samples array
+    ss << R"(    "frames": [)" << "\n";
+
+    first = true;
+    for (const std::string &s : frame_list.list) {
+        if (!first) ss << ",\n";
+        ss << R"(      {"name": )" << std::quoted(s) << "}";
+        first = false;
+    }
+
+    ss << "\n";
+    ss << R"(    ])" << "\n";
+    ss << R"(  })" << "\n";   // samples array
+    ss << R"(})" << "\n";
 
     std::string s = ss.str();
     VALUE str = rb_str_new(s.c_str(), s.size());
