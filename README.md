@@ -4,19 +4,9 @@ Experimental Ruby profiling tool
 
 ## Installation
 
-Add this line to your application's Gemfile:
-
 ```ruby
 gem 'vernier'
 ```
-
-And then execute:
-
-    $ bundle install
-
-Or install it yourself as:
-
-    $ gem install vernier
 
 ## Usage
 
