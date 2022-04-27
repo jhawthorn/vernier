@@ -137,12 +137,32 @@ ruby_object_type_name(VALUE obj) {
 #undef TYPE_CASE
 }
 
+class FrameCache {
+    std::unordered_map<Frame, std::string> map;
+
+    public:
+    const std::string &stringify(Frame frame) {
+        auto it = map.find(frame);
+        if (it == map.end()) {
+            std::stringstream ss;
+            ss << frame;
+
+            auto result = map.insert({frame, ss.str()});
+            it = result.first;
+        }
+
+        return it->second;
+    }
+};
+
 static VALUE
 trace_retained_stop(VALUE self) {
     rb_tracepoint_disable(tp_newobj);
     rb_tracepoint_disable(tp_freeobj);
 
     retained_collector *collector = &_collector;
+
+    FrameCache stringifier;
 
     std::stringstream ss;
 
@@ -152,7 +172,8 @@ trace_retained_stop(VALUE self) {
 
         for (int i = stack.size() - 1; i >= 0; i--) {
             const Frame &frame = stack.frame(i);
-            ss << frame;
+            const string &str = stringifier.stringify(frame);
+            ss << str;
             if (i > 0) ss << ";";
         }
         ss << ";" << ruby_object_type_name(obj);

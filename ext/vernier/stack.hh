@@ -33,6 +33,19 @@ struct Frame {
     }
 };
 
+bool operator==(const Frame& lhs, const Frame& rhs) noexcept {
+    return lhs.frame == rhs.frame && lhs.line == rhs.line;
+}
+
+template<>
+struct std::hash<Frame>
+{
+    std::size_t operator()(Frame const& s) const noexcept
+    {
+        return s.frame ^ s.line;
+    }
+};
+
 struct Stack {
     std::unique_ptr<VALUE[]> frames;
     std::unique_ptr<int[]> lines;
