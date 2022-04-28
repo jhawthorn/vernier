@@ -24,6 +24,14 @@ struct retained_collector {
 
     std::unordered_set<VALUE> unique_frames;
     std::unordered_map<VALUE, std::unique_ptr<Stack>> object_frames;
+
+    void reset() {
+        unique_frames.clear();
+        object_frames.clear();
+
+        allocated_objects = 0;
+        freed_objects = 0;
+    }
 };
 
 struct TraceArg {
@@ -271,6 +279,8 @@ trace_retained_stop(VALUE self) {
 
     std::string s = ss.str();
     VALUE str = rb_str_new(s.c_str(), s.size());
+
+    collector->reset();
 
     return str;
 }
