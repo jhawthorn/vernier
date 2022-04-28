@@ -144,19 +144,33 @@ ruby_object_type_name(VALUE obj) {
 }
 
 struct FrameList {
-    std::unordered_map<Frame, int> map;
+    std::unordered_map<Frame, int> frame_to_idx;
+    std::unordered_map<std::string, int> string_to_idx;
+
     std::vector<std::string> list;
 
-    int index(Frame frame) {
-        auto it = map.find(frame);
-        if (it == map.end()) {
+    int string_index(std::string str) {
+        auto it = string_to_idx.find(str);
+        if (it == string_to_idx.end()) {
+            list.push_back(str);
+            int idx = list.size() - 1;
+
+            auto result = string_to_idx.insert({str, idx});
+            it = result.first;
+        }
+
+        return it->second;
+    }
+
+    int frame_index(Frame frame) {
+        auto it = frame_to_idx.find(frame);
+        if (it == frame_to_idx.end()) {
             std::stringstream ss;
             ss << frame;
 
-            list.push_back(ss.str());
-            int idx = list.size() - 1;
+            int idx = string_index(ss.str());
 
-            auto result = map.insert({frame, idx});
+            auto result = frame_to_idx.insert({frame, idx});
             it = result.first;
         }
 
@@ -212,7 +226,7 @@ trace_retained_stop(VALUE self) {
         ss << (first ? "[" : ",\n[");
         for (int i = stack.size() - 1; i >= 0; i--) {
             const Frame &frame = stack.frame(i);
-            int index = frame_list.index(frame);
+            int index = frame_list.frame_index(frame);
             ss << index;
             if (i > 0) ss << ",";
         }
