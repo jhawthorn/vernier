@@ -174,6 +174,21 @@ trace_retained_stop(VALUE self) {
     FrameList frame_list;
     std::vector<size_t> weights;
 
+    std::unordered_map<Stack, size_t> unique_stacks;
+    for (auto& collect_it: collector->object_frames) {
+        VALUE obj = collect_it.first;
+        const Stack &stack = *collect_it.second;
+
+        size_t memsize = rb_obj_memsize_of(obj);
+
+        auto it = unique_stacks.find(stack);
+        if (it == unique_stacks.end()) {
+            unique_stacks.insert({stack, memsize});
+        } else {
+            it->second += memsize;
+        }
+    }
+
     std::stringstream ss;
 
     ss << "{\n";
@@ -190,10 +205,9 @@ trace_retained_stop(VALUE self) {
     ss << R"(      "samples":[)" << "\n";
 
     bool first = true;
-    for (auto& it: collector->object_frames) {
-
-        VALUE obj = it.first;
-        const Stack &stack = *it.second;
+    for (auto& it: unique_stacks) {
+        size_t memsize = it.second;
+        const Stack &stack = it.first;
 
         ss << (first ? "[" : ",\n[");
         for (int i = stack.size() - 1; i >= 0; i--) {
@@ -204,7 +218,7 @@ trace_retained_stop(VALUE self) {
         }
         ss << "]";
 
-        size_t memsize = rb_obj_memsize_of(obj);
+        //size_t memsize = rb_obj_memsize_of(obj);
         //ss << ";" << ruby_object_type_name(obj);
         weights.push_back(memsize);
 

@@ -64,11 +64,55 @@ struct Stack {
         std::copy_n(_lines, size, &lines[0]);
     }
 
+    Stack(const Stack &s) :
+        _size(s.size()),
+        frames(std::make_unique<VALUE[]>(s.size())),
+        lines(std::make_unique<int[]>(s.size()))
+    {
+        std::copy_n(&s.frames[0], s.size(), &frames[0]);
+        std::copy_n(&s.lines[0], s.size(), &lines[0]);
+    }
+
     Frame frame(int i) const {
         if (i >= size()) throw std::out_of_range("nope");
         return Frame{frames[i], lines[i]};
     }
 };
+
+bool operator==(const Stack& lhs, const Stack& rhs) noexcept {
+    return lhs.size() == rhs.size() &&
+        std::equal(&lhs.frames[0], &lhs.frames[lhs.size()], &rhs.frames[0]) &&
+        std::equal(&lhs.lines[0], &lhs.lines[lhs.size()], &rhs.lines[0]);
+}
+
+// https://xoshiro.di.unimi.it/splitmix64.c
+// https://nullprogram.com/blog/2018/07/31/
+uint64_t
+hash64(uint64_t x)
+{
+    x ^= x >> 16;
+    x *= 0x7feb352dU;
+    x ^= x >> 15;
+    x *= 0x846ca68bU;
+    x ^= x >> 16;
+    return x;
+}
+
+template<>
+struct std::hash<Stack>
+{
+    std::size_t operator()(Stack const& s) const noexcept
+    {
+        size_t hash = 0;
+        for (int i = 0; i < s.size(); i++) {
+            VALUE frame = s.frames[i];
+            hash ^= frame;
+            hash = hash64(hash);
+        }
+        return hash;
+    }
+};
+
 
 std::ostream& operator<<(std::ostream& os, const Frame& frame)
 {
