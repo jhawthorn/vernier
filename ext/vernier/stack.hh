@@ -41,6 +41,26 @@ struct FrameInfo {
     int line;
 };
 
+bool operator==(const FrameInfo& lhs, const FrameInfo& rhs) noexcept {
+    return
+        lhs.label == rhs.label &&
+        lhs.file == rhs.file &&
+        lhs.line == rhs.line;
+}
+
+template<>
+struct std::hash<FrameInfo>
+{
+    std::size_t operator()(FrameInfo const& f) const noexcept
+    {
+        return
+            std::hash<std::string>{}(f.label) ^
+            std::hash<std::string>{}(f.file) ^
+            f.line;
+    }
+};
+
+
 struct Frame {
     VALUE frame;
     int line;
