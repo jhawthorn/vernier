@@ -7,29 +7,46 @@
 #include <memory>
 #include <algorithm>
 
+struct FrameInfo {
+    static const char *label_cstr(VALUE frame) {
+        VALUE label = rb_profile_frame_full_label(frame);
+        return StringValueCStr(label);
+    }
+
+    static const char *file_cstr(VALUE frame) {
+        VALUE file = rb_profile_frame_absolute_path(frame);
+        if (NIL_P(file))
+            file = rb_profile_frame_path(frame);
+        if (NIL_P(file)) {
+            return "";
+        } else {
+            return StringValueCStr(file);
+        }
+    }
+
+    static int first_lineno_int(VALUE frame) {
+        VALUE first_lineno = rb_profile_frame_first_lineno(frame);
+        return FIX2INT(first_lineno);
+    }
+
+    FrameInfo(VALUE frame, int line) :
+        label(label_cstr(frame)),
+        file(file_cstr(frame)),
+        //first_lineno(first_lineno_int(frame)),
+        line(line) { }
+
+    std::string label;
+    std::string file;
+    // int first_lineno;
+    int line;
+};
+
 struct Frame {
     VALUE frame;
     int line;
 
-    VALUE full_label() const {
-        return rb_profile_frame_full_label(frame);
-    }
-
-    VALUE absolute_path() const {
-        return rb_profile_frame_absolute_path(frame);
-    }
-
-    VALUE path() const {
-        return rb_profile_frame_path(frame);
-    }
-
-    VALUE file() const {
-        VALUE file = absolute_path();
-        return NIL_P(file) ? path() : file;
-    }
-
-    VALUE first_lineno() const {
-        return rb_profile_frame_first_lineno(frame);
+    FrameInfo info() const {
+        return FrameInfo(frame, line);
     }
 };
 
@@ -113,14 +130,16 @@ struct std::hash<Stack>
     }
 };
 
+std::ostream& operator<<(std::ostream& os, const FrameInfo& info)
+{
+    os << info.file << ":" << info.line << ":in `" << info.label << "'";
+    return os;
+}
+
 
 std::ostream& operator<<(std::ostream& os, const Frame& frame)
 {
-    VALUE label = frame.full_label();
-    VALUE file = frame.absolute_path();
-    const char *file_cstr = NIL_P(file) ? "" : StringValueCStr(file);
-    os << file_cstr << ":" << frame.line << ":in `" << StringValueCStr(label) << "'";
-    return os;
+    return os << frame.info();
 }
 
 std::ostream& operator<<(std::ostream& os, const Stack& stack)
