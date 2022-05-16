@@ -250,9 +250,8 @@ trace_retained_stop(VALUE self) {
     rb_tracepoint_disable(tp_freeobj);
 
     std::unordered_map<Stack, size_t> unique_stacks;
-    for (auto& collect_it: collector->object_frames) {
-        VALUE obj = collect_it.first;
-        const Stack &stack = *collect_it.second;
+    for (auto& [obj, stack_ptr]: collector->object_frames) {
+        const Stack &stack = *stack_ptr;
 
         size_t memsize = rb_obj_memsize_of(obj);
 
