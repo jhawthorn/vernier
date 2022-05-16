@@ -152,7 +152,11 @@ struct std::hash<Stack>
 
 std::ostream& operator<<(std::ostream& os, const FrameInfo& info)
 {
-    os << info.file << ":" << info.line << ":in `" << info.label << "'";
+    os << info.file;
+    if (info.line) {
+        os << ":" << info.line;
+    }
+    os << ":in `" << info.label << "'";
     return os;
 }
 
