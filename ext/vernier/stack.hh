@@ -83,7 +83,34 @@ struct std::hash<Frame>
     }
 };
 
-struct Stack {
+struct BaseStack {
+    virtual ~BaseStack() {};
+
+	virtual int size() const = 0;
+    virtual FrameInfo frame_info(int i) const = 0;
+};
+
+struct InfoStack : public BaseStack {
+    std::vector<FrameInfo> frames;
+
+    int size() const override {
+        return frames.size();
+    }
+
+    InfoStack() {
+    }
+
+    void push_back(FrameInfo i) {
+        frames.push_back(i);
+    }
+
+    FrameInfo frame_info(int i) const {
+        if (i >= size()) throw std::out_of_range("nope");
+        return frames[i];
+    }
+};
+
+struct Stack : public BaseStack {
     std::unique_ptr<VALUE[]> frames;
     std::unique_ptr<int[]> lines;
     int _size = 0;
@@ -114,6 +141,10 @@ struct Stack {
         if (i >= size()) throw std::out_of_range("nope");
         return Frame{frames[i], lines[i]};
     }
+
+    FrameInfo frame_info(int i) const {
+        return frame(i).info();
+    }
 };
 
 bool operator==(const Stack& lhs, const Stack& rhs) noexcept {
@@ -121,6 +152,12 @@ bool operator==(const Stack& lhs, const Stack& rhs) noexcept {
         std::equal(&lhs.frames[0], &lhs.frames[lhs.size()], &rhs.frames[0]) &&
         std::equal(&lhs.lines[0], &lhs.lines[lhs.size()], &rhs.lines[0]);
 }
+
+bool operator==(const InfoStack& lhs, const InfoStack& rhs) noexcept {
+    return lhs.size() == rhs.size() &&
+        std::equal(lhs.frames.begin(), lhs.frames.end(), rhs.frames.begin());
+}
+
 
 // https://xoshiro.di.unimi.it/splitmix64.c
 // https://nullprogram.com/blog/2018/07/31/
@@ -150,6 +187,21 @@ struct std::hash<Stack>
     }
 };
 
+template<>
+struct std::hash<InfoStack>
+{
+    std::size_t operator()(Stack const& s) const noexcept
+    {
+        size_t hash = 0;
+        for (int i = 0; i < s.size(); i++) {
+            FrameInfo info = s.frame_info(i);
+            hash ^= std::hash<FrameInfo>{}(info);
+            hash = hash64(hash);
+        }
+        return hash;
+    }
+};
+
 std::ostream& operator<<(std::ostream& os, const FrameInfo& info)
 {
     os << info.file;
@@ -166,11 +218,11 @@ std::ostream& operator<<(std::ostream& os, const Frame& frame)
     return os << frame.info();
 }
 
-std::ostream& operator<<(std::ostream& os, const Stack& stack)
+std::ostream& operator<<(std::ostream& os, const BaseStack& stack)
 {
     for (int i = 0; i < stack.size(); i++) {
-        Frame frame = stack.frame(i);
-        os << frame << "\n";
+        FrameInfo info = stack.frame_info(i);
+        os << info << "\n";
     }
 
     return os;
