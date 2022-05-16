@@ -10,7 +10,6 @@ module Vernier
     3.times { GC.start } if gc
     Vernier.trace_retained_start
     yield
-    3.times { GC.start } if gc
     result = Vernier.trace_retained_stop
 
     File.write(out, result) if out

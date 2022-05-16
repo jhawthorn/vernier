@@ -17,23 +17,6 @@ using namespace std;
 
 static VALUE rb_mVernier;
 
-struct retained_collector {
-    int allocated_objects = 0;
-    int freed_objects = 0;
-    bool ignore_lines = true;
-
-    std::unordered_set<VALUE> unique_frames;
-    std::unordered_map<VALUE, std::unique_ptr<Stack>> object_frames;
-
-    void reset() {
-        unique_frames.clear();
-        object_frames.clear();
-
-        allocated_objects = 0;
-        freed_objects = 0;
-    }
-};
-
 struct TraceArg {
     rb_trace_arg_t *tparg;
     VALUE obj;
@@ -49,6 +32,80 @@ struct TraceArg {
         line = rb_tracearg_lineno(tparg);
         mid = rb_tracearg_method_id(tparg);
         klass = rb_tracearg_defined_class(tparg);
+    }
+};
+
+struct FrameList {
+    std::unordered_map<Frame, int> frame_to_idx;
+    std::unordered_map<FrameInfo, int> frame_info_to_idx;
+    std::unordered_map<std::string, int> string_to_idx;
+
+    std::vector<std::string> list;
+
+    int string_index(const std::string str) {
+        auto it = string_to_idx.find(str);
+        if (it == string_to_idx.end()) {
+            list.push_back(str);
+            int idx = list.size() - 1;
+
+            auto result = string_to_idx.insert({str, idx});
+            it = result.first;
+        }
+
+        return it->second;
+    }
+
+    int frame_info_index(const FrameInfo info) {
+        auto it = frame_info_to_idx.find(info);
+        if (it == frame_info_to_idx.end()) {
+            std::stringstream ss;
+            ss << info;
+
+            int idx = string_index(ss.str());
+
+            auto result = frame_info_to_idx.insert({info, idx});
+            it = result.first;
+        }
+
+        return it->second;
+    }
+
+    int frame_index(const Frame frame) {
+        auto it = frame_to_idx.find(frame);
+        if (it == frame_to_idx.end()) {
+            int idx = frame_info_index(frame.info());
+
+            auto result = frame_to_idx.insert({frame, idx});
+            it = result.first;
+        }
+
+        return it->second;
+    }
+
+    void clear() {
+        list.clear();
+        frame_to_idx.clear();
+        frame_info_to_idx.clear();
+        string_to_idx.clear();
+    }
+};
+
+struct retained_collector {
+    int allocated_objects = 0;
+    int freed_objects = 0;
+    bool ignore_lines = true;
+
+    std::unordered_set<VALUE> unique_frames;
+    std::unordered_map<VALUE, std::unique_ptr<Stack>> object_frames;
+    FrameList frame_list;
+
+    void reset() {
+        unique_frames.clear();
+        object_frames.clear();
+        frame_list.clear();
+
+        allocated_objects = 0;
+        freed_objects = 0;
     }
 };
 
@@ -151,50 +208,46 @@ ruby_object_type_name(VALUE obj) {
 #undef TYPE_CASE
 }
 
-struct FrameList {
-    std::unordered_map<Frame, int> frame_to_idx;
-    std::unordered_map<std::string, int> string_to_idx;
-
-    std::vector<std::string> list;
-
-    int string_index(std::string str) {
-        auto it = string_to_idx.find(str);
-        if (it == string_to_idx.end()) {
-            list.push_back(str);
-            int idx = list.size() - 1;
-
-            auto result = string_to_idx.insert({str, idx});
-            it = result.first;
+void index_frames(retained_collector *collector) {
+    // Stringify all unique frames we've observed so far
+    for (const auto& [obj, stack]: collector->object_frames) {
+        for (int i = 0; i < stack->size(); i++) {
+            Frame frame = stack->frame(i);
+            collector->frame_list.frame_index(frame);
         }
-
-        return it->second;
     }
-
-    int frame_index(Frame frame) {
-        auto it = frame_to_idx.find(frame);
-        if (it == frame_to_idx.end()) {
-            std::stringstream ss;
-            ss << frame;
-
-            int idx = string_index(ss.str());
-
-            auto result = frame_to_idx.insert({frame, idx});
-            it = result.first;
-        }
-
-        return it->second;
-    }
-};
+}
 
 static VALUE
 trace_retained_stop(VALUE self) {
+    // GC before we start turning stacks into strings
+    rb_gc();
+
+    // Stop tracking any more new objects, but we'll continue tracking free'd
+    // objects as we may be able to free some as we remove our own references
+    // to stack frames.
     rb_tracepoint_disable(tp_newobj);
-    rb_tracepoint_disable(tp_freeobj);
 
     retained_collector *collector = &_collector;
 
-    FrameList frame_list;
     std::vector<size_t> weights;
+
+    FrameList &frame_list = collector->frame_list;
+
+    index_frames(collector);
+
+    // We should have collected info for all our frames, so no need to continue
+    // marking them
+    collector->unique_frames.clear();
+
+    // GC a few times in hopes of freeing those references
+    size_t before = collector->freed_objects;
+
+    rb_gc();
+    rb_gc();
+    rb_gc();
+
+    rb_tracepoint_disable(tp_freeobj);
 
     std::unordered_map<Stack, size_t> unique_stacks;
     for (auto& collect_it: collector->object_frames) {
@@ -291,7 +344,8 @@ retained_collector_mark(void *data) {
 
     // We don't mark the objects, but we MUST mark the frames, otherwise they
     // can be garbage collected.
-    // This may lead to method entries being unnecessarily retained.
+    // When we stop collection we will stringify the remaining frames, and then
+    // clear them from the set, allowing them to be removed from out output.
     for (VALUE frame: collector->unique_frames) {
         rb_gc_mark(frame);
     }

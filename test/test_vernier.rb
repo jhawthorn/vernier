@@ -59,4 +59,65 @@ class TestVernier < Minitest::Test
     #  puts line.split(";")
     #end
   end
+
+  def test_empty_block
+    result = Vernier.trace_retained do
+    end
+
+    result = ReportReader.new(result)
+    assert result.total_bytes < 40 * 8
+  end
+
+  def test_nothing_retained
+    result = Vernier.trace_retained do
+      100.times {
+        Object.new
+      }
+    end
+
+    result = ReportReader.new(result)
+    assert result.total_bytes < 40 * 8
+  end
+
+  def test_nothing_retained_in_eval
+    result = Vernier.trace_retained do
+      100.times {
+        eval "Object.new"
+      }
+    end
+
+    result = ReportReader.new(result)
+    assert result.total_bytes < 40 * 8
+  end
+
+  def build_large_module
+    eval <<~'RUBY'
+    mod = Module.new
+    1.times do |i|
+      mod.module_eval "define_singleton_method(:test#{i}) { Object.new }; test#{i}"
+    end
+    RUBY
+    nil
+  end
+
+  def test_nothing_retained_in_module_eval
+    # Warm
+    build_large_module
+
+    result = Vernier.trace_retained do
+      # Allocate a large module
+      build_large_module
+      build_large_module
+      build_large_module
+
+      # Do some other object allocations
+      10_000.times { Object.new }
+    end
+
+    result = ReportReader.new(result)
+
+    # Ideally this would be lower around 320, but in many cases it does seem to
+    # use more memory
+    assert_operator result.total_bytes, :<, 2500
+  end
 end
