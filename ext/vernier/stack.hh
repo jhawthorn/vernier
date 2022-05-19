@@ -35,6 +35,11 @@ struct FrameInfo {
         //first_lineno(first_lineno_int(frame)),
         line(line) { }
 
+    FrameInfo(std::string label, std::string file = "", int line = 0) :
+        label(label),
+        file(file),
+        line(line) { }
+
     std::string label;
     std::string file;
     // int first_lineno;
@@ -100,11 +105,17 @@ struct InfoStack : public BaseStack {
     InfoStack() {
     }
 
+    InfoStack(const BaseStack &stack) {
+        for (int i = 0; i < stack.size(); i++) {
+            push_back(stack.frame_info(i));
+        }
+    }
+
     void push_back(FrameInfo i) {
         frames.push_back(i);
     }
 
-    FrameInfo frame_info(int i) const {
+    FrameInfo frame_info(int i) const override {
         if (i >= size()) throw std::out_of_range("nope");
         return frames[i];
     }
@@ -190,7 +201,7 @@ struct std::hash<Stack>
 template<>
 struct std::hash<InfoStack>
 {
-    std::size_t operator()(Stack const& s) const noexcept
+    std::size_t operator()(InfoStack const& s) const noexcept
     {
         size_t hash = 0;
         for (int i = 0; i < s.size(); i++) {

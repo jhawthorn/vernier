@@ -236,6 +236,12 @@ trace_retained_stop(VALUE self) {
 
     index_frames(collector);
 
+    std::unordered_map<VALUE, FrameInfo> frame_to_info;
+    for (const auto &frame: collector->unique_frames) {
+	    FrameInfo info(frame, 0);
+	    frame_to_info.insert({frame, info});
+    }
+
     // We should have collected info for all our frames, so no need to continue
     // marking them
     collector->unique_frames.clear();
@@ -249,15 +255,23 @@ trace_retained_stop(VALUE self) {
 
     rb_tracepoint_disable(tp_freeobj);
 
-    std::unordered_map<Stack, size_t> unique_stacks;
+    std::unordered_map<InfoStack, size_t> unique_stacks;
     for (auto& [obj, stack_ptr]: collector->object_frames) {
         const Stack &stack = *stack_ptr;
+	InfoStack info_stack;
+	info_stack.push_back(FrameInfo{ruby_object_type_name(obj)});
+	for (int i = 0; i < stack.size(); i++) {
+		Frame frame = stack.frame(i);
+		FrameInfo info = frame_to_info.at(frame.frame);
+		info.line = frame.line;
+		info_stack.push_back(info);
+	}
 
         size_t memsize = rb_obj_memsize_of(obj);
 
-        auto it = unique_stacks.find(stack);
+        auto it = unique_stacks.find(info_stack);
         if (it == unique_stacks.end()) {
-            unique_stacks.insert({stack, memsize});
+            unique_stacks.insert({info_stack, memsize});
         } else {
             it->second += memsize;
         }
@@ -281,12 +295,12 @@ trace_retained_stop(VALUE self) {
     bool first = true;
     for (auto& it: unique_stacks) {
         size_t memsize = it.second;
-        const Stack &stack = it.first;
+        const InfoStack &stack = it.first;
 
         ss << (first ? "[" : ",\n[");
         for (int i = stack.size() - 1; i >= 0; i--) {
-            const Frame &frame = stack.frame(i);
-            int index = frame_list.frame_index(frame);
+            const FrameInfo &frame = stack.frame_info(i);
+            int index = frame_list.frame_info_index(frame);
             ss << index;
             if (i > 0) ss << ",";
         }
