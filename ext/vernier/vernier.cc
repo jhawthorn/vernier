@@ -265,6 +265,11 @@ trace_retained_stop(VALUE self) {
 		info_stack.push_back(info);
 	}
 
+        enum ruby_value_type type = BUILTIN_TYPE(obj);
+        if (type == 0) {
+            fprintf(stderr, "ignoring invalid type: %i of %p\n", type, (void *)obj);
+            continue;
+        }
         size_t memsize = rb_obj_memsize_of(obj);
 
         auto it = unique_stacks.find(info_stack);
