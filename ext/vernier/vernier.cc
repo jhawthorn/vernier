@@ -253,8 +253,6 @@ trace_retained_stop(VALUE self) {
     rb_gc();
     rb_gc();
 
-    rb_tracepoint_disable(tp_freeobj);
-
     std::unordered_map<InfoStack, size_t> unique_stacks;
     for (auto& [obj, stack_ptr]: collector->object_frames) {
         const Stack &stack = *stack_ptr;
@@ -276,6 +274,8 @@ trace_retained_stop(VALUE self) {
             it->second += memsize;
         }
     }
+
+    rb_tracepoint_disable(tp_freeobj);
 
     std::stringstream ss;
 
