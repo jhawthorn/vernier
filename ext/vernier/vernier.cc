@@ -95,9 +95,20 @@ struct retained_collector {
     int freed_objects = 0;
     bool ignore_lines = true;
 
+    bool running = false;
+
     std::unordered_set<VALUE> unique_frames;
     std::unordered_map<VALUE, std::unique_ptr<Stack>> object_frames;
     FrameList frame_list;
+
+    bool start() {
+        if (running) {
+            return false;
+        } else {
+            running = true;
+            return true;
+        }
+    }
 
     void reset() {
         unique_frames.clear();
@@ -106,6 +117,8 @@ struct retained_collector {
 
         allocated_objects = 0;
         freed_objects = 0;
+
+        running = false;
     }
 };
 
@@ -150,6 +163,10 @@ freeobj_i(VALUE tpval, void *data) {
 static VALUE
 trace_retained_start(VALUE self) {
     retained_collector *collector = &_collector;
+
+    if (!collector->start()) {
+        rb_raise(rb_eRuntimeError, "already running");
+    }
 
     tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, collector);
     tp_freeobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_FREEOBJ, freeobj_i, collector);

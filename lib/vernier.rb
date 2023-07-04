@@ -9,8 +9,13 @@ module Vernier
   def self.trace_retained(out: nil, gc: true)
     3.times { GC.start } if gc
     Vernier.trace_retained_start
-    yield
-    result = Vernier.trace_retained_stop
+
+    result = nil
+    begin
+      yield
+    ensure
+      result = Vernier.trace_retained_stop
+    end
 
     File.write(out, result) if out
     result
