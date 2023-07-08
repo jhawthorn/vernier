@@ -272,34 +272,6 @@ trace_retained_stop(VALUE self) {
     rb_gc();
     rb_gc();
 
-    std::unordered_map<InfoStack, size_t> unique_stacks;
-    for (auto& [obj, stack_ptr]: collector->object_frames) {
-        const Stack &stack = *stack_ptr;
-
-        InfoStack info_stack;
-        //info_stack.push_back(FrameInfo{ruby_object_type_name(obj)});
-        for (int i = 0; i < stack.size(); i++) {
-            Frame frame = stack.frame(i);
-            FrameInfo info = frame_to_info.at(frame.frame);
-            info.line = frame.line;
-            info_stack.push_back(info);
-        }
-
-        enum ruby_value_type type = BUILTIN_TYPE(obj);
-        if (type == 0) {
-            fprintf(stderr, "ignoring invalid type: %i of %p\n", type, (void *)obj);
-            continue;
-        }
-        size_t memsize = rb_obj_memsize_of(obj);
-
-        auto it = unique_stacks.find(info_stack);
-        if (it == unique_stacks.end()) {
-            unique_stacks.insert({info_stack, memsize});
-        } else {
-            it->second += memsize;
-        }
-    }
-
     rb_tracepoint_disable(tp_freeobj);
 
     std::stringstream ss;
@@ -318,9 +290,9 @@ trace_retained_stop(VALUE self) {
     ss << R"(      "samples":[)" << "\n";
 
     bool first = true;
-    for (auto& it: unique_stacks) {
-        size_t memsize = it.second;
-        const InfoStack &stack = it.first;
+    for (auto& it: collector->object_frames) {
+        VALUE obj = it.first;
+        const Stack &stack = *it.second;
 
         ss << (first ? "[" : ",\n[");
         for (int i = stack.size() - 1; i >= 0; i--) {
@@ -331,7 +303,7 @@ trace_retained_stop(VALUE self) {
         }
         ss << "]";
 
-        //size_t memsize = rb_obj_memsize_of(obj);
+        size_t memsize = rb_obj_memsize_of(obj);
         //ss << ";" << ruby_object_type_name(obj);
         weights.push_back(memsize);
 
