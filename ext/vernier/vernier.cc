@@ -13,8 +13,6 @@
 
 using namespace std;
 
-#define numberof(array) ((int)(sizeof(array) / sizeof((array)[0])))
-
 static VALUE rb_mVernier;
 
 struct TraceArg {
