@@ -275,14 +275,15 @@ trace_retained_stop(VALUE self) {
     std::unordered_map<InfoStack, size_t> unique_stacks;
     for (auto& [obj, stack_ptr]: collector->object_frames) {
         const Stack &stack = *stack_ptr;
-	InfoStack info_stack;
-	//info_stack.push_back(FrameInfo{ruby_object_type_name(obj)});
-	for (int i = 0; i < stack.size(); i++) {
-		Frame frame = stack.frame(i);
-		FrameInfo info = frame_to_info.at(frame.frame);
-		info.line = frame.line;
-		info_stack.push_back(info);
-	}
+
+        InfoStack info_stack;
+        //info_stack.push_back(FrameInfo{ruby_object_type_name(obj)});
+        for (int i = 0; i < stack.size(); i++) {
+            Frame frame = stack.frame(i);
+            FrameInfo info = frame_to_info.at(frame.frame);
+            info.line = frame.line;
+            info_stack.push_back(info);
+        }
 
         enum ruby_value_type type = BUILTIN_TYPE(obj);
         if (type == 0) {
