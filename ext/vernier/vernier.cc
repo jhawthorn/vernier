@@ -40,6 +40,8 @@ struct FrameList {
 
     std::vector<std::string> list;
 
+    std::unordered_map<Stack, int> stack_to_idx;
+
     int string_index(const std::string str) {
         auto it = string_to_idx.find(str);
         if (it == string_to_idx.end()) {
@@ -80,21 +82,45 @@ struct FrameList {
         return it->second;
     }
 
+    struct StackNode {
+        std::unordered_map<VALUE, int> children;
+        VALUE frame;
+        int parent;
+        int index;
+
+        StackNode(VALUE frame, int index, int parent) : frame(frame), index(index), parent(parent) {}
+    };
+
+    StackNode root_stack_node{0, 0, 0};
+    vector<StackNode> stack_node_list;
+
+    int stack_index(const Stack &stack) {
+        StackNode *node = &root_stack_node;
+        for (int i = 0; i < stack.size(); i++) {
+            const Frame &frame = stack.frame(i);
+            int next_node_idx = node->children[frame.frame];
+            if (next_node_idx == 0) {
+                // insert a new node
+                next_node_idx = stack_node_list.size();
+                node->children[frame.frame] = next_node_idx;
+                stack_node_list.emplace_back(
+                        frame.frame,
+                        next_node_idx,
+                        node->index
+                        );
+            }
+
+            node = &stack_node_list[next_node_idx];
+        }
+        return node->index;
+    }
+
     void clear() {
         list.clear();
         frame_to_idx.clear();
         frame_info_to_idx.clear();
         string_to_idx.clear();
     }
-};
-
-struct StackTable {
-    class Handle {
-        int idx;
-        Handle(int idx) : idx(idx) {}
-    };
-
-    std::unordered_map<VALUE, std::unique_ptr<Stack>> stack_map;
 };
 
 struct retained_collector {
@@ -274,6 +300,8 @@ trace_retained_stop(VALUE self) {
 
     rb_tracepoint_disable(tp_freeobj);
 
+    VALUE result;
+
     std::stringstream ss;
 
     ss << "{\n";
@@ -293,6 +321,8 @@ trace_retained_stop(VALUE self) {
     for (auto& it: collector->object_frames) {
         VALUE obj = it.first;
         const Stack &stack = *it.second;
+
+        cerr << frame_list.stack_index(stack) << endl;
 
         ss << (first ? "[" : ",\n[");
         for (int i = stack.size() - 1; i >= 0; i--) {
