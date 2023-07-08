@@ -90,9 +90,16 @@ struct FrameList {
     }
 };
 
+struct StackTable {
+    class Handle {
+        int idx;
+        Handle(int idx) : idx(idx) {}
+    };
+
+    std::unordered_map<VALUE, std::unique_ptr<Stack>> stack_map;
+};
+
 struct retained_collector {
-    int allocated_objects = 0;
-    int freed_objects = 0;
     bool ignore_lines = true;
 
     bool running = false;
@@ -115,10 +122,14 @@ struct retained_collector {
         object_frames.clear();
         frame_list.clear();
 
-        allocated_objects = 0;
-        freed_objects = 0;
-
         running = false;
+    }
+
+    void record(VALUE obj, VALUE *frames_buffer, int *lines_buffer, int n) {
+        object_frames.emplace(
+                obj,
+                make_unique<Stack>(frames_buffer, lines_buffer, n)
+                );
     }
 };
 
@@ -130,7 +141,6 @@ static void
 newobj_i(VALUE tpval, void *data) {
     retained_collector *collector = static_cast<retained_collector *>(data);
     TraceArg tp(tpval);
-    collector->allocated_objects++;
 
     VALUE frames_buffer[2048];
     int lines_buffer[2048];
@@ -144,17 +154,13 @@ newobj_i(VALUE tpval, void *data) {
         fill_n(lines_buffer, n, 0);
     }
 
-    collector->object_frames.emplace(
-            tp.obj,
-            make_unique<Stack>(frames_buffer, lines_buffer, n)
-            );
+    collector->record(tp.obj, frames_buffer, lines_buffer, n);
 }
 
 static void
 freeobj_i(VALUE tpval, void *data) {
     retained_collector *collector = static_cast<retained_collector *>(data);
     TraceArg tp(tpval);
-    collector->freed_objects++;
 
     collector->object_frames.erase(tp.obj);
 }
@@ -264,8 +270,6 @@ trace_retained_stop(VALUE self) {
     collector->unique_frames.clear();
 
     // GC a few times in hopes of freeing those references
-    size_t before = collector->freed_objects;
-
     rb_gc();
     rb_gc();
     rb_gc();
@@ -274,7 +278,7 @@ trace_retained_stop(VALUE self) {
     for (auto& [obj, stack_ptr]: collector->object_frames) {
         const Stack &stack = *stack_ptr;
 	InfoStack info_stack;
-	info_stack.push_back(FrameInfo{ruby_object_type_name(obj)});
+	//info_stack.push_back(FrameInfo{ruby_object_type_name(obj)});
 	for (int i = 0; i < stack.size(); i++) {
 		Frame frame = stack.frame(i);
 		FrameInfo info = frame_to_info.at(frame.frame);
