@@ -154,10 +154,13 @@ module Vernier
 
       def func_table
         size = @func_names.size
+
+        cfunc_idx = @strings["<cfunc>"]
+        is_js = @filenames.map { |fn| fn != cfunc_idx }
         {
           name: @func_names,
-          isJS: [false] * size,
-          relevantForJS: [false] * size,
+          isJS: is_js,
+          relevantForJS: is_js,
           resource: [-1] * size, # set to unidentified for now
           fileName: @filenames,
           lineNumber: profile.func_table.fetch(:first_line),
