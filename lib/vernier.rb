@@ -2,6 +2,7 @@
 
 require_relative "vernier/version"
 require_relative "vernier/vernier"
+require_relative "vernier/output/firefox"
 
 module Vernier
   class Error < StandardError; end
@@ -63,7 +64,7 @@ module Vernier
         return enum_for(__method__) unless block_given?
 
         stack_idx = idx
-        while stack_idx != 0
+        while stack_idx
           frame_idx = result.stack_table[:frame][stack_idx]
           yield Frame.new(result, frame_idx)
           stack_idx = result.stack_table[:parent][stack_idx]

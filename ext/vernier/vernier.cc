@@ -77,7 +77,7 @@ struct FrameList {
         StackNode(Frame frame, int index, int parent) : frame(frame), index(index), parent(parent) {}
 
         // root
-        StackNode() : frame(Frame{0, 0}), index(0), parent(0) {}
+        StackNode() : frame(Frame{0, 0}), index(-1), parent(-1) {}
     };
 
     StackNode root_stack_node;
@@ -320,7 +320,8 @@ trace_retained_stop(VALUE self) {
     rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
     rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
     for (const auto &stack : frame_list.stack_node_list) {
-        rb_ary_push(stack_table_parent, INT2NUM(stack.parent));
+        VALUE parent_val = stack.parent == -1 ? Qnil : INT2NUM(stack.parent);
+        rb_ary_push(stack_table_parent, parent_val);
         rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
     }
     rb_hash_aset(result, sym("stack_table"), stack_table);
