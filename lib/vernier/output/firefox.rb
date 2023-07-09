@@ -17,7 +17,7 @@ module Vernier
         @func_names = names.map do |name|
           @strings[name]
         end
-        @filenames = names.map do |filename|
+        @filenames = filenames.map do |filename|
           @strings[filename]
         end
       end
