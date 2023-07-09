@@ -110,7 +110,9 @@ module Vernier
       result = RetainedResult.new(trace_retained_stop)
     end
 
-    #File.write(out, result) if out
+    if out
+      File.write(out, Output::Firefox.new(result).output)
+    end
     result
   end
 end
