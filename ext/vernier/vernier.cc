@@ -34,19 +34,14 @@ struct TraceArg {
 };
 
 struct FrameList {
-    std::unordered_map<Frame, int> frame_to_idx;
-    std::unordered_map<FrameInfo, int> frame_info_to_idx;
     std::unordered_map<std::string, int> string_to_idx;
-
-    std::vector<std::string> list;
-
-    std::unordered_map<Stack, int> stack_to_idx;
+    std::vector<std::string> string_list;
 
     int string_index(const std::string str) {
         auto it = string_to_idx.find(str);
         if (it == string_to_idx.end()) {
-            list.push_back(str);
-            int idx = list.size() - 1;
+            int idx = string_list.size();
+            string_list.push_back(str);
 
             auto result = string_to_idx.insert({str, idx});
             it = result.first;
@@ -55,56 +50,51 @@ struct FrameList {
         return it->second;
     }
 
-    int frame_info_index(const FrameInfo info) {
-        auto it = frame_info_to_idx.find(info);
-        if (it == frame_info_to_idx.end()) {
-            std::stringstream ss;
-            ss << info;
+    struct FrameWithInfo {
+        Frame frame;
+        FrameInfo info;
+    };
 
-            int idx = string_index(ss.str());
-
-            auto result = frame_info_to_idx.insert({info, idx});
-            it = result.first;
-        }
-
-        return it->second;
-    }
-
+    std::unordered_map<Frame, int> frame_to_idx;
+    std::vector<FrameWithInfo> frame_list;
     int frame_index(const Frame frame) {
         auto it = frame_to_idx.find(frame);
         if (it == frame_to_idx.end()) {
-            int idx = frame_info_index(frame.info());
-
+            int idx = frame_list.size();
+            frame_list.push_back(FrameWithInfo{frame, frame.info()});
             auto result = frame_to_idx.insert({frame, idx});
             it = result.first;
         }
-
         return it->second;
     }
 
     struct StackNode {
-        std::unordered_map<VALUE, int> children;
-        VALUE frame;
+        std::unordered_map<Frame, int> children;
+        Frame frame;
         int parent;
         int index;
 
-        StackNode(VALUE frame, int index, int parent) : frame(frame), index(index), parent(parent) {}
+        StackNode(Frame frame, int index, int parent) : frame(frame), index(index), parent(parent) {}
+
+        // root
+        StackNode() : frame(Frame{0, 0}), index(0), parent(0) {}
     };
 
-    StackNode root_stack_node{0, 0, 0};
+    StackNode root_stack_node;
     vector<StackNode> stack_node_list;
 
     int stack_index(const Stack &stack) {
         StackNode *node = &root_stack_node;
-        for (int i = 0; i < stack.size(); i++) {
+        //for (int i = 0; i < stack.size(); i++) {
+        for (int i = stack.size() - 1; i >= 0; i--) {
             const Frame &frame = stack.frame(i);
-            int next_node_idx = node->children[frame.frame];
+            int next_node_idx = node->children[frame];
             if (next_node_idx == 0) {
                 // insert a new node
                 next_node_idx = stack_node_list.size();
-                node->children[frame.frame] = next_node_idx;
+                node->children[frame] = next_node_idx;
                 stack_node_list.emplace_back(
-                        frame.frame,
+                        frame,
                         next_node_idx,
                         node->index
                         );
@@ -116,10 +106,13 @@ struct FrameList {
     }
 
     void clear() {
-        list.clear();
-        frame_to_idx.clear();
-        frame_info_to_idx.clear();
+        string_list.clear();
+        frame_list.clear();
+        stack_node_list.clear();
+
         string_to_idx.clear();
+        frame_to_idx.clear();
+        root_stack_node.children.clear();
     }
 };
 
@@ -277,8 +270,6 @@ trace_retained_stop(VALUE self) {
 
     retained_collector *collector = &_collector;
 
-    std::vector<size_t> weights;
-
     FrameList &frame_list = collector->frame_list;
 
     index_frames(collector);
@@ -300,82 +291,71 @@ trace_retained_stop(VALUE self) {
 
     rb_tracepoint_disable(tp_freeobj);
 
-    VALUE result;
+#define sym(name) ID2SYM(rb_intern_const(name))
 
-    std::stringstream ss;
+    VALUE result = rb_hash_new();
 
-    ss << "{\n";
-    ss << R"(  "exporter": "speedscope@0.6.0",)" << "\n";
-    ss << R"(  "$schema": "https://www.speedscope.app/file-format-schema.json",)" << "\n";
+    VALUE samples = rb_ary_new();
+    rb_hash_aset(result, sym("samples"), samples);
+    VALUE weights = rb_ary_new();
+    rb_hash_aset(result, sym("weights"), weights);
 
-    ss << R"(  "profiles": [)" << "\n";
-    ss << R"(    {)" << "\n";
-    ss << R"(      "type":"sampled",)" << "\n";
-    ss << R"(      "name":"retained",)" << "\n";
-    ss << R"(      "unit":"bytes",)" << "\n";
-    ss << R"(      "startValue":0,)" << "\n";
-    ss << R"(      "endValue":0,)" << "\n";
-    ss << R"(      "samples":[)" << "\n";
-
-    bool first = true;
     for (auto& it: collector->object_frames) {
         VALUE obj = it.first;
         const Stack &stack = *it.second;
 
-        cerr << frame_list.stack_index(stack) << endl;
+        int stack_index = frame_list.stack_index(stack);
+        rb_ary_push(samples, INT2NUM(stack_index));
+        rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
 
-        ss << (first ? "[" : ",\n[");
-        for (int i = stack.size() - 1; i >= 0; i--) {
-            const FrameInfo &frame = stack.frame_info(i);
-            int index = frame_list.frame_info_index(frame);
-            ss << index;
-            if (i > 0) ss << ",";
-        }
-        ss << "]";
-
-        size_t memsize = rb_obj_memsize_of(obj);
-        //ss << ";" << ruby_object_type_name(obj);
-        weights.push_back(memsize);
-
-        first = false;
+        //for (int i = stack.size() - 1; i >= 0; i--) {
+        //    const FrameInfo &frame = stack.frame_info(i);
+        //    int index = frame_list.frame_info_index(frame);
+        //}
     }
 
-    ss << "\n";
-    ss << R"(      ],)" << "\n";
-    ss << R"(      "weights":[)" << "\n";
-
-    first = true;
-    for (size_t w : weights) {
-        if (!first) ss << "," ;
-        ss << w;
-        first = false;
+    VALUE stack_table = rb_hash_new();
+    VALUE stack_table_parent = rb_ary_new();
+    VALUE stack_table_frame = rb_ary_new();
+    rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
+    rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
+    for (const auto &stack : frame_list.stack_node_list) {
+        rb_ary_push(stack_table_parent, INT2NUM(stack.parent));
+        rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
     }
+    rb_hash_aset(result, sym("stack_table"), stack_table);
 
-    ss << "\n";
-    ss << R"(      ])" << "\n";
-    ss << R"(    })" << "\n"; // sample object
-    ss << R"(  ],)" << "\n";   // samples array
-    ss << R"(  "shared": {)" << "\n";   // samples array
-    ss << R"(    "frames": [)" << "\n";
-
-    first = true;
-    for (const std::string &s : frame_list.list) {
-        if (!first) ss << ",\n";
-        ss << R"(      {"name": )" << std::quoted(s) << "}";
-        first = false;
+    VALUE frame_table = rb_hash_new();
+    VALUE frame_table_func = rb_ary_new();
+    VALUE frame_table_line = rb_ary_new();
+    rb_hash_aset(frame_table, sym("func"), frame_table_func);
+    rb_hash_aset(frame_table, sym("line"), frame_table_line);
+    //for (const auto &frame : frame_list.frame_list) {
+    for (int i = 0; i < frame_list.frame_list.size(); i++) {
+        const auto &frame = frame_list.frame_list[i];
+        rb_ary_push(frame_table_func, INT2NUM(i));
+        rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
     }
+    rb_hash_aset(result, sym("frame_table"), frame_table);
 
-    ss << "\n";
-    ss << R"(    ])" << "\n";
-    ss << R"(  })" << "\n";   // samples array
-    ss << R"(})" << "\n";
+    // TODO: dedup funcs before this step
+    VALUE func_table = rb_hash_new();
+    VALUE func_table_name = rb_ary_new();
+    VALUE func_table_filename = rb_ary_new();
+    rb_hash_aset(func_table, sym("name"), func_table_name);
+    rb_hash_aset(func_table, sym("filename"), func_table_filename);
+    for (const auto &frame : frame_list.frame_list) {
+        const std::string label = frame.info.label;
+        const std::string filename = frame.info.file;
 
-    std::string s = ss.str();
-    VALUE str = rb_str_new(s.c_str(), s.size());
+        rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
+        rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
+    }
+    rb_hash_aset(result, sym("func_table"), func_table);
 
     collector->reset();
 
-    return str;
+    return result;
 }
 
 static void

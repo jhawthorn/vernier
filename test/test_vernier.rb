@@ -4,8 +4,9 @@ require "test_helper"
 require "json"
 
 class ReportReader
-  def initialize(json)
-    @data = JSON.parse(json)
+  attr_reader :result
+  def initialize(result)
+    @result = result
   end
 
   def profile_hash
@@ -17,7 +18,7 @@ class ReportReader
   end
 
   def weights
-    profile_hash["weights"]
+    result.weights
   end
 
   def total_bytes
@@ -42,22 +43,16 @@ class TestVernier < Minitest::Test
       }
     end
 
-    result = ReportReader.new(result)
+    #reader = ReportReader.new(result)
 
     assert result.total_bytes > 40 * 100
     assert result.total_bytes < 40 * 200
 
-    #lines_matching_retained = lines.select do |line|
-    #  line.include?("#{__FILE__}:#{start_line+5}")
-    #end
+    top_stack_tally = result.samples.tally.max_by(&:last)
+    top_stack = result.stack(top_stack_tally.first)
 
-    ## WHY 101 and not 100 ????
-    #assert lines_matching_retained.size == 101
-
-    #lines.uniq.each do |line|
-    #  puts "="*80
-    #  puts line.split(";")
-    #end
+    assert_equal "Class#new", top_stack.frames[0].label
+    assert_equal "#{self.class}##{__method__}", top_stack.frames[1].label
   end
 
   def test_empty_block
