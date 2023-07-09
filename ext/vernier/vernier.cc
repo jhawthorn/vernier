@@ -337,14 +337,18 @@ trace_retained_stop(VALUE self) {
     VALUE func_table = rb_hash_new();
     VALUE func_table_name = rb_ary_new();
     VALUE func_table_filename = rb_ary_new();
+    VALUE func_table_first_line = rb_ary_new();
     rb_hash_aset(func_table, sym("name"), func_table_name);
     rb_hash_aset(func_table, sym("filename"), func_table_filename);
+    rb_hash_aset(func_table, sym("first_line"), func_table_first_line);
     for (const auto &frame : frame_list.frame_list) {
         const std::string label = frame.info.label;
-        const std::string filename = frame.info.file;
+	const std::string filename = frame.info.file;
+        const int first_line = frame.info.first_lineno;
 
         rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
         rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
+        rb_ary_push(func_table_first_line, INT2NUM(first_line));
     }
     rb_hash_aset(result, sym("func_table"), func_table);
 

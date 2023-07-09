@@ -26,13 +26,13 @@ struct FrameInfo {
 
     static int first_lineno_int(VALUE frame) {
         VALUE first_lineno = rb_profile_frame_first_lineno(frame);
-        return FIX2INT(first_lineno);
+        return NIL_P(first_lineno) ? 0 : FIX2INT(first_lineno);
     }
 
     FrameInfo(VALUE frame, int line) :
         label(label_cstr(frame)),
         file(file_cstr(frame)),
-        //first_lineno(first_lineno_int(frame)),
+        first_lineno(first_lineno_int(frame)),
         line(line) { }
 
     FrameInfo(std::string label, std::string file = "", int line = 0) :
@@ -42,7 +42,7 @@ struct FrameInfo {
 
     std::string label;
     std::string file;
-    // int first_lineno;
+    int first_lineno;
     int line;
 };
 

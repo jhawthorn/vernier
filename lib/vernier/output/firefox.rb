@@ -160,9 +160,8 @@ module Vernier
           relevantForJS: [false] * size,
           resource: [-1] * size, # set to unidentified for now
           fileName: @filenames,
-          lineNumber: [0] * size,
+          lineNumber: profile.func_table.fetch(:first_line),
           columnNumber: [0] * size,
-          #lineNumber: functions.map { _1.line },
           #columnNumber: functions.map { _1.column },
           length: size
         }
