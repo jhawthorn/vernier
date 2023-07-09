@@ -107,9 +107,9 @@ module Vernier
         {
           stack: samples,
           time: times,
-          #weight: weights,
-          weight: nil,
-          weightType: "samples",
+          weight: weights,
+          #weightType: "samples",
+          weightType: "bytes",
           length: samples.length
         }
       end
