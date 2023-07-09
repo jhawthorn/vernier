@@ -117,8 +117,6 @@ struct FrameList {
 };
 
 struct retained_collector {
-    bool ignore_lines = true;
-
     bool running = false;
 
     std::unordered_set<VALUE> unique_frames;
@@ -165,10 +163,6 @@ newobj_i(VALUE tpval, void *data) {
 
     for (int i = 0; i < n; i++) {
         collector->unique_frames.insert(frames_buffer[i]);
-    }
-
-    if (collector->ignore_lines) {
-        fill_n(lines_buffer, n, 0);
     }
 
     collector->record(tp.obj, frames_buffer, lines_buffer, n);
