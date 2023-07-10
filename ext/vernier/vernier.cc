@@ -14,6 +14,7 @@
 using namespace std;
 
 static VALUE rb_mVernier;
+static VALUE rb_cVernierResult;
 
 struct TraceArg {
     rb_trace_arg_t *tparg;
@@ -260,13 +261,12 @@ static VALUE
 build_collector_result(retained_collector *collector) {
     FrameList &frame_list = collector->frame_list;
 
-#define sym(name) ID2SYM(rb_intern_const(name))
-    VALUE result = rb_hash_new();
+    VALUE result = rb_obj_alloc(rb_cVernierResult);
 
     VALUE samples = rb_ary_new();
-    rb_hash_aset(result, sym("samples"), samples);
+    rb_ivar_set(result, rb_intern("@samples"), samples);
     VALUE weights = rb_ary_new();
-    rb_hash_aset(result, sym("weights"), weights);
+    rb_ivar_set(result, rb_intern("@weights"), weights);
 
     for (auto& obj: collector->object_list) {
         const auto search = collector->object_frames.find(obj);
@@ -279,6 +279,7 @@ build_collector_result(retained_collector *collector) {
     }
 
     VALUE stack_table = rb_hash_new();
+    rb_ivar_set(result, rb_intern("@stack_table"), stack_table);
     VALUE stack_table_parent = rb_ary_new();
     VALUE stack_table_frame = rb_ary_new();
     rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
@@ -288,9 +289,9 @@ build_collector_result(retained_collector *collector) {
         rb_ary_push(stack_table_parent, parent_val);
         rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
     }
-    rb_hash_aset(result, sym("stack_table"), stack_table);
 
     VALUE frame_table = rb_hash_new();
+    rb_ivar_set(result, rb_intern("@frame_table"), frame_table);
     VALUE frame_table_func = rb_ary_new();
     VALUE frame_table_line = rb_ary_new();
     rb_hash_aset(frame_table, sym("func"), frame_table_func);
@@ -301,10 +302,10 @@ build_collector_result(retained_collector *collector) {
         rb_ary_push(frame_table_func, INT2NUM(i));
         rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
     }
-    rb_hash_aset(result, sym("frame_table"), frame_table);
 
     // TODO: dedup funcs before this step
     VALUE func_table = rb_hash_new();
+    rb_ivar_set(result, rb_intern("@func_table"), func_table);
     VALUE func_table_name = rb_ary_new();
     VALUE func_table_filename = rb_ary_new();
     VALUE func_table_first_line = rb_ary_new();
@@ -320,7 +321,6 @@ build_collector_result(retained_collector *collector) {
         rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
         rb_ary_push(func_table_first_line, INT2NUM(first_line));
     }
-    rb_hash_aset(result, sym("func_table"), func_table);
 
     return result;
 }
@@ -384,6 +384,7 @@ extern "C" void
 Init_vernier(void)
 {
   rb_mVernier = rb_define_module("Vernier");
+  rb_cVernierResult = rb_define_class_under(rb_mVernier, "Result", rb_cObject);
 
   rb_define_module_function(rb_mVernier, "trace_retained_start", trace_retained_start, 0);
   rb_define_module_function(rb_mVernier, "trace_retained_stop", trace_retained_stop, 0);

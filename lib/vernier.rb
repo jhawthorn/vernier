@@ -10,19 +10,7 @@ module Vernier
   class Result
     attr_reader :weights, :samples, :stack_table, :frame_table, :func_table
 
-    attr_reader :pid, :start_time, :end_time
-
-    def initialize(result)
-      @samples = result.fetch(:samples)
-      @weights = result.fetch(:weights)
-      @stack_table = result.fetch(:stack_table)
-      @frame_table = result.fetch(:frame_table)
-      @func_table = result.fetch(:func_table)
-
-      @pid = result.fetch(:pid)
-      @start_time = result.fetch(:start_time)
-      @end_time = result.fetch(:end_time)
-    end
+    attr_accessor :pid, :start_time, :end_time
 
     def each_sample
       return enum_for(__method__) unless block_given?
@@ -111,9 +99,7 @@ module Vernier
     def stack(idx)
       Stack.new(self, idx)
     end
-  end
 
-  class RetainedResult < Result
     def total_bytes
       @weights.sum
     end
@@ -130,14 +116,11 @@ module Vernier
     begin
       yield
     ensure
-      data = trace_retained_stop
+      result = trace_retained_stop
       end_time = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
-      data.update(
-        pid: Process.pid,
-        start_time: start_time,
-        end_time: end_time,
-      )
-      result = RetainedResult.new(data)
+      result.pid = Process.pid
+      result.start_time = start_time
+      result.end_time = end_time
     end
 
     if out
