@@ -150,8 +150,9 @@ struct retained_collector {
 
 static retained_collector _collector;
 
-static VALUE tp_newobj;
-static VALUE tp_freeobj;
+static VALUE tp_newobj = Qnil;
+static VALUE tp_freeobj = Qnil;
+
 static void
 newobj_i(VALUE tpval, void *data) {
     retained_collector *collector = static_cast<retained_collector *>(data);
@@ -254,6 +255,12 @@ void index_frames(retained_collector *collector) {
 
 static VALUE
 trace_retained_stop(VALUE self) {
+    retained_collector *collector = &_collector;
+
+    if (!collector->running) {
+        rb_raise(rb_eRuntimeError, "collector not running");
+    }
+
     // GC before we start turning stacks into strings
     rb_gc();
 
@@ -261,8 +268,7 @@ trace_retained_stop(VALUE self) {
     // objects as we may be able to free some as we remove our own references
     // to stack frames.
     rb_tracepoint_disable(tp_newobj);
-
-    retained_collector *collector = &_collector;
+    tp_newobj = Qnil;
 
     FrameList &frame_list = collector->frame_list;
 
@@ -284,6 +290,7 @@ trace_retained_stop(VALUE self) {
     rb_gc();
 
     rb_tracepoint_disable(tp_freeobj);
+    tp_freeobj = Qnil;
 
 #define sym(name) ID2SYM(rb_intern_const(name))
 
@@ -368,6 +375,9 @@ retained_collector_mark(void *data) {
     for (VALUE frame: collector->unique_frames) {
         rb_gc_mark(frame);
     }
+
+    rb_gc_mark(tp_newobj);
+    rb_gc_mark(tp_freeobj);
 }
 
 extern "C" void
