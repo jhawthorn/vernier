@@ -4,6 +4,7 @@
 #include <memory>
 #include <algorithm>
 #include <sstream>
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -56,12 +57,13 @@ struct FrameList {
     };
 
     std::unordered_map<Frame, int> frame_to_idx;
-    std::vector<FrameWithInfo> frame_list;
+    std::vector<Frame> frame_list;
+    std::vector<FrameWithInfo> frame_with_info_list;
     int frame_index(const Frame frame) {
         auto it = frame_to_idx.find(frame);
         if (it == frame_to_idx.end()) {
             int idx = frame_list.size();
-            frame_list.push_back(FrameWithInfo{frame, frame.info()});
+            frame_list.push_back(frame);
             auto result = frame_to_idx.insert({frame, idx});
             it = result.first;
         }
@@ -105,10 +107,23 @@ struct FrameList {
         return node->index;
     }
 
+    // Converts Frames from stacks other tables. "Symbolicates" the frames
+    // which allocates.
+    void finalize() {
+        for (const auto &stack_node : stack_node_list) {
+            frame_index(stack_node.frame);
+        }
+        for (const auto &frame : frame_list) {
+            frame_with_info_list.push_back(FrameWithInfo{frame, frame.info()});
+        }
+    }
+
+
     void clear() {
         string_list.clear();
         frame_list.clear();
         stack_node_list.clear();
+        frame_with_info_list.clear();
 
         string_to_idx.clear();
         frame_to_idx.clear();
@@ -120,7 +135,7 @@ struct retained_collector {
     bool running = false;
 
     std::unordered_set<VALUE> unique_frames;
-    std::unordered_map<VALUE, std::unique_ptr<Stack>> object_frames;
+    std::map<VALUE, int> object_frames;
     FrameList frame_list;
 
     bool start() {
@@ -141,10 +156,11 @@ struct retained_collector {
     }
 
     void record(VALUE obj, VALUE *frames_buffer, int *lines_buffer, int n) {
-        object_frames.emplace(
-                obj,
-                make_unique<Stack>(frames_buffer, lines_buffer, n)
-                );
+        Stack stack(frames_buffer, lines_buffer, n);
+
+        int stack_index = frame_list.stack_index(stack);
+
+        object_frames.emplace(obj, stack_index);
     }
 };
 
@@ -243,16 +259,6 @@ ruby_object_type_name(VALUE obj) {
 #undef TYPE_CASE
 }
 
-void index_frames(retained_collector *collector) {
-    // Stringify all unique frames we've observed so far
-    for (const auto& [obj, stack]: collector->object_frames) {
-        for (int i = 0; i < stack->size(); i++) {
-            Frame frame = stack->frame(i);
-            collector->frame_list.frame_index(frame);
-        }
-    }
-}
-
 static VALUE
 build_collector_result(retained_collector *collector) {
     FrameList &frame_list = collector->frame_list;
@@ -267,9 +273,10 @@ build_collector_result(retained_collector *collector) {
 
     for (auto& it: collector->object_frames) {
         VALUE obj = it.first;
-        const Stack &stack = *it.second;
+        //const Stack &stack = *it.second;
+        //int stack_index = frame_list.stack_index(stack);
+        int stack_index = it.second;
 
-        int stack_index = frame_list.stack_index(stack);
         rb_ary_push(samples, INT2NUM(stack_index));
         rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
     }
@@ -292,8 +299,8 @@ build_collector_result(retained_collector *collector) {
     rb_hash_aset(frame_table, sym("func"), frame_table_func);
     rb_hash_aset(frame_table, sym("line"), frame_table_line);
     //for (const auto &frame : frame_list.frame_list) {
-    for (int i = 0; i < frame_list.frame_list.size(); i++) {
-        const auto &frame = frame_list.frame_list[i];
+    for (int i = 0; i < frame_list.frame_with_info_list.size(); i++) {
+        const auto &frame = frame_list.frame_with_info_list[i];
         rb_ary_push(frame_table_func, INT2NUM(i));
         rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
     }
@@ -307,9 +314,9 @@ build_collector_result(retained_collector *collector) {
     rb_hash_aset(func_table, sym("name"), func_table_name);
     rb_hash_aset(func_table, sym("filename"), func_table_filename);
     rb_hash_aset(func_table, sym("first_line"), func_table_first_line);
-    for (const auto &frame : frame_list.frame_list) {
+    for (const auto &frame : frame_list.frame_with_info_list) {
         const std::string label = frame.info.label;
-	const std::string filename = frame.info.file;
+        const std::string filename = frame.info.file;
         const int first_line = frame.info.first_lineno;
 
         rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
@@ -340,7 +347,7 @@ trace_retained_stop(VALUE self) {
 
     FrameList &frame_list = collector->frame_list;
 
-    index_frames(collector);
+    collector->frame_list.finalize();
 
     // We should have collected info for all our frames, so no need to continue
     // marking them

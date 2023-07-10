@@ -85,7 +85,6 @@ struct BaseStack {
     virtual ~BaseStack() {};
 
     virtual int size() const = 0;
-    virtual FrameInfo frame_info(int i) const = 0;
 };
 
 struct Stack : public BaseStack {
