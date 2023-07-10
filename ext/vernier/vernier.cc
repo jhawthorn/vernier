@@ -4,7 +4,6 @@
 #include <memory>
 #include <algorithm>
 #include <sstream>
-#include <map>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -134,7 +133,9 @@ struct FrameList {
 struct retained_collector {
     bool running = false;
 
-    std::map<VALUE, int> object_frames;
+    std::unordered_map<VALUE, int> object_frames;
+    std::vector<VALUE> object_list;
+
     FrameList frame_list;
 
     bool start() {
@@ -148,6 +149,7 @@ struct retained_collector {
 
     void reset() {
         object_frames.clear();
+        object_list.clear();
         frame_list.clear();
 
         running = false;
@@ -158,6 +160,7 @@ struct retained_collector {
 
         int stack_index = frame_list.stack_index(stack);
 
+        object_list.push_back(obj);
         object_frames.emplace(obj, stack_index);
     }
 };
@@ -265,14 +268,14 @@ build_collector_result(retained_collector *collector) {
     VALUE weights = rb_ary_new();
     rb_hash_aset(result, sym("weights"), weights);
 
-    for (auto& it: collector->object_frames) {
-        VALUE obj = it.first;
-        //const Stack &stack = *it.second;
-        //int stack_index = frame_list.stack_index(stack);
-        int stack_index = it.second;
+    for (auto& obj: collector->object_list) {
+        const auto search = collector->object_frames.find(obj);
+        if (search != collector->object_frames.end()) {
+            int stack_index = search->second;
 
-        rb_ary_push(samples, INT2NUM(stack_index));
-        rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
+            rb_ary_push(samples, INT2NUM(stack_index));
+            rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
+        }
     }
 
     VALUE stack_table = rb_hash_new();

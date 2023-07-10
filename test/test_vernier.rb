@@ -109,6 +109,36 @@ class TestVernier < Minitest::Test
     nil
   end
 
+  def alloc_a
+    Object.new
+  end
+
+  def alloc_b
+    Object.new
+  end
+
+  def alloc_c
+    Object.new
+  end
+
+  def test_alloc_order
+    result = Vernier.trace_retained do
+      alloc_a
+      alloc_b
+      alloc_c
+    end
+
+    frames = result.each_sample.map {|stack, _| stack.frames[0] }
+    labels = frames.map(&:label)
+
+    expected = %w[
+      TestVernier#alloc_a
+      TestVernier#alloc_b
+      TestVernier#alloc_c
+    ]
+    assert_equal expected, labels.grep(/#alloc_[abc]\z/)
+  end
+
   def test_nothing_retained_in_module_eval
     skip("WIP")
 

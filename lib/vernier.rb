@@ -25,13 +25,31 @@ module Vernier
     end
 
     def each_sample
+      return enum_for(__method__) unless block_given?
       @samples.size.times do |sample_idx|
         weight = @weights[sample_idx]
         stack_idx = @samples[sample_idx]
+        yield stack(stack_idx), weight
       end
     end
 
-    class Func < Struct.new(:result, :idx)
+    class BaseType
+      attr_reader :result, :idx
+      def initialize(result, idx)
+        @result = result
+        @idx = idx
+      end
+
+      def to_s
+        idx.to_s
+      end
+
+      def inspect
+        "#<#{self.class}\n#{to_s}>"
+      end
+    end
+
+    class Func < BaseType
       def label
         result.func_table[:name][idx]
       end
@@ -46,7 +64,7 @@ module Vernier
       end
     end
 
-    class Frame < Struct.new(:result, :idx)
+    class Frame < BaseType
       def label; func.label; end
       def filename; func.filename; end
       alias name label
@@ -65,7 +83,7 @@ module Vernier
       end
     end
 
-    class Stack < Struct.new(:result, :idx)
+    class Stack < BaseType
       def each_frame
         return enum_for(__method__) unless block_given?
 
@@ -87,10 +105,6 @@ module Vernier
           arr << frame.to_s
         end
         arr.join("\n")
-      end
-
-      def inspect
-        "#<#{self.class}\n#{self}>"
       end
     end
 
