@@ -10,12 +10,18 @@ module Vernier
   class Result
     attr_reader :weights, :samples, :stack_table, :frame_table, :func_table
 
+    attr_reader :pid, :start_time, :end_time
+
     def initialize(result)
       @samples = result.fetch(:samples)
       @weights = result.fetch(:weights)
       @stack_table = result.fetch(:stack_table)
       @frame_table = result.fetch(:frame_table)
       @func_table = result.fetch(:func_table)
+
+      @pid = result.fetch(:pid)
+      @start_time = result.fetch(:start_time)
+      @end_time = result.fetch(:end_time)
     end
 
     def each_sample
@@ -101,13 +107,23 @@ module Vernier
 
   def self.trace_retained(out: nil, gc: true)
     3.times { GC.start } if gc
+
+    start_time = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
+
     Vernier.trace_retained_start
 
     result = nil
     begin
       yield
     ensure
-      result = RetainedResult.new(trace_retained_stop)
+      data = trace_retained_stop
+      end_time = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
+      data.update(
+        pid: Process.pid,
+        start_time: start_time,
+        end_time: end_time,
+      )
+      result = RetainedResult.new(data)
     end
 
     if out

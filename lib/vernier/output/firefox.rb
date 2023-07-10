@@ -59,7 +59,7 @@ module Vernier
               registerTime: 0,
               unregisterTime: nil,
               pausedRanges: [],
-              pid: 123,
+              pid: profile.pid,
               tid: 456,
               frameTable: frame_table,
               funcTable: func_table,

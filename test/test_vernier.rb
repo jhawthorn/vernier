@@ -73,6 +73,8 @@ class TestVernier < Minitest::Test
     end
 
     assert_equal "already running", ex.message
+
+    assert result.samples.size > 0
   end
 
   def test_nothing_retained
