@@ -224,6 +224,7 @@ class BaseCollector {
     };
 
     virtual void mark() {
+        frame_list.mark_frames();
     };
 };
 
