@@ -254,46 +254,10 @@ void index_frames(retained_collector *collector) {
 }
 
 static VALUE
-trace_retained_stop(VALUE self) {
-    retained_collector *collector = &_collector;
-
-    if (!collector->running) {
-        rb_raise(rb_eRuntimeError, "collector not running");
-    }
-
-    // GC before we start turning stacks into strings
-    rb_gc();
-
-    // Stop tracking any more new objects, but we'll continue tracking free'd
-    // objects as we may be able to free some as we remove our own references
-    // to stack frames.
-    rb_tracepoint_disable(tp_newobj);
-    tp_newobj = Qnil;
-
+build_collector_result(retained_collector *collector) {
     FrameList &frame_list = collector->frame_list;
 
-    index_frames(collector);
-
-    std::unordered_map<VALUE, FrameInfo> frame_to_info;
-    for (const auto &frame: collector->unique_frames) {
-	    FrameInfo info(frame, 0);
-	    frame_to_info.insert({frame, info});
-    }
-
-    // We should have collected info for all our frames, so no need to continue
-    // marking them
-    collector->unique_frames.clear();
-
-    // GC a few times in hopes of freeing those references
-    rb_gc();
-    rb_gc();
-    rb_gc();
-
-    rb_tracepoint_disable(tp_freeobj);
-    tp_freeobj = Qnil;
-
 #define sym(name) ID2SYM(rb_intern_const(name))
-
     VALUE result = rb_hash_new();
 
     VALUE samples = rb_ary_new();
@@ -358,6 +322,42 @@ trace_retained_stop(VALUE self) {
         rb_ary_push(func_table_first_line, INT2NUM(first_line));
     }
     rb_hash_aset(result, sym("func_table"), func_table);
+
+    return result;
+}
+
+static VALUE
+trace_retained_stop(VALUE self) {
+    retained_collector *collector = &_collector;
+
+    if (!collector->running) {
+        rb_raise(rb_eRuntimeError, "collector not running");
+    }
+
+    // GC before we start turning stacks into strings
+    rb_gc();
+
+    // Stop tracking any more new objects, but we'll continue tracking free'd
+    // objects as we may be able to free some as we remove our own references
+    // to stack frames.
+    rb_tracepoint_disable(tp_newobj);
+    tp_newobj = Qnil;
+
+    FrameList &frame_list = collector->frame_list;
+
+    index_frames(collector);
+
+    // We should have collected info for all our frames, so no need to continue
+    // marking them
+    collector->unique_frames.clear();
+
+    // GC again
+    rb_gc();
+
+    rb_tracepoint_disable(tp_freeobj);
+    tp_freeobj = Qnil;
+
+    VALUE result = build_collector_result(collector);
 
     collector->reset();
 

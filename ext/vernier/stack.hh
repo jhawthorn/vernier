@@ -29,28 +29,21 @@ struct FrameInfo {
         return NIL_P(first_lineno) ? 0 : FIX2INT(first_lineno);
     }
 
-    FrameInfo(VALUE frame, int line) :
+    FrameInfo(VALUE frame) :
         label(label_cstr(frame)),
         file(file_cstr(frame)),
-        first_lineno(first_lineno_int(frame)),
-        line(line) { }
-
-    FrameInfo(std::string label, std::string file = "", int line = 0) :
-        label(label),
-        file(file),
-        line(line) { }
+        first_lineno(first_lineno_int(frame)) { }
 
     std::string label;
     std::string file;
     int first_lineno;
-    int line;
 };
 
 bool operator==(const FrameInfo& lhs, const FrameInfo& rhs) noexcept {
     return
         lhs.label == rhs.label &&
         lhs.file == rhs.file &&
-        lhs.line == rhs.line;
+        lhs.first_lineno == rhs.first_lineno;
 }
 
 template<>
@@ -61,7 +54,7 @@ struct std::hash<FrameInfo>
         return
             std::hash<std::string>{}(f.label) ^
             std::hash<std::string>{}(f.file) ^
-            f.line;
+            f.first_lineno;
     }
 };
 
@@ -71,7 +64,7 @@ struct Frame {
     int line;
 
     FrameInfo info() const {
-        return FrameInfo(frame, line);
+        return FrameInfo(frame);
     }
 };
 
@@ -91,7 +84,7 @@ struct std::hash<Frame>
 struct BaseStack {
     virtual ~BaseStack() {};
 
-	virtual int size() const = 0;
+    virtual int size() const = 0;
     virtual FrameInfo frame_info(int i) const = 0;
 };
 
@@ -212,30 +205,3 @@ struct std::hash<InfoStack>
         return hash;
     }
 };
-
-std::ostream& operator<<(std::ostream& os, const FrameInfo& info)
-{
-    os << info.file;
-    if (info.line) {
-        os << ":" << info.line;
-    }
-    os << ":in `" << info.label << "'";
-    return os;
-}
-
-
-std::ostream& operator<<(std::ostream& os, const Frame& frame)
-{
-    return os << frame.info();
-}
-
-std::ostream& operator<<(std::ostream& os, const BaseStack& stack)
-{
-    for (int i = 0; i < stack.size(); i++) {
-        FrameInfo info = stack.frame_info(i);
-        os << info << "\n";
-    }
-
-    return os;
-}
-
