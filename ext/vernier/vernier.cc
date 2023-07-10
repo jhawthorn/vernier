@@ -20,6 +20,7 @@ using namespace std;
 
 static VALUE rb_mVernier;
 static VALUE rb_cVernierResult;
+static VALUE rb_cVernierCollector;
 
 struct TraceArg {
     rb_trace_arg_t *tparg;
@@ -335,11 +336,36 @@ class RetainedCollector : public BaseCollector {
     }
 };
 
-static RetainedCollector _collector;
+static void
+collector_mark(void *data) {
+    RetainedCollector *collector = static_cast<RetainedCollector *>(data);
+    collector->mark();
+}
+
+static void
+collector_free(void *data) {
+    RetainedCollector *collector = static_cast<RetainedCollector *>(data);
+    delete collector;
+}
+
+static const rb_data_type_t rb_collector_type = {
+    .wrap_struct_name = "vernier/collector",
+    .function = {
+        //.dmemsize = rb_collector_memsize,
+        .dmark = collector_mark,
+        .dfree = collector_free,
+    },
+};
+
+static RetainedCollector *get_collector(VALUE obj) {
+    RetainedCollector *collector;
+    TypedData_Get_Struct(obj, RetainedCollector, &rb_collector_type, collector);
+    return collector;
+}
 
 static VALUE
-trace_retained_start(VALUE self) {
-    RetainedCollector *collector = &_collector;
+collector_start(VALUE self) {
+    RetainedCollector *collector = get_collector(self);
 
     if (!collector->start()) {
         rb_raise(rb_eRuntimeError, "already running");
@@ -349,17 +375,17 @@ trace_retained_start(VALUE self) {
 }
 
 static VALUE
-trace_retained_stop(VALUE self) {
-    RetainedCollector *collector = &_collector;
+collector_stop(VALUE self) {
+    RetainedCollector *collector = get_collector(self);
 
     VALUE result = collector->stop();
     return result;
 }
 
-static void
-collector_mark(void *data) {
-    RetainedCollector *collector = static_cast<RetainedCollector *>(data);
-    collector->mark();
+
+static VALUE collector_new(VALUE self) {
+    RetainedCollector *collector = new RetainedCollector();
+    return TypedData_Wrap_Struct(self, &rb_collector_type, collector);
 }
 
 extern "C" void
@@ -368,9 +394,12 @@ Init_vernier(void)
   rb_mVernier = rb_define_module("Vernier");
   rb_cVernierResult = rb_define_class_under(rb_mVernier, "Result", rb_cObject);
 
-  rb_define_module_function(rb_mVernier, "trace_retained_start", trace_retained_start, 0);
-  rb_define_module_function(rb_mVernier, "trace_retained_stop", trace_retained_stop, 0);
+  rb_cVernierCollector = rb_define_class_under(rb_mVernier, "Collector", rb_cObject);
+  rb_undef_alloc_func(rb_cVernierCollector);
+  rb_define_singleton_method(rb_cVernierCollector, "new", collector_new, 0);
+  rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
+  rb_define_method(rb_cVernierCollector, "stop",  collector_stop, 0);
 
-  static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, collector_mark, NULL, &_collector);
-  rb_global_variable(&gc_hook);
+  //static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, collector_mark, NULL, &_collector);
+  //rb_global_variable(&gc_hook);
 }

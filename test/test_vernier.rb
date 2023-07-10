@@ -63,18 +63,16 @@ class TestVernier < Minitest::Test
     assert result.total_bytes < 40 * 8
   end
 
-  def test_nesting_errors
-    ex = nil
-    result = Vernier.trace_retained do
-      ex = assert_raises RuntimeError do
-        Vernier.trace_retained do
-        end
+  def test_nested_collections
+    result1 = result2 = nil
+    result1 = Vernier.trace_retained do
+      result2 = Vernier.trace_retained do
+        Object.new
       end
     end
 
-    assert_equal "already running", ex.message
-
-    assert result.samples.size > 0
+    assert result2.samples.size > 0
+    assert result1.samples.size > result2.samples.size
   end
 
   def test_nothing_retained

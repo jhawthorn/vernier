@@ -9,6 +9,10 @@ Rake::TestTask.new(:test) do |t|
   t.test_files = FileList["test/**/test_*.rb"]
 end
 
+task :console => :compile do
+  sh "irb -r vernier"
+end
+
 require "rake/extensiontask"
 
 task build: :compile

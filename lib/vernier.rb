@@ -110,13 +110,14 @@ module Vernier
 
     start_time = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
 
-    Vernier.trace_retained_start
+    collector = Vernier::Collector.new
+    collector.start
 
     result = nil
     begin
       yield
     ensure
-      result = trace_retained_stop
+      result = collector.stop
       end_time = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
       result.pid = Process.pid
       result.start_time = start_time
