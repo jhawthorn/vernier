@@ -11,6 +11,11 @@
 #include "stack.hh"
 #include "ruby/debug.h"
 
+#define sym(name) ID2SYM(rb_intern_const(name))
+
+// HACK: This isn't public, but the objspace ext uses it
+extern "C" size_t rb_obj_memsize_of(VALUE);
+
 using namespace std;
 
 static VALUE rb_mVernier;
@@ -131,15 +136,12 @@ struct FrameList {
     }
 };
 
-struct retained_collector {
+class BaseCollector {
+    public:
     bool running = false;
-
-    std::unordered_map<VALUE, int> object_frames;
-    std::vector<VALUE> object_list;
-
     FrameList frame_list;
 
-    bool start() {
+    virtual bool start() {
         if (running) {
             return false;
         } else {
@@ -148,12 +150,172 @@ struct retained_collector {
         }
     }
 
+    virtual void reset() {
+        frame_list.clear();
+        running = false;
+    }
+};
+
+class RetainedCollector : public BaseCollector {
+    public:
+
+    std::unordered_map<VALUE, int> object_frames;
+    std::vector<VALUE> object_list;
+
+    VALUE tp_newobj = Qnil;
+    VALUE tp_freeobj = Qnil;
+
+    static void newobj_i(VALUE tpval, void *data) {
+        RetainedCollector *collector = static_cast<RetainedCollector *>(data);
+        TraceArg tp(tpval);
+
+        VALUE frames_buffer[2048];
+        int lines_buffer[2048];
+        int n = rb_profile_frames(0, 2048, frames_buffer, lines_buffer);
+
+        collector->record(tp.obj, frames_buffer, lines_buffer, n);
+    }
+
+    static void freeobj_i(VALUE tpval, void *data) {
+        RetainedCollector *collector = static_cast<RetainedCollector *>(data);
+        TraceArg tp(tpval);
+
+        collector->object_frames.erase(tp.obj);
+    }
+
+    bool start() {
+        if (!BaseCollector::start()) {
+            return false;
+        }
+
+        tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
+        tp_freeobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_FREEOBJ, freeobj_i, this);
+
+        rb_tracepoint_enable(tp_newobj);
+        rb_tracepoint_enable(tp_freeobj);
+
+        return true;
+    }
+
+    VALUE stop() {
+        if (!running) {
+            rb_raise(rb_eRuntimeError, "collector not running");
+        }
+
+        // GC before we start turning stacks into strings
+        rb_gc();
+
+        // Stop tracking any more new objects, but we'll continue tracking free'd
+        // objects as we may be able to free some as we remove our own references
+        // to stack frames.
+        rb_tracepoint_disable(tp_newobj);
+        tp_newobj = Qnil;
+
+        frame_list.finalize();
+
+        // We should have collected info for all our frames, so no need to continue
+        // marking them
+        // FIXME: previously here we cleared the list of frames so we would stop
+        // marking them. Maybe now we should set a flag so that we stop marking them
+
+        // GC again
+        rb_gc();
+
+        rb_tracepoint_disable(tp_freeobj);
+        tp_freeobj = Qnil;
+
+        VALUE result = build_collector_result(this);
+
+        reset();
+
+        return result;
+    }
+
+    static VALUE build_collector_result(RetainedCollector *collector) {
+        FrameList &frame_list = collector->frame_list;
+
+        VALUE result = rb_obj_alloc(rb_cVernierResult);
+
+        VALUE samples = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@samples"), samples);
+        VALUE weights = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@weights"), weights);
+
+        for (auto& obj: collector->object_list) {
+            const auto search = collector->object_frames.find(obj);
+            if (search != collector->object_frames.end()) {
+                int stack_index = search->second;
+
+                rb_ary_push(samples, INT2NUM(stack_index));
+                rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
+            }
+        }
+
+        VALUE stack_table = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@stack_table"), stack_table);
+        VALUE stack_table_parent = rb_ary_new();
+        VALUE stack_table_frame = rb_ary_new();
+        rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
+        rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
+        for (const auto &stack : frame_list.stack_node_list) {
+            VALUE parent_val = stack.parent == -1 ? Qnil : INT2NUM(stack.parent);
+            rb_ary_push(stack_table_parent, parent_val);
+            rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
+        }
+
+        VALUE frame_table = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@frame_table"), frame_table);
+        VALUE frame_table_func = rb_ary_new();
+        VALUE frame_table_line = rb_ary_new();
+        rb_hash_aset(frame_table, sym("func"), frame_table_func);
+        rb_hash_aset(frame_table, sym("line"), frame_table_line);
+        //for (const auto &frame : frame_list.frame_list) {
+        for (int i = 0; i < frame_list.frame_with_info_list.size(); i++) {
+            const auto &frame = frame_list.frame_with_info_list[i];
+            rb_ary_push(frame_table_func, INT2NUM(i));
+            rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
+        }
+
+        // TODO: dedup funcs before this step
+        VALUE func_table = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@func_table"), func_table);
+        VALUE func_table_name = rb_ary_new();
+        VALUE func_table_filename = rb_ary_new();
+        VALUE func_table_first_line = rb_ary_new();
+        rb_hash_aset(func_table, sym("name"), func_table_name);
+        rb_hash_aset(func_table, sym("filename"), func_table_filename);
+        rb_hash_aset(func_table, sym("first_line"), func_table_first_line);
+        for (const auto &frame : frame_list.frame_with_info_list) {
+            const std::string label = frame.info.label;
+            const std::string filename = frame.info.file;
+            const int first_line = frame.info.first_lineno;
+
+            rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
+            rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
+            rb_ary_push(func_table_first_line, INT2NUM(first_line));
+        }
+
+        return result;
+    }
+
     void reset() {
         object_frames.clear();
         object_list.clear();
-        frame_list.clear();
 
-        running = false;
+        BaseCollector::reset();
+    }
+
+    void mark() {
+        // We don't mark the objects, but we MUST mark the frames, otherwise they
+        // can be garbage collected.
+        // When we stop collection we will stringify the remaining frames, and then
+        // clear them from the set, allowing them to be removed from out output.
+        for (auto stack_node: frame_list.stack_node_list) {
+            rb_gc_mark(stack_node.frame.frame);
+        }
+
+        rb_gc_mark(tp_newobj);
+        rb_gc_mark(tp_freeobj);
     }
 
     void record(VALUE obj, VALUE *frames_buffer, int *lines_buffer, int n) {
@@ -166,53 +328,19 @@ struct retained_collector {
     }
 };
 
-static retained_collector _collector;
-
-static VALUE tp_newobj = Qnil;
-static VALUE tp_freeobj = Qnil;
-
-static void
-newobj_i(VALUE tpval, void *data) {
-    retained_collector *collector = static_cast<retained_collector *>(data);
-    TraceArg tp(tpval);
-
-    VALUE frames_buffer[2048];
-    int lines_buffer[2048];
-    int n = rb_profile_frames(0, 2048, frames_buffer, lines_buffer);
-
-    collector->record(tp.obj, frames_buffer, lines_buffer, n);
-}
-
-static void
-freeobj_i(VALUE tpval, void *data) {
-    retained_collector *collector = static_cast<retained_collector *>(data);
-    TraceArg tp(tpval);
-
-    collector->object_frames.erase(tp.obj);
-}
+static RetainedCollector _collector;
 
 
 static VALUE
 trace_retained_start(VALUE self) {
-    retained_collector *collector = &_collector;
+    RetainedCollector *collector = &_collector;
 
     if (!collector->start()) {
         rb_raise(rb_eRuntimeError, "already running");
     }
 
-    tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, collector);
-    tp_freeobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_FREEOBJ, freeobj_i, collector);
-
-    rb_tracepoint_enable(tp_newobj);
-    rb_tracepoint_enable(tp_freeobj);
-
     return Qtrue;
 }
-
-#define sym(name) ID2SYM(rb_intern_const(name))
-
-// HACK: This isn't public, but the objspace ext uses it
-extern "C" size_t rb_obj_memsize_of(VALUE);
 
 static const char *
 ruby_object_type_name(VALUE obj) {
@@ -258,126 +386,17 @@ ruby_object_type_name(VALUE obj) {
 }
 
 static VALUE
-build_collector_result(retained_collector *collector) {
-    FrameList &frame_list = collector->frame_list;
-
-    VALUE result = rb_obj_alloc(rb_cVernierResult);
-
-    VALUE samples = rb_ary_new();
-    rb_ivar_set(result, rb_intern("@samples"), samples);
-    VALUE weights = rb_ary_new();
-    rb_ivar_set(result, rb_intern("@weights"), weights);
-
-    for (auto& obj: collector->object_list) {
-        const auto search = collector->object_frames.find(obj);
-        if (search != collector->object_frames.end()) {
-            int stack_index = search->second;
-
-            rb_ary_push(samples, INT2NUM(stack_index));
-            rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
-        }
-    }
-
-    VALUE stack_table = rb_hash_new();
-    rb_ivar_set(result, rb_intern("@stack_table"), stack_table);
-    VALUE stack_table_parent = rb_ary_new();
-    VALUE stack_table_frame = rb_ary_new();
-    rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
-    rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
-    for (const auto &stack : frame_list.stack_node_list) {
-        VALUE parent_val = stack.parent == -1 ? Qnil : INT2NUM(stack.parent);
-        rb_ary_push(stack_table_parent, parent_val);
-        rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
-    }
-
-    VALUE frame_table = rb_hash_new();
-    rb_ivar_set(result, rb_intern("@frame_table"), frame_table);
-    VALUE frame_table_func = rb_ary_new();
-    VALUE frame_table_line = rb_ary_new();
-    rb_hash_aset(frame_table, sym("func"), frame_table_func);
-    rb_hash_aset(frame_table, sym("line"), frame_table_line);
-    //for (const auto &frame : frame_list.frame_list) {
-    for (int i = 0; i < frame_list.frame_with_info_list.size(); i++) {
-        const auto &frame = frame_list.frame_with_info_list[i];
-        rb_ary_push(frame_table_func, INT2NUM(i));
-        rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
-    }
-
-    // TODO: dedup funcs before this step
-    VALUE func_table = rb_hash_new();
-    rb_ivar_set(result, rb_intern("@func_table"), func_table);
-    VALUE func_table_name = rb_ary_new();
-    VALUE func_table_filename = rb_ary_new();
-    VALUE func_table_first_line = rb_ary_new();
-    rb_hash_aset(func_table, sym("name"), func_table_name);
-    rb_hash_aset(func_table, sym("filename"), func_table_filename);
-    rb_hash_aset(func_table, sym("first_line"), func_table_first_line);
-    for (const auto &frame : frame_list.frame_with_info_list) {
-        const std::string label = frame.info.label;
-        const std::string filename = frame.info.file;
-        const int first_line = frame.info.first_lineno;
-
-        rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
-        rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
-        rb_ary_push(func_table_first_line, INT2NUM(first_line));
-    }
-
-    return result;
-}
-
-static VALUE
 trace_retained_stop(VALUE self) {
-    retained_collector *collector = &_collector;
+    RetainedCollector *collector = &_collector;
 
-    if (!collector->running) {
-        rb_raise(rb_eRuntimeError, "collector not running");
-    }
-
-    // GC before we start turning stacks into strings
-    rb_gc();
-
-    // Stop tracking any more new objects, but we'll continue tracking free'd
-    // objects as we may be able to free some as we remove our own references
-    // to stack frames.
-    rb_tracepoint_disable(tp_newobj);
-    tp_newobj = Qnil;
-
-    FrameList &frame_list = collector->frame_list;
-
-    collector->frame_list.finalize();
-
-    // We should have collected info for all our frames, so no need to continue
-    // marking them
-    // FIXME: previously here we cleared the list of frames so we would stop
-    // marking them. Maybe now we should set a flag so that we stop marking them
-
-    // GC again
-    rb_gc();
-
-    rb_tracepoint_disable(tp_freeobj);
-    tp_freeobj = Qnil;
-
-    VALUE result = build_collector_result(collector);
-
-    collector->reset();
-
+    VALUE result = collector->stop();
     return result;
 }
 
 static void
-retained_collector_mark(void *data) {
-    retained_collector *collector = static_cast<retained_collector *>(data);
-
-    // We don't mark the objects, but we MUST mark the frames, otherwise they
-    // can be garbage collected.
-    // When we stop collection we will stringify the remaining frames, and then
-    // clear them from the set, allowing them to be removed from out output.
-    for (auto stack_node: collector->frame_list.stack_node_list) {
-        rb_gc_mark(stack_node.frame.frame);
-    }
-
-    rb_gc_mark(tp_newobj);
-    rb_gc_mark(tp_freeobj);
+collector_mark(void *data) {
+    RetainedCollector *collector = static_cast<RetainedCollector *>(data);
+    collector->mark();
 }
 
 extern "C" void
@@ -389,6 +408,6 @@ Init_vernier(void)
   rb_define_module_function(rb_mVernier, "trace_retained_start", trace_retained_start, 0);
   rb_define_module_function(rb_mVernier, "trace_retained_stop", trace_retained_stop, 0);
 
-  static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, retained_collector_mark, NULL, &_collector);
+  static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, collector_mark, NULL, &_collector);
   rb_global_variable(&gc_hook);
 }
