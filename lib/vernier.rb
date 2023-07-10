@@ -110,7 +110,7 @@ module Vernier
 
     start_time = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
 
-    collector = Vernier::Collector.new
+    collector = Vernier::Collector.new(:retained)
     collector.start
 
     result = nil

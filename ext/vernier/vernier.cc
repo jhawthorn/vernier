@@ -140,9 +140,63 @@ struct FrameList {
         frame_to_idx.clear();
         root_stack_node.children.clear();
     }
+
+    void write_result(VALUE result) {
+        FrameList &frame_list = *this;
+
+        VALUE stack_table = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@stack_table"), stack_table);
+        VALUE stack_table_parent = rb_ary_new();
+        VALUE stack_table_frame = rb_ary_new();
+        rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
+        rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
+        for (const auto &stack : frame_list.stack_node_list) {
+            VALUE parent_val = stack.parent == -1 ? Qnil : INT2NUM(stack.parent);
+            rb_ary_push(stack_table_parent, parent_val);
+            rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
+        }
+
+        VALUE frame_table = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@frame_table"), frame_table);
+        VALUE frame_table_func = rb_ary_new();
+        VALUE frame_table_line = rb_ary_new();
+        rb_hash_aset(frame_table, sym("func"), frame_table_func);
+        rb_hash_aset(frame_table, sym("line"), frame_table_line);
+        //for (const auto &frame : frame_list.frame_list) {
+        for (int i = 0; i < frame_list.frame_with_info_list.size(); i++) {
+            const auto &frame = frame_list.frame_with_info_list[i];
+            rb_ary_push(frame_table_func, INT2NUM(i));
+            rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
+        }
+
+        // TODO: dedup funcs before this step
+        VALUE func_table = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@func_table"), func_table);
+        VALUE func_table_name = rb_ary_new();
+        VALUE func_table_filename = rb_ary_new();
+        VALUE func_table_first_line = rb_ary_new();
+        rb_hash_aset(func_table, sym("name"), func_table_name);
+        rb_hash_aset(func_table, sym("filename"), func_table_filename);
+        rb_hash_aset(func_table, sym("first_line"), func_table_first_line);
+        for (const auto &frame : frame_list.frame_with_info_list) {
+            const std::string label = frame.info.label;
+            const std::string filename = frame.info.file;
+            const int first_line = frame.info.first_lineno;
+
+            rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
+            rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
+            rb_ary_push(func_table_first_line, INT2NUM(first_line));
+        }
+    }
 };
 
 class BaseCollector {
+    protected:
+
+    virtual void reset() {
+        frame_list.clear();
+    }
+
     public:
     bool running = false;
     FrameList frame_list;
@@ -156,13 +210,65 @@ class BaseCollector {
         }
     }
 
-    virtual void reset() {
-        frame_list.clear();
+    virtual VALUE stop() {
+        if (!running) {
+            rb_raise(rb_eRuntimeError, "collector not running");
+        }
         running = false;
+
+        return Qnil;
     }
+
+    virtual void sample() {
+        rb_raise(rb_eRuntimeError, "collector doesn't support manual sampling");
+    };
 
     virtual void mark() {
     };
+};
+
+class CustomCollector : public BaseCollector {
+    std::vector<int> samples;
+
+    void sample() {
+        VALUE frames_buffer[2048];
+        int lines_buffer[2048];
+        int n = rb_profile_frames(0, 2048, frames_buffer, lines_buffer);
+
+        Stack stack(frames_buffer, lines_buffer, n);
+
+        int stack_index = frame_list.stack_index(stack);
+
+        samples.push_back(stack_index);
+    }
+
+    VALUE stop() {
+        BaseCollector::stop();
+
+        VALUE result = build_collector_result();
+
+        reset();
+
+        return result;
+    }
+
+    VALUE build_collector_result() {
+        VALUE result = rb_obj_alloc(rb_cVernierResult);
+
+        VALUE samples = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@samples"), samples);
+        VALUE weights = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@weights"), weights);
+
+        for (auto& stack_index: this->samples) {
+            rb_ary_push(samples, INT2NUM(stack_index));
+            rb_ary_push(weights, INT2NUM(1));
+        }
+
+        frame_list.write_result(result);
+
+        return result;
+    }
 };
 
 class RetainedCollector : public BaseCollector {
@@ -223,9 +329,7 @@ class RetainedCollector : public BaseCollector {
     }
 
     VALUE stop() {
-        if (!running) {
-            rb_raise(rb_eRuntimeError, "collector not running");
-        }
+        BaseCollector::stop();
 
         // GC before we start turning stacks into strings
         rb_gc();
@@ -277,49 +381,7 @@ class RetainedCollector : public BaseCollector {
             }
         }
 
-        VALUE stack_table = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@stack_table"), stack_table);
-        VALUE stack_table_parent = rb_ary_new();
-        VALUE stack_table_frame = rb_ary_new();
-        rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
-        rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
-        for (const auto &stack : frame_list.stack_node_list) {
-            VALUE parent_val = stack.parent == -1 ? Qnil : INT2NUM(stack.parent);
-            rb_ary_push(stack_table_parent, parent_val);
-            rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
-        }
-
-        VALUE frame_table = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@frame_table"), frame_table);
-        VALUE frame_table_func = rb_ary_new();
-        VALUE frame_table_line = rb_ary_new();
-        rb_hash_aset(frame_table, sym("func"), frame_table_func);
-        rb_hash_aset(frame_table, sym("line"), frame_table_line);
-        //for (const auto &frame : frame_list.frame_list) {
-        for (int i = 0; i < frame_list.frame_with_info_list.size(); i++) {
-            const auto &frame = frame_list.frame_with_info_list[i];
-            rb_ary_push(frame_table_func, INT2NUM(i));
-            rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
-        }
-
-        // TODO: dedup funcs before this step
-        VALUE func_table = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@func_table"), func_table);
-        VALUE func_table_name = rb_ary_new();
-        VALUE func_table_filename = rb_ary_new();
-        VALUE func_table_first_line = rb_ary_new();
-        rb_hash_aset(func_table, sym("name"), func_table_name);
-        rb_hash_aset(func_table, sym("filename"), func_table_filename);
-        rb_hash_aset(func_table, sym("first_line"), func_table_first_line);
-        for (const auto &frame : frame_list.frame_with_info_list) {
-            const std::string label = frame.info.label;
-            const std::string filename = frame.info.file;
-            const int first_line = frame.info.first_lineno;
-
-            rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
-            rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
-            rb_ary_push(func_table_first_line, INT2NUM(first_line));
-        }
+        frame_list.write_result(result);
 
         return result;
     }
@@ -344,7 +406,7 @@ collector_mark(void *data) {
 
 static void
 collector_free(void *data) {
-    RetainedCollector *collector = static_cast<RetainedCollector *>(data);
+    BaseCollector *collector = static_cast<BaseCollector *>(data);
     delete collector;
 }
 
@@ -357,15 +419,15 @@ static const rb_data_type_t rb_collector_type = {
     },
 };
 
-static RetainedCollector *get_collector(VALUE obj) {
-    RetainedCollector *collector;
-    TypedData_Get_Struct(obj, RetainedCollector, &rb_collector_type, collector);
+static BaseCollector *get_collector(VALUE obj) {
+    BaseCollector *collector;
+    TypedData_Get_Struct(obj, BaseCollector, &rb_collector_type, collector);
     return collector;
 }
 
 static VALUE
 collector_start(VALUE self) {
-    RetainedCollector *collector = get_collector(self);
+    auto *collector = get_collector(self);
 
     if (!collector->start()) {
         rb_raise(rb_eRuntimeError, "already running");
@@ -376,15 +438,29 @@ collector_start(VALUE self) {
 
 static VALUE
 collector_stop(VALUE self) {
-    RetainedCollector *collector = get_collector(self);
+    auto *collector = get_collector(self);
 
     VALUE result = collector->stop();
     return result;
 }
 
+static VALUE
+collector_sample(VALUE self) {
+    auto *collector = get_collector(self);
 
-static VALUE collector_new(VALUE self) {
-    RetainedCollector *collector = new RetainedCollector();
+    collector->sample();
+    return Qtrue;
+}
+
+static VALUE collector_new(VALUE self, VALUE mode) {
+    BaseCollector *collector;
+    if (mode == sym("retained")) {
+        collector = new RetainedCollector();
+    } else if (mode == sym("custom")) {
+        collector = new CustomCollector();
+    } else {
+        rb_raise(rb_eArgError, "invalid mode");
+    }
     return TypedData_Wrap_Struct(self, &rb_collector_type, collector);
 }
 
@@ -396,9 +472,10 @@ Init_vernier(void)
 
   rb_cVernierCollector = rb_define_class_under(rb_mVernier, "Collector", rb_cObject);
   rb_undef_alloc_func(rb_cVernierCollector);
-  rb_define_singleton_method(rb_cVernierCollector, "new", collector_new, 0);
+  rb_define_singleton_method(rb_cVernierCollector, "new", collector_new, 1);
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
   rb_define_method(rb_cVernierCollector, "stop",  collector_stop, 0);
+  rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
 
   //static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, collector_mark, NULL, &_collector);
   //rb_global_variable(&gc_hook);
