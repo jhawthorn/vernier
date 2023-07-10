@@ -134,7 +134,6 @@ struct FrameList {
 struct retained_collector {
     bool running = false;
 
-    std::unordered_set<VALUE> unique_frames;
     std::map<VALUE, int> object_frames;
     FrameList frame_list;
 
@@ -148,7 +147,6 @@ struct retained_collector {
     }
 
     void reset() {
-        unique_frames.clear();
         object_frames.clear();
         frame_list.clear();
 
@@ -177,10 +175,6 @@ newobj_i(VALUE tpval, void *data) {
     VALUE frames_buffer[2048];
     int lines_buffer[2048];
     int n = rb_profile_frames(0, 2048, frames_buffer, lines_buffer);
-
-    for (int i = 0; i < n; i++) {
-        collector->unique_frames.insert(frames_buffer[i]);
-    }
 
     collector->record(tp.obj, frames_buffer, lines_buffer, n);
 }
@@ -351,7 +345,8 @@ trace_retained_stop(VALUE self) {
 
     // We should have collected info for all our frames, so no need to continue
     // marking them
-    collector->unique_frames.clear();
+    // FIXME: previously here we cleared the list of frames so we would stop
+    // marking them. Maybe now we should set a flag so that we stop marking them
 
     // GC again
     rb_gc();
@@ -374,8 +369,8 @@ retained_collector_mark(void *data) {
     // can be garbage collected.
     // When we stop collection we will stringify the remaining frames, and then
     // clear them from the set, allowing them to be removed from out output.
-    for (VALUE frame: collector->unique_frames) {
-        rb_gc_mark(frame);
+    for (auto stack_node: collector->frame_list.stack_node_list) {
+        rb_gc_mark(stack_node.frame.frame);
     }
 
     rb_gc_mark(tp_newobj);
