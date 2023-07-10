@@ -123,6 +123,11 @@ struct FrameList {
         }
     }
 
+    void mark_frames() {
+        for (auto stack_node: stack_node_list) {
+            rb_gc_mark(stack_node.frame.frame);
+        }
+    }
 
     void clear() {
         string_list.clear();
@@ -154,10 +159,27 @@ class BaseCollector {
         frame_list.clear();
         running = false;
     }
+
+    virtual void mark() {
+    };
 };
 
 class RetainedCollector : public BaseCollector {
-    public:
+    void reset() {
+        object_frames.clear();
+        object_list.clear();
+
+        BaseCollector::reset();
+    }
+
+    void record(VALUE obj, VALUE *frames_buffer, int *lines_buffer, int n) {
+        Stack stack(frames_buffer, lines_buffer, n);
+
+        int stack_index = frame_list.stack_index(stack);
+
+        object_list.push_back(obj);
+        object_frames.emplace(obj, stack_index);
+    }
 
     std::unordered_map<VALUE, int> object_frames;
     std::vector<VALUE> object_list;
@@ -182,6 +204,8 @@ class RetainedCollector : public BaseCollector {
 
         collector->object_frames.erase(tp.obj);
     }
+
+    public:
 
     bool start() {
         if (!BaseCollector::start()) {
@@ -224,14 +248,15 @@ class RetainedCollector : public BaseCollector {
         rb_tracepoint_disable(tp_freeobj);
         tp_freeobj = Qnil;
 
-        VALUE result = build_collector_result(this);
+        VALUE result = build_collector_result();
 
         reset();
 
         return result;
     }
 
-    static VALUE build_collector_result(RetainedCollector *collector) {
+    VALUE build_collector_result() {
+        RetainedCollector *collector = this;
         FrameList &frame_list = collector->frame_list;
 
         VALUE result = rb_obj_alloc(rb_cVernierResult);
@@ -298,38 +323,19 @@ class RetainedCollector : public BaseCollector {
         return result;
     }
 
-    void reset() {
-        object_frames.clear();
-        object_list.clear();
-
-        BaseCollector::reset();
-    }
-
     void mark() {
         // We don't mark the objects, but we MUST mark the frames, otherwise they
         // can be garbage collected.
         // When we stop collection we will stringify the remaining frames, and then
         // clear them from the set, allowing them to be removed from out output.
-        for (auto stack_node: frame_list.stack_node_list) {
-            rb_gc_mark(stack_node.frame.frame);
-        }
+        frame_list.mark_frames();
 
         rb_gc_mark(tp_newobj);
         rb_gc_mark(tp_freeobj);
     }
-
-    void record(VALUE obj, VALUE *frames_buffer, int *lines_buffer, int n) {
-        Stack stack(frames_buffer, lines_buffer, n);
-
-        int stack_index = frame_list.stack_index(stack);
-
-        object_list.push_back(obj);
-        object_frames.emplace(obj, stack_index);
-    }
 };
 
 static RetainedCollector _collector;
-
 
 static VALUE
 trace_retained_start(VALUE self) {
