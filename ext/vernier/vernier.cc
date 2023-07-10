@@ -272,11 +272,6 @@ build_collector_result(retained_collector *collector) {
         int stack_index = frame_list.stack_index(stack);
         rb_ary_push(samples, INT2NUM(stack_index));
         rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
-
-        //for (int i = stack.size() - 1; i >= 0; i--) {
-        //    const FrameInfo &frame = stack.frame_info(i);
-        //    int index = frame_list.frame_info_index(frame);
-        //}
     }
 
     VALUE stack_table = rb_hash_new();
