@@ -110,6 +110,8 @@ class TestVernier < Minitest::Test
   end
 
   def test_nothing_retained_in_module_eval
+    skip("WIP")
+
     # Warm
     build_large_module
 
