@@ -401,7 +401,7 @@ class RetainedCollector : public BaseCollector {
 
 static void
 collector_mark(void *data) {
-    RetainedCollector *collector = static_cast<RetainedCollector *>(data);
+    BaseCollector *collector = static_cast<BaseCollector *>(data);
     collector->mark();
 }
 
