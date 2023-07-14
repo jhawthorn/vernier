@@ -7,8 +7,74 @@ module Vernier
     # https://profiler.firefox.com/
     # https://github.com/firefox-devtools/profiler/blob/main/src/types/profile.js
     class Firefox
+      class Categorizer
+        attr_reader :categories
+        def initialize
+          @categories = []
+
+          add_category(name: "Default", color: "grey")
+          add_category(name: "GC", color: "red")
+          add_category(
+            name: "stdlib",
+            color: "red",
+            matcher: starts_with(RbConfig::CONFIG["rubylibdir"])
+          )
+          add_category(name: "cfunc", color: "yellow", matcher: "<cfunc>")
+
+          rails_components = %w[ activesupport activemodel activerecord
+          actionview actionpack activejob actionmailer actioncable
+          activestorage actionmailbox actiontext railties ]
+          add_category(
+            name: "Rails",
+            color: "green",
+            matcher: gem_path(*rails_components)
+          )
+          add_category(
+            name: "gem",
+            color: "red",
+            matcher: starts_with(*Gem.path)
+          )
+          add_category(
+            name: "Application",
+            color: "purple"
+          )
+        end
+
+        def add_category(**kw)
+          @categories << Category.new(@categories.length, **kw)
+        end
+
+        def starts_with(*paths)
+          %r{\A#{Regexp.union(paths)}}
+        end
+
+        def gem_path(*names)
+          %r{\A#{Regexp.union(Gem.path)}/gems/#{Regexp.union(names)}}
+        end
+
+        def categorize(path)
+          @categories.detect { |category| category.matches?(path) } || @categories.first
+        end
+
+        class Category
+          attr_reader :idx, :name, :color, :matcher
+          def initialize(idx, name:, color:, matcher: nil)
+            @idx = idx
+            @name = name
+            @color = color
+            @matcher = matcher
+          end
+
+          def matches?(path)
+            @matcher && @matcher === path
+          end
+        end
+      end
+
       def initialize(profile)
         @profile = profile
+
+        @categorizer = Categorizer.new
 
         names = profile.func_table.fetch(:name)
         filenames = profile.func_table.fetch(:filename)
@@ -19,6 +85,9 @@ module Vernier
         end
         @filenames = filenames.map do |filename|
           @strings[filename]
+        end
+        @categories = filenames.map do |filename|
+          @categorizer.categorize(filename)
         end
       end
 
@@ -47,7 +116,14 @@ module Vernier
               time: "ms",
               eventDelay: "ms",
               threadCPUDelta: "µs"
-            } # FIXME: memory vs wall
+            }, # FIXME: memory vs wall
+            categories: @categorizer.categories.map do |category|
+              {
+                name: category.name,
+                color: category.color,
+                subcategories: []
+              }
+            end
           },
           libs: [],
           threads: [
@@ -122,7 +198,7 @@ module Vernier
         raise unless prefixes.size == size
         {
           frame: frames,
-          category: [1] * size,
+          category: frames.map{|idx| @categories[idx].idx },
           subcategory: [0] * size,
           prefix: prefixes,
           length: prefixes.length
@@ -134,13 +210,14 @@ module Vernier
         lines = profile.frame_table.fetch(:line)
         size = funcs.length
         none = [nil] * size
+        categories = @categories.map(&:idx)
 
         raise unless lines.size == funcs.size
 
         {
           address: [-1] * size,
           inlineDepth: [0] * size,
-          category: nil,
+          category: categories,
           subcategory: nil,
           func: funcs,
           nativeSymbol: none,
