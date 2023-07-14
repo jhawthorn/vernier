@@ -7,6 +7,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <sys/time.h>
+#include <signal.h>
+
 #include "vernier.hh"
 #include "stack.hh"
 #include "ruby/debug.h"
@@ -246,6 +249,8 @@ class CustomCollector : public BaseCollector {
     VALUE stop() {
         BaseCollector::stop();
 
+        frame_list.finalize();
+
         VALUE result = build_collector_result();
 
         reset();
@@ -399,6 +404,133 @@ class RetainedCollector : public BaseCollector {
     }
 };
 
+class TimeCollector : public BaseCollector {
+    static TimeCollector *instance;
+
+    std::vector<int> samples;
+
+    VALUE queued_frames[2048];
+    int queued_lines[2048];
+    int queued_length = 0;
+    int buffered_samples = 0;
+
+    void queue_sample() {
+        buffered_samples++;
+
+        if (buffered_samples > 1) {
+            return;
+        }
+
+        queued_length = rb_profile_frames(0, 2048, queued_frames, queued_lines);
+    }
+
+    void record_sample() {
+        Stack stack(queued_frames, queued_lines, queued_length);
+        int stack_index = frame_list.stack_index(stack);
+        samples.push_back(stack_index);
+
+        buffered_samples = 0;
+    }
+
+    static void postponed_job_handler(void *) {
+        if (instance) {
+            instance->record_sample();
+        }
+    }
+
+    static void signal_handler(int sig, siginfo_t* sinfo, void* ucontext) {
+        if (instance) {
+            instance->queue_sample();
+            rb_postponed_job_register_one(0, postponed_job_handler, (void*)0);
+        }
+    }
+
+    enum timer_mode { MODE_WALL, MODE_CPU };
+
+    bool start() {
+        if (instance) {
+            return false;
+        }
+        if (!BaseCollector::start()) {
+            return false;
+        }
+
+        instance = this;
+
+        timer_mode mode = MODE_WALL;
+
+        struct sigaction sa;
+        sa.sa_sigaction = signal_handler;
+        sa.sa_flags = SA_RESTART | SA_SIGINFO;
+        sigemptyset(&sa.sa_mask);
+        sigaction(mode == MODE_WALL ? SIGALRM : SIGPROF, &sa, NULL);
+        // TODO: also SIGPROF
+
+        int interval = 500;
+        struct itimerval timer;
+        timer.it_interval.tv_sec = 0;
+        timer.it_interval.tv_usec = interval;
+        timer.it_value = timer.it_interval;
+        setitimer(mode == MODE_WALL ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+
+        return true;
+    }
+
+    VALUE stop() {
+        BaseCollector::stop();
+
+        instance = NULL;
+
+        timer_mode mode = MODE_WALL;
+
+	struct itimerval timer;
+	memset(&timer, 0, sizeof(timer));
+	setitimer(mode == MODE_WALL ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+
+	struct sigaction sa;
+	sa.sa_handler = SIG_IGN;
+	sa.sa_flags = SA_RESTART;
+	sigemptyset(&sa.sa_mask);
+	sigaction(mode == MODE_WALL ? SIGALRM : SIGPROF, &sa, NULL);
+
+        frame_list.finalize();
+
+        VALUE result = build_collector_result();
+
+        reset();
+
+        return result;
+    }
+
+    VALUE build_collector_result() {
+        VALUE result = rb_obj_alloc(rb_cVernierResult);
+
+        VALUE samples = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@samples"), samples);
+        VALUE weights = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@weights"), weights);
+
+        for (auto& stack_index: this->samples) {
+            rb_ary_push(samples, INT2NUM(stack_index));
+            rb_ary_push(weights, INT2NUM(1));
+        }
+
+        frame_list.write_result(result);
+
+        return result;
+    }
+
+    void mark() {
+        frame_list.mark_frames();
+
+        for (int i = 0; i < queued_length; i++) {
+            rb_gc_mark(queued_frames[i]);
+        }
+    }
+};
+
+TimeCollector *TimeCollector::instance = NULL;
+
 static void
 collector_mark(void *data) {
     BaseCollector *collector = static_cast<BaseCollector *>(data);
@@ -459,6 +591,8 @@ static VALUE collector_new(VALUE self, VALUE mode) {
         collector = new RetainedCollector();
     } else if (mode == sym("custom")) {
         collector = new CustomCollector();
+    } else if (mode == sym("wall")) {
+        collector = new TimeCollector();
     } else {
         rb_raise(rb_eArgError, "invalid mode");
     }

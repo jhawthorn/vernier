@@ -114,6 +114,23 @@ module Vernier
     end
   end
 
+  def self.trace(mode: :wall, out: nil)
+    collector = Vernier::Collector.new(mode)
+    collector.start
+
+    result = nil
+    begin
+      yield
+    ensure
+      result = collector.stop
+    end
+
+    if out
+      File.write(out, Output::Firefox.new(result).output)
+    end
+    result
+  end
+
   def self.trace_retained(out: nil, gc: true)
     3.times { GC.start } if gc
 
