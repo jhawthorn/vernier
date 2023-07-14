@@ -3,6 +3,7 @@
 require_relative "vernier/version"
 require_relative "vernier/vernier"
 require_relative "vernier/output/firefox"
+require_relative "vernier/output/top"
 
 module Vernier
   class Error < StandardError; end
@@ -81,6 +82,14 @@ module Vernier
           yield Frame.new(result, frame_idx)
           stack_idx = result.stack_table[:parent][stack_idx]
         end
+      end
+
+      def leaf_frame_idx
+        result.stack_table[:frame][idx]
+      end
+
+      def leaf_frame
+        Frame.new(result, leaf_frame_idx)
       end
 
       def frames
