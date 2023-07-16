@@ -483,15 +483,15 @@ class TimeCollector : public BaseCollector {
 
         timer_mode mode = MODE_WALL;
 
-	struct itimerval timer;
-	memset(&timer, 0, sizeof(timer));
-	setitimer(mode == MODE_WALL ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+        struct itimerval timer;
+        memset(&timer, 0, sizeof(timer));
+        setitimer(mode == MODE_WALL ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
 
-	struct sigaction sa;
-	sa.sa_handler = SIG_IGN;
-	sa.sa_flags = SA_RESTART;
-	sigemptyset(&sa.sa_mask);
-	sigaction(mode == MODE_WALL ? SIGALRM : SIGPROF, &sa, NULL);
+        struct sigaction sa;
+        sa.sa_handler = SIG_IGN;
+        sa.sa_flags = SA_RESTART;
+        sigemptyset(&sa.sa_mask);
+        sigaction(mode == MODE_WALL ? SIGALRM : SIGPROF, &sa, NULL);
 
         frame_list.finalize();
 
