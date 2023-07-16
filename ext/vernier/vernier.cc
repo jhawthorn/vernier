@@ -563,11 +563,6 @@ class RetainedCollector : public BaseCollector {
 class TimeCollector : public BaseCollector {
     std::vector<int> samples;
 
-    VALUE queued_frames[2048];
-    int queued_lines[2048];
-    int queued_length = 0;
-    int buffered_samples = 0;
-
     pthread_t target_thread;
     pthread_t sample_thread;
 
