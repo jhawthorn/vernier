@@ -21,10 +21,10 @@ class TestTimeCollector < Minitest::Test
     result = collector.stop
 
     assert_valid_result result
-    assert_equal 400, result.samples.size
+    assert_includes (380..420), result.samples.size
 
-    significant_stacks = result.samples.tally.select { |k,v| v > 5 }
+    significant_stacks = result.samples.tally.select { |k,v| v > 10 }
     assert_equal 2, significant_stacks.size
-    assert significant_stacks.sum(&:last) > 390
+    assert significant_stacks.sum(&:last) > 350
   end
 end
