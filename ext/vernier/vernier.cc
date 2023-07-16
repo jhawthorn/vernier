@@ -6,9 +6,12 @@
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
+#include <cassert>
+#include <atomic>
 
 #include <sys/time.h>
 #include <signal.h>
+#include <semaphore.h>
 
 #include "vernier.hh"
 #include "stack.hh"
@@ -24,6 +27,165 @@ using namespace std;
 static VALUE rb_mVernier;
 static VALUE rb_cVernierResult;
 static VALUE rb_cVernierCollector;
+
+class TimeStamp {
+    static const uint64_t nanoseconds_per_second = 1000000000;
+    uint64_t value_ns;
+
+    TimeStamp(uint64_t value_ns) : value_ns(value_ns) {}
+
+    public:
+    static TimeStamp Now() {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        return TimeStamp(ts.tv_sec * nanoseconds_per_second + ts.tv_nsec);
+    }
+
+    static void Sleep(const TimeStamp &time) {
+        struct timespec ts = time.timespec();
+
+        int res;
+        do {
+            res = nanosleep(&ts, &ts);
+        } while (res && errno == EINTR);
+    }
+
+    static TimeStamp from_microseconds(uint64_t us) {
+        return TimeStamp(us * 1000);
+    }
+
+    static TimeStamp from_nanoseconds(uint64_t ns) {
+        return TimeStamp(ns);
+    }
+
+    TimeStamp operator-(const TimeStamp &other) const {
+        TimeStamp result = *this;
+        return result -= other;
+    }
+
+    TimeStamp &operator-=(const TimeStamp &other) {
+        if (value_ns > other.value_ns) {
+            value_ns = value_ns - other.value_ns;
+        } else {
+            // underflow
+            value_ns = 0;
+        }
+        return *this;
+    }
+
+    TimeStamp operator+(const TimeStamp &other) const {
+        TimeStamp result = *this;
+        return result += other;
+    }
+
+    TimeStamp &operator+=(const TimeStamp &other) {
+        uint64_t new_value = value_ns + other.value_ns;
+        value_ns = new_value;
+        return *this;
+    }
+
+    uint64_t nanoseconds() const {
+        return value_ns;
+    }
+
+    uint64_t microseconds() const {
+        return value_ns / 1000;
+    }
+
+    struct timespec timespec() const {
+        struct timespec ts;
+        ts.tv_sec = nanoseconds() / nanoseconds_per_second;
+        ts.tv_nsec = (nanoseconds() % nanoseconds_per_second);
+        return ts;
+    }
+};
+
+std::ostream& operator<<(std::ostream& os, const TimeStamp& info) {
+    os << info.nanoseconds() << "ns";
+    return os;
+}
+
+// A basic semaphore built on sem_wait/sem_post
+// post() is guaranteed to be async-signal-safe
+class SamplerSemaphore {
+    sem_t sem;
+
+    public:
+
+    SamplerSemaphore(unsigned int value = 0) {
+        sem_init(&sem, 0, value);
+    };
+
+    ~SamplerSemaphore() {
+        sem_destroy(&sem);
+    };
+
+    void wait() {
+        int ret;
+        do {
+            ret = sem_wait(&sem);
+        } while (ret && errno == EINTR);
+        assert(ret == 0);
+    }
+
+    void post() {
+        sem_post(&sem);
+    }
+};
+
+struct RawSample {
+    constexpr static int MAX_LEN = 2024;
+    VALUE frames[MAX_LEN];
+    int lines[MAX_LEN];
+    int len;
+
+    int size() const {
+        return len;
+    }
+
+    Frame frame(int i) const {
+        const Frame frame = {frames[i], lines[i]};
+        return frame;
+    }
+
+    void sample() {
+        assert(!len);
+        len = rb_profile_frames(0, MAX_LEN, frames, lines);
+    }
+};
+
+// Based very loosely on the design of Gecko's SigHandlerCoordinator
+// This is used for communication between the profiler thread and the signal
+// handlers in the observed thread.
+struct LiveSample {
+    RawSample sample;
+
+    SamplerSemaphore sem_complete;
+
+    // Wait for a sample to be collected by the signal handler on another thread
+    void wait() {
+        sem_complete.wait();
+    }
+
+    int size() const {
+        return sample.size();
+    }
+
+    Frame frame(int i) const {
+        return sample.frame(i);
+    }
+
+    // Called from a signal handler in the observed thread in order to take a
+    // sample and signal to the proifiler thread that the sample is ready.
+    //
+    // CRuby doesn't guarantee that rb_profile_frames can be used as
+    // async-signal-safe but in practice it seems to be.
+    // sem_post is safe in an async-signal-safe context.
+    void sample_current_thread() {
+        sample.sample();
+        sem_complete.post();
+    }
+};
 
 struct TraceArg {
     rb_trace_arg_t *tparg;
@@ -94,7 +256,7 @@ struct FrameList {
     StackNode root_stack_node;
     vector<StackNode> stack_node_list;
 
-    int stack_index(const Stack &stack) {
+    int stack_index(const RawSample &stack) {
         StackNode *node = &root_stack_node;
         //for (int i = 0; i < stack.size(); i++) {
         for (int i = stack.size() - 1; i >= 0; i--) {
@@ -235,13 +397,9 @@ class CustomCollector : public BaseCollector {
     std::vector<int> samples;
 
     void sample() {
-        VALUE frames_buffer[2048];
-        int lines_buffer[2048];
-        int n = rb_profile_frames(0, 2048, frames_buffer, lines_buffer);
-
-        Stack stack(frames_buffer, lines_buffer, n);
-
-        int stack_index = frame_list.stack_index(stack);
+        RawSample sample;
+        sample.sample();
+        int stack_index = frame_list.stack_index(sample);
 
         samples.push_back(stack_index);
     }
@@ -285,10 +443,10 @@ class RetainedCollector : public BaseCollector {
         BaseCollector::reset();
     }
 
-    void record(VALUE obj, VALUE *frames_buffer, int *lines_buffer, int n) {
-        Stack stack(frames_buffer, lines_buffer, n);
-
-        int stack_index = frame_list.stack_index(stack);
+    void record(VALUE obj) {
+        RawSample sample;
+        sample.sample();
+        int stack_index = frame_list.stack_index(sample);
 
         object_list.push_back(obj);
         object_frames.emplace(obj, stack_index);
@@ -304,11 +462,7 @@ class RetainedCollector : public BaseCollector {
         RetainedCollector *collector = static_cast<RetainedCollector *>(data);
         TraceArg tp(tpval);
 
-        VALUE frames_buffer[2048];
-        int lines_buffer[2048];
-        int n = rb_profile_frames(0, 2048, frames_buffer, lines_buffer);
-
-        collector->record(tp.obj, frames_buffer, lines_buffer, n);
+        collector->record(tp.obj);
     }
 
     static void freeobj_i(VALUE tpval, void *data) {
@@ -405,8 +559,6 @@ class RetainedCollector : public BaseCollector {
 };
 
 class TimeCollector : public BaseCollector {
-    static TimeCollector *instance;
-
     std::vector<int> samples;
 
     VALUE queued_frames[2048];
@@ -414,64 +566,76 @@ class TimeCollector : public BaseCollector {
     int queued_length = 0;
     int buffered_samples = 0;
 
-    void queue_sample() {
-        buffered_samples++;
+    pthread_t target_thread;
+    pthread_t sample_thread;
 
-        if (buffered_samples > 1) {
-            return;
-        }
+    atomic_bool running;
+    SamplerSemaphore thread_stopped;
 
-        queued_length = rb_profile_frames(0, 2048, queued_frames, queued_lines);
-    }
+    static inline LiveSample *live_sample;
 
-    void record_sample() {
-        Stack stack(queued_frames, queued_lines, queued_length);
-        int stack_index = frame_list.stack_index(stack);
+    void record_sample(const LiveSample &sample) {
+        int stack_index = frame_list.stack_index(sample.sample);
         samples.push_back(stack_index);
-
-        buffered_samples = 0;
-    }
-
-    static void postponed_job_handler(void *) {
-        if (instance) {
-            instance->record_sample();
-        }
     }
 
     static void signal_handler(int sig, siginfo_t* sinfo, void* ucontext) {
-        if (instance) {
-            instance->queue_sample();
-            rb_postponed_job_register_one(0, postponed_job_handler, (void*)0);
-        }
+        assert(live_sample);
+        live_sample->sample_current_thread();
     }
 
-    enum timer_mode { MODE_WALL, MODE_CPU };
+    void sample_thread_run() {
+        LiveSample sample;
+        live_sample = &sample;
+
+        TimeStamp interval = TimeStamp::from_microseconds(500);
+        TimeStamp next_sample_schedule = TimeStamp::Now();
+        while (running) {
+            TimeStamp sample_start = TimeStamp::Now();
+
+            pthread_kill(target_thread, SIGPROF);
+            sample.wait();
+
+            record_sample(sample);
+
+            TimeStamp sample_complete = TimeStamp::Now();
+
+            next_sample_schedule += interval;
+            TimeStamp sleep_time = next_sample_schedule - sample_complete;
+            TimeStamp::Sleep(sleep_time);
+        }
+
+        live_sample = NULL;
+
+        thread_stopped.post();
+    }
+
+    static void *sample_thread_entry(void *arg) {
+        TimeCollector *collector = static_cast<TimeCollector *>(arg);
+        collector->sample_thread_run();
+        return NULL;
+    }
 
     bool start() {
-        if (instance) {
-            return false;
-        }
         if (!BaseCollector::start()) {
             return false;
         }
 
-        instance = this;
-
-        timer_mode mode = MODE_WALL;
+        target_thread = pthread_self();
 
         struct sigaction sa;
         sa.sa_sigaction = signal_handler;
         sa.sa_flags = SA_RESTART | SA_SIGINFO;
         sigemptyset(&sa.sa_mask);
-        sigaction(mode == MODE_WALL ? SIGALRM : SIGPROF, &sa, NULL);
-        // TODO: also SIGPROF
+        sigaction(SIGPROF, &sa, NULL);
 
-        int interval = 500;
-        struct itimerval timer;
-        timer.it_interval.tv_sec = 0;
-        timer.it_interval.tv_usec = interval;
-        timer.it_value = timer.it_interval;
-        setitimer(mode == MODE_WALL ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
+        running = true;
+
+        int ret = pthread_create(&sample_thread, NULL, &sample_thread_entry, this);
+        if (ret != 0) {
+            perror("pthread_create");
+            rb_bug("pthread_create");
+        }
 
         return true;
     }
@@ -479,19 +643,14 @@ class TimeCollector : public BaseCollector {
     VALUE stop() {
         BaseCollector::stop();
 
-        instance = NULL;
-
-        timer_mode mode = MODE_WALL;
-
-        struct itimerval timer;
-        memset(&timer, 0, sizeof(timer));
-        setitimer(mode == MODE_WALL ? ITIMER_REAL : ITIMER_PROF, &timer, 0);
-
         struct sigaction sa;
         sa.sa_handler = SIG_IGN;
         sa.sa_flags = SA_RESTART;
         sigemptyset(&sa.sa_mask);
-        sigaction(mode == MODE_WALL ? SIGALRM : SIGPROF, &sa, NULL);
+        sigaction(SIGPROF, &sa, NULL);
+
+        running = false;
+        thread_stopped.wait();
 
         frame_list.finalize();
 
@@ -523,13 +682,13 @@ class TimeCollector : public BaseCollector {
     void mark() {
         frame_list.mark_frames();
 
-        for (int i = 0; i < queued_length; i++) {
-            rb_gc_mark(queued_frames[i]);
-        }
+        //for (int i = 0; i < queued_length; i++) {
+        //    rb_gc_mark(queued_frames[i]);
+        //}
+
+        // FIXME: How can we best mark buffered or pending frames?
     }
 };
-
-TimeCollector *TimeCollector::instance = NULL;
 
 static void
 collector_mark(void *data) {
