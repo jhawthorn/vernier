@@ -15,7 +15,9 @@
 
 #include "vernier.hh"
 #include "stack.hh"
+
 #include "ruby/debug.h"
+#include "ruby/thread.h"
 
 #define sym(name) ID2SYM(rb_intern_const(name))
 
@@ -616,6 +618,12 @@ class TimeCollector : public BaseCollector {
         return NULL;
     }
 
+    static void internal_thread_event_cb(rb_event_flag_t event, const rb_internal_thread_event_data_t *event_data, void *data) {
+        //cerr << "internal thread event" << event << " at " << TimeStamp::Now() << endl;
+    }
+
+    rb_internal_thread_event_hook_t *thread_hook;
+
     bool start() {
         if (!BaseCollector::start()) {
             return false;
@@ -637,6 +645,8 @@ class TimeCollector : public BaseCollector {
             rb_bug("pthread_create");
         }
 
+        thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
+
         return true;
     }
 
@@ -651,6 +661,8 @@ class TimeCollector : public BaseCollector {
 
         running = false;
         thread_stopped.wait();
+
+        rb_internal_thread_remove_event_hook(thread_hook);
 
         frame_list.finalize();
 

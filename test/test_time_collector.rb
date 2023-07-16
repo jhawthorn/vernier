@@ -27,4 +27,15 @@ class TestTimeCollector < Minitest::Test
     assert_equal 2, significant_stacks.size
     assert significant_stacks.sum(&:last) > 350
   end
+
+  def test_threads
+    collector = Vernier::Collector.new(:wall)
+    th1 = Thread.new { foo }
+    th2 = Thread.new { foo }
+    collector.start
+    foo
+    th1.join
+    th2.join
+    result = collector.stop
+  end
 end
