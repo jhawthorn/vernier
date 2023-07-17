@@ -103,8 +103,8 @@ module Vernier
         {
           meta: {
             interval: 1, # FIXME: memory vs wall
-            startTime: 0,
-            endTime: profile.total_bytes, # FIXME
+            startTime: (profile.timestamps&.min || 0) / 1_000_000.0,
+            endTime: (profile.timestamps&.max || 0) / 1_000_000.0,
             processType: 0,
             product: "Ruby/Vernier",
             stackwalk: 1,
@@ -149,18 +149,26 @@ module Vernier
                 host: [],
                 type: []
               },
-              markers: {
-                data: [],
-                name: [],
-                startTime: [],
-                endTime: [],
-                phase: [],
-                category: [],
-                length: 0
-              },
+              markers: markers_table,
               stringArray: string_table
             }
           ]
+        }
+      end
+
+      def markers_table
+        markers = profile.markers || []
+        times = markers.map { _1 / 1_000_000.0 }
+        size = times.size
+
+        {
+          data: [nil] * size,
+          name: [@strings["test"]] * size,
+          startTime: times,
+          endTime: [nil] * size,
+          phase: [0] * size,
+          category: [0] * size,
+          length: size
         }
       end
 
@@ -169,11 +177,11 @@ module Vernier
         weights = profile.weights
         size = samples.size
 
-        times = []
-        t = 0
-        weights.each do |w|
-          times << t
-          t += w
+        if profile.timestamps
+          times = profile.timestamps.map { _1 / 1_000_000.0 }
+        else
+          # FIXME: record timestamps for memory samples
+          times = (0...size).to_a
         end
 
         raise unless samples.size == size
@@ -184,8 +192,8 @@ module Vernier
           stack: samples,
           time: times,
           weight: weights,
-          #weightType: "samples",
-          weightType: "bytes",
+          weightType: "samples",
+          #weightType: "bytes",
           length: samples.length
         }
       end
