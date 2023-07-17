@@ -560,8 +560,20 @@ class RetainedCollector : public BaseCollector {
     }
 };
 
+class Marker {
+    public:
+    enum Type {
+        MARKER_GVL_THREAD_RESUMED,
+    };
+    Type type;
+    TimeStamp timestamp;
+};
+
 class TimeCollector : public BaseCollector {
     std::vector<int> samples;
+    std::vector<TimeStamp> timestamps;
+
+    std::vector<Marker> markers;
 
     pthread_t target_thread;
     pthread_t sample_thread;
@@ -594,6 +606,7 @@ class TimeCollector : public BaseCollector {
             sample.wait();
 
             record_sample(sample);
+            timestamps.push_back(sample_start);
 
             TimeStamp sample_complete = TimeStamp::Now();
 
@@ -618,6 +631,8 @@ class TimeCollector : public BaseCollector {
         //cerr << "internal thread event" << event << " at " << TimeStamp::Now() << endl;
 
         if (event == RUBY_INTERNAL_THREAD_EVENT_RESUMED) {
+            collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_RESUMED, TimeStamp::Now()});
+
             // Look at me! I have the GVL!
             collector->target_thread = pthread_self();
         }
@@ -685,6 +700,19 @@ class TimeCollector : public BaseCollector {
         for (auto& stack_index: this->samples) {
             rb_ary_push(samples, INT2NUM(stack_index));
             rb_ary_push(weights, INT2NUM(1));
+        }
+
+        VALUE timestamps = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@timestamps"), timestamps);
+
+        for (auto& timestamp: this->timestamps) {
+            rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
+        }
+
+        VALUE markers = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@markers"), markers);
+        for (auto& marker: this->markers) {
+            rb_ary_push(markers, ULL2NUM(marker.timestamp.nanoseconds()));
         }
 
         frame_list.write_result(result);
