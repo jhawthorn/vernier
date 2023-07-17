@@ -36,6 +36,13 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/jhawthorn/vernier. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/jhawthorn/vernier/blob/main/CODE_OF_CONDUCT.md).
 
+### Resources
+
+* https://profiler.firefox.com/docs/#/
+* https://github.com/firefox-devtools/profiler/tree/main/docs-developer
+* https://github.com/tmm1/stackprof
+* https://github.com/ruby/ruby/pull/5500
+
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
