@@ -614,7 +614,13 @@ class TimeCollector : public BaseCollector {
     }
 
     static void internal_thread_event_cb(rb_event_flag_t event, const rb_internal_thread_event_data_t *event_data, void *data) {
+        TimeCollector *collector = static_cast<TimeCollector *>(data);
         //cerr << "internal thread event" << event << " at " << TimeStamp::Now() << endl;
+
+        if (event == RUBY_INTERNAL_THREAD_EVENT_RESUMED) {
+            // Look at me! I have the GVL!
+            collector->target_thread = pthread_self();
+        }
     }
 
     rb_internal_thread_event_hook_t *thread_hook;

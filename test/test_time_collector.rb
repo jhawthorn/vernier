@@ -28,7 +28,7 @@ class TestTimeCollector < Minitest::Test
     assert significant_stacks.sum(&:last) > 350
   end
 
-  def test_threads
+  def test_sleeping_threads
     collector = Vernier::Collector.new(:wall)
     th1 = Thread.new { foo }
     th2 = Thread.new { foo }
@@ -37,5 +37,26 @@ class TestTimeCollector < Minitest::Test
     th1.join
     th2.join
     result = collector.stop
+
+    # TODO: some assertions on behaviour
+  end
+
+  def count_up_to(n)
+    i = 0
+    while i < n
+      i += 1
+    end
+  end
+
+  def test_two_busy_threads
+    collector = Vernier::Collector.new(:wall)
+    th1 = Thread.new { count_up_to(10_000_000) }
+    th2 = Thread.new { count_up_to(10_000_000) }
+    collector.start
+    th1.join
+    th2.join
+    result = collector.stop
+
+    # TODO: some assertions on behaviour
   end
 end
