@@ -1,6 +1,6 @@
 # Vernier
 
-Experimental Ruby profiling tool
+Experimental next-generation Ruby profiler.
 
 ## Installation
 
@@ -10,16 +10,21 @@ gem 'vernier'
 
 ## Usage
 
-Record a flamegraph of all **retained** allocations from requiring `irb`.
+### Retained memory
+
+Record a flamegraph of all **retained** allocations from loading `irb`.
 
 ```
-ruby -r vernier -e 'Vernier.trace_retained(out: "irb.stackcollapse") { require "irb" }'
+ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "irb" }'
 ```
 
-The output can then be viewed in speedscope or other flamegraph tools
+The output can then be viewed in the [Firefox Profiler (demo)](https://share.firefox.dev/3DhLsFa)
 
-<img width="1082" alt="Screen Shot 2022-04-26 at 8 11 19 PM" src="https://user-images.githubusercontent.com/131752/165440422-3a11f5cc-3018-4455-8918-887c2afa6d6e.png">
+### Time
 
+```
+Vernier.trace(out: "time_profile.json") { some_slow_method }'
+```
 
 ## Development
 
