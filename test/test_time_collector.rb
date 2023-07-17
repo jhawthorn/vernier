@@ -38,6 +38,7 @@ class TestTimeCollector < Minitest::Test
     th2.join
     result = collector.stop
 
+    assert_valid_result result
     # TODO: some assertions on behaviour
   end
 
@@ -57,6 +58,7 @@ class TestTimeCollector < Minitest::Test
     th2.join
     result = collector.stop
 
+    assert_valid_result result
     # TODO: some assertions on behaviour
   end
 end
