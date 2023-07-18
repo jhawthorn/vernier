@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <cassert>
 #include <atomic>
+#include <mutex>
 
 #include <sys/time.h>
 #include <signal.h>
@@ -575,11 +576,23 @@ class Marker {
     TimeStamp timestamp;
 };
 
+class MarkerTable {
+    public:
+        std::vector<Marker> list;
+        std::mutex mutex;
+
+        void record(Marker::Type type) {
+            const std::lock_guard<std::mutex> lock(mutex);
+
+            list.push_back({ type, TimeStamp::Now() });
+        }
+};
+
 class TimeCollector : public BaseCollector {
     std::vector<int> samples;
     std::vector<TimeStamp> timestamps;
 
-    std::vector<Marker> markers;
+    MarkerTable markers;
 
     pthread_t target_thread;
     pthread_t sample_thread;
@@ -638,22 +651,22 @@ class TimeCollector : public BaseCollector {
 
         switch (event) {
             case RUBY_INTERNAL_THREAD_EVENT_STARTED:
-                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_STARTED, TimeStamp::Now()});
+                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_STARTED);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_READY:
-                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_READY, TimeStamp::Now()});
+                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_READY);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_RESUMED:
-                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_RESUMED, TimeStamp::Now()});
+                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_RESUMED);
 
                 // Look at me! I have the GVL!
                 collector->target_thread = pthread_self();
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED:
-                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_SUSPENDED, TimeStamp::Now()});
+                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_SUSPENDED);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_EXITED:
-                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_EXITED, TimeStamp::Now()});
+                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_EXITED);
                 break;
 
         }
@@ -741,7 +754,7 @@ class TimeCollector : public BaseCollector {
         VALUE marker_names = rb_ary_new();
         rb_ivar_set(result, rb_intern("@marker_timestamps"), marker_timestamps);
         rb_ivar_set(result, rb_intern("@marker_names"), marker_names);
-        for (auto& marker: this->markers) {
+        for (auto& marker: this->markers.list) {
             rb_ary_push(marker_timestamps, ULL2NUM(marker.timestamp.nanoseconds()));
             rb_ary_push(marker_names, marker_strings[marker.type]);
         }
