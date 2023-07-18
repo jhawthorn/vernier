@@ -157,13 +157,13 @@ module Vernier
       end
 
       def markers_table
-        markers = profile.markers || []
-        times = markers.map { _1 / 1_000_000.0 }
+        names = (profile.marker_names || [])
+        times = (profile.marker_timestamps || []).map { _1 / 1_000_000.0 }
         size = times.size
 
         {
           data: [nil] * size,
-          name: [@strings["test"]] * size,
+          name: names.map { @strings[_1] },
           startTime: times,
           endTime: [nil] * size,
           phase: [0] * size,

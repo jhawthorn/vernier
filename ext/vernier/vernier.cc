@@ -563,7 +563,13 @@ class RetainedCollector : public BaseCollector {
 class Marker {
     public:
     enum Type {
+        MARKER_GVL_THREAD_STARTED,
+        MARKER_GVL_THREAD_READY,
         MARKER_GVL_THREAD_RESUMED,
+        MARKER_GVL_THREAD_SUSPENDED,
+        MARKER_GVL_THREAD_EXITED,
+
+        MARKER_MAX,
     };
     Type type;
     TimeStamp timestamp;
@@ -630,11 +636,26 @@ class TimeCollector : public BaseCollector {
         TimeCollector *collector = static_cast<TimeCollector *>(data);
         //cerr << "internal thread event" << event << " at " << TimeStamp::Now() << endl;
 
-        if (event == RUBY_INTERNAL_THREAD_EVENT_RESUMED) {
-            collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_RESUMED, TimeStamp::Now()});
+        switch (event) {
+            case RUBY_INTERNAL_THREAD_EVENT_STARTED:
+                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_STARTED, TimeStamp::Now()});
+                break;
+            case RUBY_INTERNAL_THREAD_EVENT_READY:
+                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_READY, TimeStamp::Now()});
+                break;
+            case RUBY_INTERNAL_THREAD_EVENT_RESUMED:
+                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_RESUMED, TimeStamp::Now()});
 
-            // Look at me! I have the GVL!
-            collector->target_thread = pthread_self();
+                // Look at me! I have the GVL!
+                collector->target_thread = pthread_self();
+                break;
+            case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED:
+                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_SUSPENDED, TimeStamp::Now()});
+                break;
+            case RUBY_INTERNAL_THREAD_EVENT_EXITED:
+                collector->markers.push_back(Marker{Marker::Type::MARKER_GVL_THREAD_EXITED, TimeStamp::Now()});
+                break;
+
         }
     }
 
@@ -709,10 +730,20 @@ class TimeCollector : public BaseCollector {
             rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
         }
 
-        VALUE markers = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@markers"), markers);
+        VALUE marker_strings[Marker::Type::MARKER_MAX] = {0};
+        marker_strings[Marker::Type::MARKER_GVL_THREAD_STARTED] = rb_str_new_lit("thread started");
+        marker_strings[Marker::Type::MARKER_GVL_THREAD_READY] = rb_str_new_lit("thread ready");
+        marker_strings[Marker::Type::MARKER_GVL_THREAD_RESUMED] = rb_str_new_lit("thread resumed");
+        marker_strings[Marker::Type::MARKER_GVL_THREAD_SUSPENDED] = rb_str_new_lit("thread suspended");
+        marker_strings[Marker::Type::MARKER_GVL_THREAD_EXITED] = rb_str_new_lit("thread exited");
+
+        VALUE marker_timestamps = rb_ary_new();
+        VALUE marker_names = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@marker_timestamps"), marker_timestamps);
+        rb_ivar_set(result, rb_intern("@marker_names"), marker_names);
         for (auto& marker: this->markers) {
-            rb_ary_push(markers, ULL2NUM(marker.timestamp.nanoseconds()));
+            rb_ary_push(marker_timestamps, ULL2NUM(marker.timestamp.nanoseconds()));
+            rb_ary_push(marker_names, marker_strings[marker.type]);
         }
 
         frame_list.write_result(result);
