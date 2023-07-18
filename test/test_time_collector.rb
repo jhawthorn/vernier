@@ -61,4 +61,18 @@ class TestTimeCollector < Minitest::Test
     assert_valid_result result
     # TODO: some assertions on behaviour
   end
+
+  def test_many_threads
+    50.times do
+      collector = Vernier::Collector.new(:wall)
+      collector.start
+      50.times.map do
+        Thread.new { count_up_to(2_000) }
+      end.map(&:join)
+      result = collector.stop
+      assert_valid_result result
+    end
+
+    # TODO: some assertions on behaviour
+  end
 end

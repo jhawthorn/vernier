@@ -669,14 +669,14 @@ class TimeCollector : public BaseCollector {
     VALUE stop() {
         BaseCollector::stop();
 
+        running = false;
+        thread_stopped.wait();
+
         struct sigaction sa;
         sa.sa_handler = SIG_IGN;
         sa.sa_flags = SA_RESTART;
         sigemptyset(&sa.sa_mask);
         sigaction(SIGPROF, &sa, NULL);
-
-        running = false;
-        thread_stopped.wait();
 
         rb_internal_thread_remove_event_hook(thread_hook);
 
