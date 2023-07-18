@@ -136,7 +136,7 @@ class SamplerSemaphore {
 };
 
 struct RawSample {
-    constexpr static int MAX_LEN = 2024;
+    constexpr static int MAX_LEN = 2048;
     VALUE frames[MAX_LEN];
     int lines[MAX_LEN];
     int len;
