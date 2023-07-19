@@ -675,6 +675,10 @@ class ThreadTable {
 
             for (auto &thread : list) {
                 if (pthread_equal(current_thread, thread.pthread_id)) {
+                    if (thread.state == Thread::State::STOPPED) {
+                        return;
+                    }
+
                     thread.state = new_state;
 
                     if (new_state == Thread::State::SUSPENDED) {
@@ -747,7 +751,9 @@ class TimeCollector : public BaseCollector {
             for (auto thread : threads.list) {
                 //if (thread.state == Thread::State::RUNNING) {
                 if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend.size() == 0)) {
-                    pthread_kill(thread.pthread_id, SIGPROF);
+                    if (pthread_kill(thread.pthread_id, SIGPROF)) {
+                        rb_bug("pthread_kill failed");
+                    }
                     sample.wait();
 
                     record_sample(sample);
