@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         ruby:
-          - '3.2.0'
+          - '3.2.2'
           - 'head'
         os:
           - ubuntu-latest
