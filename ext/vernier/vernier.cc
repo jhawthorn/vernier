@@ -13,7 +13,11 @@
 
 #include <sys/time.h>
 #include <signal.h>
+#ifdef __APPLE__
+#include <dispatch/dispatch.h>
+#else
 #include <semaphore.h>
+#endif
 
 #include "vernier.hh"
 #include "stack.hh"
@@ -112,28 +116,48 @@ std::ostream& operator<<(std::ostream& os, const TimeStamp& info) {
 // A basic semaphore built on sem_wait/sem_post
 // post() is guaranteed to be async-signal-safe
 class SamplerSemaphore {
+#ifdef __APPLE__
+    dispatch_semaphore_t sem;
+#else
     sem_t sem;
+#endif
 
     public:
 
     SamplerSemaphore(unsigned int value = 0) {
+#ifdef __APPLE__
+        sem = dispatch_semaphore_create(value);
+#else
         sem_init(&sem, 0, value);
+#endif
     };
 
     ~SamplerSemaphore() {
+#ifdef __APPLE__
+        dispatch_release(sem);
+#else
         sem_destroy(&sem);
+#endif
     };
 
     void wait() {
+#ifdef __APPLE__
+        dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+#else
         int ret;
         do {
             ret = sem_wait(&sem);
         } while (ret && errno == EINTR);
         assert(ret == 0);
+#endif
     }
 
     void post() {
+#ifdef __APPLE__
+        dispatch_semaphore_signal(sem);
+#else
         sem_post(&sem);
+#endif
     }
 };
 
