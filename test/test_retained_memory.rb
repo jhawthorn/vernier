@@ -44,8 +44,8 @@ class TestVernier < Minitest::Test
 
     #reader = ReportReader.new(result)
 
-    assert result.total_bytes > 40 * 100
-    assert result.total_bytes < 40 * 200
+    assert_operator result.total_bytes, :>, 40 * 100
+    assert_operator result.total_bytes, :<, 40 * 200
 
     top_stack_tally = result.samples.tally.max_by(&:last)
     top_stack = result.stack(top_stack_tally.first)
@@ -70,8 +70,8 @@ class TestVernier < Minitest::Test
       end
     end
 
-    assert result2.samples.size > 0
-    assert result1.samples.size > result2.samples.size
+    assert_operator result2.samples.size, :>, 0
+    assert_operator result1.samples.size, :>, result2.samples.size
   end
 
   def test_nothing_retained
@@ -82,7 +82,7 @@ class TestVernier < Minitest::Test
     end
 
     result = ReportReader.new(result)
-    assert result.total_bytes < 40 * 8
+    assert_operator result.total_bytes, :<, 40 * 8
   end
 
   def test_nothing_retained_in_eval
@@ -93,7 +93,7 @@ class TestVernier < Minitest::Test
     end
 
     result = ReportReader.new(result)
-    assert result.total_bytes < 40 * 8
+    assert_operator result.total_bytes, :<, 40 * 8
   end
 
   def build_large_module
