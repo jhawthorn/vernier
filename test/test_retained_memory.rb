@@ -25,7 +25,7 @@ class ReportReader
   end
 end
 
-class TestVernier < Minitest::Test
+class TestRetainedMemory < Minitest::Test
   def test_that_it_has_a_version_number
     refute_nil ::Vernier::VERSION
   end
@@ -33,7 +33,6 @@ class TestVernier < Minitest::Test
   def test_tracing_retained_objects
     retained = []
 
-    start_line = __LINE__
     result = Vernier.trace_retained do
       100.times {
         Object.new
@@ -128,10 +127,10 @@ class TestVernier < Minitest::Test
     frames = result.each_sample.map {|stack, _| stack.frames[0] }
     labels = frames.map(&:label)
 
-    expected = %w[
-      TestVernier#alloc_a
-      TestVernier#alloc_b
-      TestVernier#alloc_c
+    expected = %W[
+      #{self.class.name}#alloc_a
+      #{self.class.name}#alloc_b
+      #{self.class.name}#alloc_c
     ]
     assert_equal expected, labels.grep(/#alloc_[abc]\z/)
   end
