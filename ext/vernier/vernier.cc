@@ -601,8 +601,21 @@ class MarkerTable {
         }
 };
 
+typedef uint64_t native_thread_id_t;
+
 class Thread {
     public:
+        static native_thread_id_t get_native_thread_id() {
+#ifdef __APPLE__
+            uint64_t thread_id;
+            int e = pthread_threadid_np(pthread_self(), &thread_id);
+            if (e != 0) rb_syserr_fail(e, "pthread_threadid_np");
+            return thread_id;
+#else
+            return gettid();
+#endif
+        }
+
         enum State {
             RUNNING,
             SUSPENDED,
@@ -610,10 +623,10 @@ class Thread {
         };
 
         pthread_t pthread_id;
-        uint64_t native_tid;
+        native_thread_id_t native_tid;
         State state;
 
-	RawSample stack_on_suspend;
+        RawSample stack_on_suspend;
 };
 
 extern "C" int ruby_thread_has_gvl_p(void);
@@ -648,8 +661,7 @@ class ThreadTable {
                 }
             }
 
-            // FIXME: macos
-            pid_t native_tid = gettid();
+            pid_t native_tid = Thread::get_native_thread_id();
             list.push_back(Thread{current_thread, (uint64_t)native_tid, new_state});
         }
 
@@ -671,7 +683,7 @@ class ThreadTable {
 class TimeCollector : public BaseCollector {
     std::vector<int> samples;
     std::vector<TimeStamp> timestamps;
-    std::vector<uint64_t> sample_threads;
+    std::vector<native_thread_id_t> sample_threads;
 
     MarkerTable markers;
     ThreadTable threads;
