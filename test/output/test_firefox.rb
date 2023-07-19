@@ -4,7 +4,7 @@ require "test_helper"
 
 class TestOutputFirefox < Minitest::Test
   def assert_valid_firefox_profile(profile)
-    data = JSON.parse(profile)
+    JSON.parse(profile)
   end
 
   def test_retained_firefox_output
@@ -23,8 +23,6 @@ class TestOutputFirefox < Minitest::Test
   end
 
   def test_timed_firefox_output
-    retained = []
-
     result = Vernier.trace do
       i = 0
       while i < 1_000_000
@@ -38,8 +36,6 @@ class TestOutputFirefox < Minitest::Test
   end
 
   def test_threaded_timed_firefox_output
-    retained = []
-
     result = Vernier.trace do
       th1 = Thread.new { sleep 0.01 }
       th2 = Thread.new { sleep 0.02 }
