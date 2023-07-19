@@ -3,6 +3,7 @@
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "vernier"
 
+ENV["MT_CPU"] = "0"
 require "minitest/autorun"
 
 class Minitest::Test

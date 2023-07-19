@@ -73,22 +73,7 @@ module Vernier
 
       def initialize(profile)
         @profile = profile
-
         @categorizer = Categorizer.new
-
-        names = profile.func_table.fetch(:name)
-        filenames = profile.func_table.fetch(:filename)
-
-        @strings = Hash.new { |h, k| h[k] = h.size }
-        @func_names = names.map do |name|
-          @strings[name]
-        end
-        @filenames = filenames.map do |filename|
-          @strings[filename]
-        end
-        @categories = filenames.map do |filename|
-          @categorizer.categorize(filename)
-        end
       end
 
       def output
@@ -100,6 +85,28 @@ module Vernier
       attr_reader :profile
 
       def data
+        threads = Hash.new {|h,k| h[k] = {
+          timestamps: [],
+          weights: [],
+          samples: [],
+        }}
+
+        profile.samples.size.times do |i|
+          tid = profile.sample_threads[i]
+          thread = threads[tid]
+
+          thread[:timestamps] << profile.timestamps[i]
+          thread[:weights] << profile.weights[i]
+          thread[:samples] << profile.samples[i]
+        end
+
+        thread_data = threads.map.with_index do |(tid, data), i|
+          samples = data[:samples]
+          weights = data[:weights]
+          timestamps = data[:timestamps]
+          Thread.new(profile, @categorizer, tid, samples, weights, timestamps, i == 0).data
+        end
+
         {
           meta: {
             interval: 1, # FIXME: memory vs wall
@@ -126,137 +133,166 @@ module Vernier
             end
           },
           libs: [],
-          threads: [
-            {
-              name: "Main",
-              isMainThread: true,
-              processStartupTime: 0, # FIXME
-              processShutdownTime: nil, # FIXME
-              registerTime: 0,
-              unregisterTime: nil,
-              pausedRanges: [],
-              pid: profile.pid,
-              tid: 456,
-              frameTable: frame_table,
-              funcTable: func_table,
-              nativeSymbols: {},
-              stackTable: stack_table,
-              samples: samples_table,
-              resourceTable: {
-                length: 0,
-                lib: [],
-                name: [],
-                host: [],
-                type: []
-              },
-              markers: markers_table,
-              stringArray: string_table
-            }
-          ]
+          threads: thread_data
         }
       end
 
-      def markers_table
-        names = (profile.marker_names || [])
-        times = (profile.marker_timestamps || []).map { _1 / 1_000_000.0 }
-        size = times.size
+      class Thread
+        attr_reader :profile
 
-        {
-          data: [nil] * size,
-          name: names.map { @strings[_1] },
-          startTime: times,
-          endTime: [nil] * size,
-          phase: [0] * size,
-          category: [0] * size,
-          length: size
-        }
-      end
+        def initialize(profile, categorizer, tid, samples, weights, timestamps, main_thread)
+          @profile = profile
+          @categorizer = categorizer
+          @tid = tid
 
-      def samples_table
-        samples = profile.samples
-        weights = profile.weights
-        size = samples.size
+          @samples, @weights, @timestamps = samples, weights, timestamps
+          @main_thread = main_thread
 
-        if profile.timestamps
-          times = profile.timestamps.map { _1 / 1_000_000.0 }
-        else
-          # FIXME: record timestamps for memory samples
-          times = (0...size).to_a
+          names = profile.func_table.fetch(:name)
+          filenames = profile.func_table.fetch(:filename)
+
+          @strings = Hash.new { |h, k| h[k] = h.size }
+          @func_names = names.map do |name|
+            @strings[name]
+          end
+          @filenames = filenames.map do |filename|
+            @strings[filename]
+          end
+          @categories = filenames.map do |filename|
+            @categorizer.categorize(filename)
+          end
         end
 
-        raise unless samples.size == size
-        raise unless weights.size == size
-        raise unless times.size == size
+        def data
+          {
+            name: "thread #{@tid}",
+            isMainThread: @tid == ::Thread.main.native_thread_id,
+            processStartupTime: 0, # FIXME
+            processShutdownTime: nil, # FIXME
+            registerTime: 0,
+            unregisterTime: nil,
+            pausedRanges: [],
+            pid: profile.pid || Process.pid,
+            tid: @tid,
+            frameTable: frame_table,
+            funcTable: func_table,
+            nativeSymbols: {},
+            stackTable: stack_table,
+            samples: samples_table,
+            resourceTable: {
+              length: 0,
+              lib: [],
+              name: [],
+              host: [],
+              type: []
+            },
+            markers: markers_table,
+            stringArray: string_table
+          }
+        end
 
-        {
-          stack: samples,
-          time: times,
-          weight: weights,
-          weightType: "samples",
-          #weightType: "bytes",
-          length: samples.length
-        }
-      end
+        def markers_table
+          names = (profile.marker_names || [])
+          times = (profile.marker_timestamps || []).map { _1 / 1_000_000.0 }
+          size = times.size
 
-      def stack_table
-        frames = profile.stack_table.fetch(:frame)
-        prefixes = profile.stack_table.fetch(:parent)
-        size = frames.length
-        raise unless frames.size == size
-        raise unless prefixes.size == size
-        {
-          frame: frames,
-          category: frames.map{|idx| @categories[idx].idx },
-          subcategory: [0] * size,
-          prefix: prefixes,
-          length: prefixes.length
-        }
-      end
+          {
+            data: [nil] * size,
+            name: names.map { @strings[_1] },
+            startTime: times,
+            endTime: [nil] * size,
+            phase: [0] * size,
+            category: [0] * size,
+            length: size
+          }
+        end
 
-      def frame_table
-        funcs = profile.frame_table.fetch(:func)
-        lines = profile.frame_table.fetch(:line)
-        size = funcs.length
-        none = [nil] * size
-        categories = @categories.map(&:idx)
+        def samples_table
+          samples = @samples
+          weights = @weights
+          size = samples.size
 
-        raise unless lines.size == funcs.size
+          if @timestamps
+            times = @timestamps.map { _1 / 1_000_000.0 }
+          else
+            # FIXME: record timestamps for memory samples
+            times = (0...size).to_a
+          end
 
-        {
-          address: [-1] * size,
-          inlineDepth: [0] * size,
-          category: categories,
-          subcategory: nil,
-          func: funcs,
-          nativeSymbol: none,
-          innerWindowID: none,
-          implementation: none,
-          line: lines,
-          column: none,
-          length: size
-        }
-      end
+          raise unless samples.size == size
+          raise unless weights.size == size
+          raise unless times.size == size
 
-      def func_table
-        size = @func_names.size
+          {
+            stack: samples,
+            time: times,
+            weight: weights,
+            weightType: "samples",
+            #weightType: "bytes",
+            length: samples.length
+          }
+        end
 
-        cfunc_idx = @strings["<cfunc>"]
-        is_js = @filenames.map { |fn| fn != cfunc_idx }
-        {
-          name: @func_names,
-          isJS: is_js,
-          relevantForJS: is_js,
-          resource: [-1] * size, # set to unidentified for now
-          fileName: @filenames,
-          lineNumber: profile.func_table.fetch(:first_line),
-          columnNumber: [0] * size,
-          #columnNumber: functions.map { _1.column },
-          length: size
-        }
-      end
+        def stack_table
+          frames = profile.stack_table.fetch(:frame)
+          prefixes = profile.stack_table.fetch(:parent)
+          size = frames.length
+          raise unless frames.size == size
+          raise unless prefixes.size == size
+          {
+            frame: frames,
+            category: frames.map{|idx| @categories[idx].idx },
+            subcategory: [0] * size,
+            prefix: prefixes,
+            length: prefixes.length
+          }
+        end
 
-      def string_table
-        @strings.keys
+        def frame_table
+          funcs = profile.frame_table.fetch(:func)
+          lines = profile.frame_table.fetch(:line)
+          size = funcs.length
+          none = [nil] * size
+          categories = @categories.map(&:idx)
+
+          raise unless lines.size == funcs.size
+
+          {
+            address: [-1] * size,
+            inlineDepth: [0] * size,
+            category: categories,
+            subcategory: nil,
+            func: funcs,
+            nativeSymbol: none,
+            innerWindowID: none,
+            implementation: none,
+            line: lines,
+            column: none,
+            length: size
+          }
+        end
+
+        def func_table
+          size = @func_names.size
+
+          cfunc_idx = @strings["<cfunc>"]
+          is_js = @filenames.map { |fn| fn != cfunc_idx }
+          {
+            name: @func_names,
+            isJS: is_js,
+            relevantForJS: is_js,
+            resource: [-1] * size, # set to unidentified for now
+            fileName: @filenames,
+            lineNumber: profile.func_table.fetch(:first_line),
+            columnNumber: [0] * size,
+            #columnNumber: functions.map { _1.column },
+            length: size
+          }
+        end
+
+        def string_table
+          @strings.keys
+        end
       end
     end
   end

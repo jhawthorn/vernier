@@ -30,13 +30,17 @@ class TestTimeCollector < Minitest::Test
 
   def test_sleeping_threads
     collector = Vernier::Collector.new(:wall)
-    th1 = Thread.new { foo }
-    th2 = Thread.new { foo }
+    th1 = Thread.new { foo; Thread.current.native_thread_id }
+    th2 = Thread.new { foo; Thread.current.native_thread_id }
     collector.start
-    foo
-    th1.join
-    th2.join
+    th1id = th1.value
+    th2id = th2.value
     result = collector.stop
+
+    tally = result.sample_threads.tally
+    assert_includes (380..420), tally[Thread.current.native_thread_id]
+    assert_includes (380..420), tally[th1id]
+    assert_includes (380..420), tally[th2id]
 
     assert_valid_result result
     # TODO: some assertions on behaviour

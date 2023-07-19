@@ -9,6 +9,7 @@
 #include <cassert>
 #include <atomic>
 #include <mutex>
+#include <optional>
 
 #include <sys/time.h>
 #include <signal.h>
@@ -152,8 +153,20 @@ struct RawSample {
     }
 
     void sample() {
-        assert(!len);
+        if (!ruby_native_thread_p()) {
+            clear();
+            return;
+        }
+
         len = rb_profile_frames(0, MAX_LEN, frames, lines);
+    }
+
+    void clear() {
+        len = 0;
+    }
+
+    bool empty() {
+        return len == 0;
     }
 };
 
@@ -588,11 +601,80 @@ class MarkerTable {
         }
 };
 
+class Thread {
+    public:
+        enum State {
+            RUNNING,
+            SUSPENDED,
+            STOPPED
+        };
+
+        pthread_t pthread_id;
+        uint64_t native_tid;
+        State state;
+
+	RawSample stack_on_suspend;
+};
+
+extern "C" int ruby_thread_has_gvl_p(void);
+
+class ThreadTable {
+    public:
+        std::vector<Thread> list;
+        std::mutex mutex;
+
+        void started() {
+            //const std::lock_guard<std::mutex> lock(mutex);
+
+            //list.push_back(Thread{pthread_self(), Thread::State::SUSPENDED});
+            set_state(Thread::State::SUSPENDED);
+        }
+
+        void set_state(Thread::State new_state) {
+            const std::lock_guard<std::mutex> lock(mutex);
+
+            pthread_t current_thread = pthread_self();
+            //cerr << "set state=" << new_state << " thread=" << gettid() << endl;
+
+            for (auto &thread : list) {
+                if (pthread_equal(current_thread, thread.pthread_id)) {
+                    thread.state = new_state;
+
+                    if (new_state == Thread::State::SUSPENDED) {
+                        thread.stack_on_suspend.sample();
+                        //cerr << gettid() << " suspended! Stack size:" << thread.stack_on_suspend.size() << endl;
+                    }
+                    return;
+                }
+            }
+
+            // FIXME: macos
+            pid_t native_tid = gettid();
+            list.push_back(Thread{current_thread, (uint64_t)native_tid, new_state});
+        }
+
+        std::optional<pthread_t> get_active() {
+            const std::lock_guard<std::mutex> lock(mutex);
+
+            for (auto thread : list) {
+                if (thread.state == Thread::State::RUNNING) {
+                    cerr << "active thread=" << thread.pthread_id << endl;
+                    return thread.pthread_id;
+                }
+            }
+            cerr << "not found :(" << endl;
+
+            return {};
+        }
+};
+
 class TimeCollector : public BaseCollector {
     std::vector<int> samples;
     std::vector<TimeStamp> timestamps;
+    std::vector<uint64_t> sample_threads;
 
     MarkerTable markers;
+    ThreadTable threads;
 
     pthread_t target_thread;
     pthread_t sample_thread;
@@ -602,9 +684,13 @@ class TimeCollector : public BaseCollector {
 
     static inline LiveSample *live_sample;
 
-    void record_sample(const LiveSample &sample) {
-        int stack_index = frame_list.stack_index(sample.sample);
+    void record_sample(const RawSample &sample) {
+        int stack_index = frame_list.stack_index(sample);
         samples.push_back(stack_index);
+    }
+
+    void record_sample(const LiveSample &sample) {
+        record_sample(sample.sample);
     }
 
     static void signal_handler(int sig, siginfo_t* sinfo, void* ucontext) {
@@ -621,11 +707,26 @@ class TimeCollector : public BaseCollector {
         while (running) {
             TimeStamp sample_start = TimeStamp::Now();
 
-            pthread_kill(target_thread, SIGPROF);
-            sample.wait();
+            threads.mutex.lock();
+            for (auto thread : threads.list) {
+                //if (thread.state == Thread::State::RUNNING) {
+                if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend.size() == 0)) {
+                    pthread_kill(thread.pthread_id, SIGPROF);
+                    sample.wait();
 
-            record_sample(sample);
-            timestamps.push_back(sample_start);
+                    record_sample(sample);
+                    timestamps.push_back(sample_start);
+                    sample_threads.push_back(thread.native_tid);
+                } else if (thread.state == Thread::State::SUSPENDED) {
+                    if (thread.stack_on_suspend.size() != 0) {
+                        record_sample(thread.stack_on_suspend);
+                        timestamps.push_back(sample_start);
+                        sample_threads.push_back(thread.native_tid);
+                    }
+                } else {
+                }
+            }
+            threads.mutex.unlock();
 
             TimeStamp sample_complete = TimeStamp::Now();
 
@@ -652,21 +753,25 @@ class TimeCollector : public BaseCollector {
         switch (event) {
             case RUBY_INTERNAL_THREAD_EVENT_STARTED:
                 collector->markers.record(Marker::Type::MARKER_GVL_THREAD_STARTED);
+                collector->threads.started();
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_READY:
                 collector->markers.record(Marker::Type::MARKER_GVL_THREAD_READY);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_RESUMED:
                 collector->markers.record(Marker::Type::MARKER_GVL_THREAD_RESUMED);
+                collector->threads.set_state(Thread::State::RUNNING);
 
                 // Look at me! I have the GVL!
                 collector->target_thread = pthread_self();
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED:
                 collector->markers.record(Marker::Type::MARKER_GVL_THREAD_SUSPENDED);
+                collector->threads.set_state(Thread::State::SUSPENDED);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_EXITED:
                 collector->markers.record(Marker::Type::MARKER_GVL_THREAD_EXITED);
+                collector->threads.set_state(Thread::State::STOPPED);
                 break;
 
         }
@@ -730,7 +835,6 @@ class TimeCollector : public BaseCollector {
         rb_ivar_set(result, rb_intern("@samples"), samples);
         VALUE weights = rb_ary_new();
         rb_ivar_set(result, rb_intern("@weights"), weights);
-
         for (auto& stack_index: this->samples) {
             rb_ary_push(samples, INT2NUM(stack_index));
             rb_ary_push(weights, INT2NUM(1));
@@ -741,6 +845,12 @@ class TimeCollector : public BaseCollector {
 
         for (auto& timestamp: this->timestamps) {
             rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
+        }
+
+        VALUE sample_threads = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@sample_threads"), sample_threads);
+        for (auto& thread: this->sample_threads) {
+            rb_ary_push(sample_threads, ULL2NUM(thread));
         }
 
         VALUE marker_strings[Marker::Type::MARKER_MAX] = {0};
