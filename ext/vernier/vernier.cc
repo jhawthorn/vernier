@@ -884,6 +884,12 @@ class TimeCollector : public BaseCollector {
             rb_bug("pthread_create");
         }
 
+        // Set the state of the current Ruby thread to RUNNING.
+        // We want to have at least one thread in our thread list because it's
+        // possible that the profile might be such that we don't get any
+        // thread switch events and we need at least one
+        this->threads.set_state(Thread::State::RUNNING);
+
         thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
 
         return true;
