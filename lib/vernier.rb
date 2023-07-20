@@ -14,6 +14,14 @@ module Vernier
 
     attr_accessor :pid, :start_time, :end_time
 
+    def to_gecko
+      Output::Firefox.new(self).output
+    end
+
+    def write(out:)
+      File.write(out, to_gecko)
+    end
+
     def each_sample
       return enum_for(__method__) unless block_given?
       @samples.size.times do |sample_idx|
@@ -152,7 +160,7 @@ module Vernier
     end
 
     if out
-      File.write(out, Output::Firefox.new(result).output)
+      result.write(out:)
     end
     result
   end
