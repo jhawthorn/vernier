@@ -22,8 +22,17 @@
 #include "vernier.hh"
 #include "stack.hh"
 
+#include "ruby/ruby.h"
 #include "ruby/debug.h"
 #include "ruby/thread.h"
+
+// GC event's we'll monitor during profiling
+#define RUBY_GC_PHASE_EVENTS \
+  RUBY_INTERNAL_EVENT_GC_START | \
+  RUBY_INTERNAL_EVENT_GC_END_MARK | \
+  RUBY_INTERNAL_EVENT_GC_END_SWEEP | \
+  RUBY_INTERNAL_EVENT_GC_ENTER | \
+  RUBY_INTERNAL_EVENT_GC_EXIT
 
 #define sym(name) ID2SYM(rb_intern_const(name))
 
@@ -176,8 +185,9 @@ struct RawSample {
     VALUE frames[MAX_LEN];
     int lines[MAX_LEN];
     int len;
+    bool gc;
 
-    RawSample() : len(0) { }
+    RawSample() : len(0), gc(false) { }
 
     int size() const {
         return len;
@@ -194,11 +204,18 @@ struct RawSample {
             return;
         }
 
-        len = rb_profile_frames(0, MAX_LEN, frames, lines);
+        if (rb_during_gc()) {
+          gc = true;
+          len = 0;
+        } else {
+          gc = false;
+          len = rb_profile_frames(0, MAX_LEN, frames, lines);
+        }
     }
 
     void clear() {
         len = 0;
+        gc = false;
     }
 
     bool empty() const {
@@ -678,6 +695,12 @@ class Marker {
         MARKER_GVL_THREAD_SUSPENDED,
         MARKER_GVL_THREAD_EXITED,
 
+        MARKER_GC_START,
+        MARKER_GC_END_MARK,
+        MARKER_GC_END_SWEEP,
+        MARKER_GC_ENTER,
+        MARKER_GC_EXIT,
+
         MARKER_MAX,
     };
     Type type;
@@ -802,7 +825,11 @@ class TimeCollector : public BaseCollector {
                     }
                     sample.wait();
 
-                    record_sample(sample.sample, sample_start, thread);
+                    if (sample.sample.gc) {
+                        // fprintf(stderr, "skipping GC sample\n");
+                    } else {
+                        record_sample(sample.sample, sample_start, thread);
+                    }
                 } else if (thread.state == Thread::State::SUSPENDED) {
                     record_sample(thread.stack_on_suspend, sample_start, thread);
                 } else {
@@ -826,6 +853,30 @@ class TimeCollector : public BaseCollector {
         TimeCollector *collector = static_cast<TimeCollector *>(arg);
         collector->sample_thread_run();
         return NULL;
+    }
+
+    static void internal_gc_event_cb(VALUE tpval, void *data) {
+        TimeCollector *collector = static_cast<TimeCollector *>(data);
+        rb_trace_arg_t *tparg = rb_tracearg_from_tracepoint(tpval);
+        int event = rb_tracearg_event_flag(tparg);
+
+        switch (event) {
+            case RUBY_INTERNAL_EVENT_GC_START:
+                collector->markers.record(Marker::Type::MARKER_GC_START);
+                break;
+            case RUBY_INTERNAL_EVENT_GC_END_MARK:
+                collector->markers.record(Marker::Type::MARKER_GC_END_MARK);
+                break;
+            case RUBY_INTERNAL_EVENT_GC_END_SWEEP:
+                collector->markers.record(Marker::Type::MARKER_GC_END_SWEEP);
+                break;
+            case RUBY_INTERNAL_EVENT_GC_ENTER:
+                collector->markers.record(Marker::Type::MARKER_GC_ENTER);
+                break;
+            case RUBY_INTERNAL_EVENT_GC_EXIT:
+                collector->markers.record(Marker::Type::MARKER_GC_EXIT);
+                break;
+        }
     }
 
     static void internal_thread_event_cb(rb_event_flag_t event, const rb_internal_thread_event_data_t *event_data, void *data) {
@@ -860,6 +911,7 @@ class TimeCollector : public BaseCollector {
     }
 
     rb_internal_thread_event_hook_t *thread_hook;
+    VALUE gc_hook;
 
     bool start() {
         if (!BaseCollector::start()) {
@@ -891,6 +943,8 @@ class TimeCollector : public BaseCollector {
         this->threads.set_state(Thread::State::RUNNING);
 
         thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
+        gc_hook = rb_tracepoint_new(0, RUBY_GC_PHASE_EVENTS, internal_gc_event_cb, (void *)this);
+        rb_tracepoint_enable(gc_hook);
 
         return true;
     }
@@ -908,6 +962,7 @@ class TimeCollector : public BaseCollector {
         sigaction(SIGPROF, &sa, NULL);
 
         rb_internal_thread_remove_event_hook(thread_hook);
+        rb_tracepoint_disable(gc_hook);
 
         frame_list.finalize();
 
@@ -954,6 +1009,12 @@ class TimeCollector : public BaseCollector {
         marker_strings[Marker::Type::MARKER_GVL_THREAD_SUSPENDED] = rb_str_new_lit("thread suspended");
         marker_strings[Marker::Type::MARKER_GVL_THREAD_EXITED] = rb_str_new_lit("thread exited");
 
+        marker_strings[Marker::Type::MARKER_GC_START] = rb_str_new_lit("GC start");
+        marker_strings[Marker::Type::MARKER_GC_END_MARK] = rb_str_new_lit("GC end marking");
+        marker_strings[Marker::Type::MARKER_GC_END_SWEEP] = rb_str_new_lit("GC end sweeping");
+        marker_strings[Marker::Type::MARKER_GC_ENTER] = rb_str_new_lit("GC enter");
+        marker_strings[Marker::Type::MARKER_GC_EXIT] = rb_str_new_lit("GC exit");
+
         VALUE marker_timestamps = rb_ary_new();
         VALUE marker_names = rb_ary_new();
         VALUE marker_threads = rb_ary_new();
@@ -986,6 +1047,7 @@ class TimeCollector : public BaseCollector {
 
     void mark() {
         frame_list.mark_frames();
+        rb_gc_mark(gc_hook);
 
         //for (int i = 0; i < queued_length; i++) {
         //    rb_gc_mark(queued_frames[i]);

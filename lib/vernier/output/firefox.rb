@@ -211,14 +211,49 @@ module Vernier
           times = (@marker_timestamps || []).map { _1 / 1_000_000.0 }
           size = times.size
 
+          string_indexes = []
+          start_times = []
+          end_times = []
+          phases = []
+          categories = []
+
+          names.each_with_index { |name, i|
+            if name == "GC exit"
+              # skip because these are incorporated in "GC enter"
+            else
+              start_times << times[i]
+
+              if name == "GC enter"
+                j = i + 1
+                phases << 1
+                string_indexes << @strings["GC pause"]
+                categories << 1 # Category 1 is GC :sweat_smile:
+
+                while j < size
+                  if names[j] == "GC exit"
+                    end_times << times[j]
+                    break
+                  end
+
+                  j += 1
+                end
+              else
+                categories << (name =~ /GC/ ? 1 : 0)
+                string_indexes << @strings[name]
+                phases << 0
+                end_times << nil
+              end
+            end
+          }
+
           {
-            data: [nil] * size,
-            name: names.map { @strings[_1] },
-            startTime: times,
-            endTime: [nil] * size,
-            phase: [0] * size,
-            category: [0] * size,
-            length: size
+            data: [nil] * start_times.size,
+            name: string_indexes,
+            startTime: start_times,
+            endTime: end_times,
+            phase: phases,
+            category: categories,
+            length: start_times.size
           }
         end
 
