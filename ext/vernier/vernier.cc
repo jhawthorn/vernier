@@ -43,10 +43,16 @@ class TimeStamp {
     TimeStamp(uint64_t value_ns) : value_ns(value_ns) {}
 
     public:
+    TimeStamp() : value_ns(0) {}
+
     static TimeStamp Now() {
         struct timespec ts;
         clock_gettime(CLOCK_MONOTONIC, &ts);
         return TimeStamp(ts.tv_sec * nanoseconds_per_second + ts.tv_nsec);
+    }
+
+    static TimeStamp Zero() {
+        return TimeStamp(0);
     }
 
     static void Sleep(const TimeStamp &time) {
@@ -98,6 +104,10 @@ class TimeStamp {
 
     uint64_t microseconds() const {
         return value_ns / 1000;
+    }
+
+    bool zero() const {
+        return value_ns == 0;
     }
 
     struct timespec timespec() const {
@@ -166,6 +176,8 @@ struct RawSample {
     VALUE frames[MAX_LEN];
     int lines[MAX_LEN];
     int len;
+
+    RawSample() : len(0) { }
 
     int size() const {
         return len;
@@ -618,6 +630,7 @@ class Thread {
         }
 
         enum State {
+            STARTED,
             RUNNING,
             SUSPENDED,
             STOPPED
@@ -627,7 +640,33 @@ class Thread {
         native_thread_id_t native_tid;
         State state;
 
+        TimeStamp state_changed_at;
+        TimeStamp started_at;
+        TimeStamp stopped_at;
+
         RawSample stack_on_suspend;
+
+        Thread(State state) : state(state) {
+            pthread_id = pthread_self();
+            native_tid = get_native_thread_id();
+            started_at = state_changed_at = TimeStamp::Now();
+        }
+
+        void set_state(State new_state) {
+            if (state == Thread::State::STOPPED) {
+                return;
+            }
+
+            auto now = TimeStamp::Now();
+
+            state = new_state;
+            state_changed_at = now;
+            if (new_state == State::STARTED) {
+                started_at = now;
+            } else if (new_state == State::STOPPED) {
+                stopped_at = now;
+            }
+        }
 };
 
 class Marker {
@@ -669,7 +708,7 @@ class ThreadTable {
             //const std::lock_guard<std::mutex> lock(mutex);
 
             //list.push_back(Thread{pthread_self(), Thread::State::SUSPENDED});
-            set_state(Thread::State::SUSPENDED);
+            set_state(Thread::State::STARTED);
         }
 
         void set_state(Thread::State new_state) {
@@ -680,11 +719,11 @@ class ThreadTable {
 
             for (auto &thread : list) {
                 if (pthread_equal(current_thread, thread.pthread_id)) {
-                    if (thread.state == Thread::State::STOPPED) {
-                        return;
+                    if (new_state == Thread::State::STARTED) {
+                        throw std::runtime_error("started event on existing thread");
                     }
 
-                    thread.state = new_state;
+                    thread.set_state(new_state);
 
                     if (new_state == Thread::State::SUSPENDED) {
                         thread.stack_on_suspend.sample();
@@ -695,7 +734,7 @@ class ThreadTable {
             }
 
             pid_t native_tid = Thread::get_native_thread_id();
-            list.push_back(Thread{current_thread, (uint64_t)native_tid, new_state});
+            list.emplace_back(new_state);
         }
 
         std::optional<pthread_t> get_active() {
@@ -728,6 +767,8 @@ class TimeCollector : public BaseCollector {
     SamplerSemaphore thread_stopped;
 
     static inline LiveSample *live_sample;
+
+    TimeStamp started_at;
 
     void record_sample(const RawSample &sample, TimeStamp time, const Thread &thread) {
         if (!sample.empty()) {
@@ -825,6 +866,8 @@ class TimeCollector : public BaseCollector {
             return false;
         }
 
+	started_at = TimeStamp::Now();
+
         target_thread = pthread_self();
 
         struct sigaction sa;
@@ -872,6 +915,10 @@ class TimeCollector : public BaseCollector {
     VALUE build_collector_result() {
         VALUE result = rb_obj_alloc(rb_cVernierResult);
 
+        VALUE meta = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@meta"), meta);
+        rb_hash_aset(meta, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
+
         VALUE samples = rb_ary_new();
         rb_ivar_set(result, rb_intern("@samples"), samples);
         VALUE weights = rb_ary_new();
@@ -911,6 +958,19 @@ class TimeCollector : public BaseCollector {
             rb_ary_push(marker_timestamps, ULL2NUM(marker.timestamp.nanoseconds()));
             rb_ary_push(marker_names, marker_strings[marker.type]);
             rb_ary_push(marker_threads, ULL2NUM(marker.thread_id));
+        }
+
+        VALUE threads = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@threads"), threads);
+        for (const auto& thread: this->threads.list) {
+            VALUE hash = rb_hash_new();
+            rb_hash_aset(threads, ULL2NUM(thread.native_tid), hash);
+            rb_hash_aset(hash, sym("tid"), ULL2NUM(thread.native_tid));
+            rb_hash_aset(hash, sym("started_at"), ULL2NUM(thread.started_at.nanoseconds()));
+            if (!thread.stopped_at.zero()) {
+                rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread.stopped_at.nanoseconds()));
+            }
+
         }
 
         frame_list.write_result(result);

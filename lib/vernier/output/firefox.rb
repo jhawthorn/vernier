@@ -111,10 +111,11 @@ module Vernier
         end
 
         thread_data = threads.map.with_index do |(tid, data), i|
+          thread_info = profile.threads[tid]
           Thread.new(
             profile,
             @categorizer,
-            tid:,
+            **thread_info,
             **data
           ).data
         end
@@ -152,13 +153,15 @@ module Vernier
       class Thread
         attr_reader :profile
 
-        def initialize(profile, categorizer, tid:, samples:, weights:, timestamps:, marker_names:, marker_timestamps:)
+        def initialize(profile, categorizer, tid:, samples:, weights:, timestamps:, marker_names:, marker_timestamps:, started_at:, stopped_at: nil)
           @profile = profile
           @categorizer = categorizer
           @tid = tid
 
           @samples, @weights, @timestamps = samples, weights, timestamps
           @marker_names, @marker_timestamps = marker_names, marker_timestamps
+
+          @started_at, @stopped_at = started_at, stopped_at
 
           names = profile.func_table.fetch(:name)
           filenames = profile.func_table.fetch(:filename)
@@ -181,8 +184,8 @@ module Vernier
             isMainThread: @tid == ::Thread.main.native_thread_id,
             processStartupTime: 0, # FIXME
             processShutdownTime: nil, # FIXME
-            registerTime: 0,
-            unregisterTime: nil,
+            registerTime: (@started_at - 0) / 1_000_000.0,
+            unregisterTime: ((@stopped_at - 0) / 1_000_000.0 if @stopped_at),
             pausedRanges: [],
             pid: profile.pid || Process.pid,
             tid: @tid,

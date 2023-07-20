@@ -14,6 +14,12 @@ module Vernier
     attr_reader :marker_names, :marker_timestamps, :marker_threads
 
     attr_accessor :pid, :start_time, :end_time
+    attr_accessor :threads
+    attr_accessor :meta
+
+    def started_at
+      meta[:started_at]
+    end
 
     def to_gecko
       Output::Firefox.new(self).output
