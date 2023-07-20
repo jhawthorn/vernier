@@ -189,7 +189,7 @@ struct RawSample {
         len = 0;
     }
 
-    bool empty() {
+    bool empty() const {
         return len == 0;
     }
 };
@@ -297,6 +297,10 @@ struct FrameList {
     vector<StackNode> stack_node_list;
 
     int stack_index(const RawSample &stack) {
+        if (stack.empty()) {
+            throw std::runtime_error("empty stack");
+        }
+
         StackNode *node = &root_stack_node;
         //for (int i = 0; i < stack.size(); i++) {
         for (int i = stack.size() - 1; i >= 0; i--) {
@@ -598,33 +602,6 @@ class RetainedCollector : public BaseCollector {
     }
 };
 
-class Marker {
-    public:
-    enum Type {
-        MARKER_GVL_THREAD_STARTED,
-        MARKER_GVL_THREAD_READY,
-        MARKER_GVL_THREAD_RESUMED,
-        MARKER_GVL_THREAD_SUSPENDED,
-        MARKER_GVL_THREAD_EXITED,
-
-        MARKER_MAX,
-    };
-    Type type;
-    TimeStamp timestamp;
-};
-
-class MarkerTable {
-    public:
-        std::vector<Marker> list;
-        std::mutex mutex;
-
-        void record(Marker::Type type) {
-            const std::lock_guard<std::mutex> lock(mutex);
-
-            list.push_back({ type, TimeStamp::Now() });
-        }
-};
-
 typedef uint64_t native_thread_id_t;
 
 class Thread {
@@ -651,6 +628,34 @@ class Thread {
         State state;
 
         RawSample stack_on_suspend;
+};
+
+class Marker {
+    public:
+    enum Type {
+        MARKER_GVL_THREAD_STARTED,
+        MARKER_GVL_THREAD_READY,
+        MARKER_GVL_THREAD_RESUMED,
+        MARKER_GVL_THREAD_SUSPENDED,
+        MARKER_GVL_THREAD_EXITED,
+
+        MARKER_MAX,
+    };
+    Type type;
+    TimeStamp timestamp;
+    native_thread_id_t thread_id;
+};
+
+class MarkerTable {
+    public:
+        std::vector<Marker> list;
+        std::mutex mutex;
+
+        void record(Marker::Type type) {
+            const std::lock_guard<std::mutex> lock(mutex);
+
+            list.push_back({ type, TimeStamp::Now(), Thread::get_native_thread_id() });
+        }
 };
 
 extern "C" int ruby_thread_has_gvl_p(void);
@@ -724,13 +729,13 @@ class TimeCollector : public BaseCollector {
 
     static inline LiveSample *live_sample;
 
-    void record_sample(const RawSample &sample) {
-        int stack_index = frame_list.stack_index(sample);
-        samples.push_back(stack_index);
-    }
-
-    void record_sample(const LiveSample &sample) {
-        record_sample(sample.sample);
+    void record_sample(const RawSample &sample, TimeStamp time, const Thread &thread) {
+        if (!sample.empty()) {
+            int stack_index = frame_list.stack_index(sample);
+            samples.push_back(stack_index);
+            timestamps.push_back(time);
+            sample_threads.push_back(thread.native_tid);
+        }
     }
 
     static void signal_handler(int sig, siginfo_t* sinfo, void* ucontext) {
@@ -756,15 +761,9 @@ class TimeCollector : public BaseCollector {
                     }
                     sample.wait();
 
-                    record_sample(sample);
-                    timestamps.push_back(sample_start);
-                    sample_threads.push_back(thread.native_tid);
+                    record_sample(sample.sample, sample_start, thread);
                 } else if (thread.state == Thread::State::SUSPENDED) {
-                    if (thread.stack_on_suspend.size() != 0) {
-                        record_sample(thread.stack_on_suspend);
-                        timestamps.push_back(sample_start);
-                        sample_threads.push_back(thread.native_tid);
-                    }
+                    record_sample(thread.stack_on_suspend, sample_start, thread);
                 } else {
                 }
             }
@@ -904,11 +903,14 @@ class TimeCollector : public BaseCollector {
 
         VALUE marker_timestamps = rb_ary_new();
         VALUE marker_names = rb_ary_new();
+        VALUE marker_threads = rb_ary_new();
         rb_ivar_set(result, rb_intern("@marker_timestamps"), marker_timestamps);
         rb_ivar_set(result, rb_intern("@marker_names"), marker_names);
+        rb_ivar_set(result, rb_intern("@marker_threads"), marker_threads);
         for (auto& marker: this->markers.list) {
             rb_ary_push(marker_timestamps, ULL2NUM(marker.timestamp.nanoseconds()));
             rb_ary_push(marker_names, marker_strings[marker.type]);
+            rb_ary_push(marker_threads, ULL2NUM(marker.thread_id));
         }
 
         frame_list.write_result(result);

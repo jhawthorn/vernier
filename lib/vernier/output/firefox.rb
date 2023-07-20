@@ -89,6 +89,8 @@ module Vernier
           timestamps: [],
           weights: [],
           samples: [],
+          marker_names: [],
+          marker_timestamps: [],
         }}
 
         profile.samples.size.times do |i|
@@ -100,11 +102,21 @@ module Vernier
           thread[:samples] << profile.samples[i]
         end
 
+        profile.marker_names.size.times do |i|
+          tid = profile.marker_threads[i]
+          thread = threads[tid]
+
+          thread[:marker_names] << profile.marker_names[i]
+          thread[:marker_timestamps] << profile.marker_timestamps[i]
+        end
+
         thread_data = threads.map.with_index do |(tid, data), i|
-          samples = data[:samples]
-          weights = data[:weights]
-          timestamps = data[:timestamps]
-          Thread.new(profile, @categorizer, tid, samples, weights, timestamps, i == 0).data
+          Thread.new(
+            profile,
+            @categorizer,
+            tid:,
+            **data
+          ).data
         end
 
         {
@@ -140,13 +152,13 @@ module Vernier
       class Thread
         attr_reader :profile
 
-        def initialize(profile, categorizer, tid, samples, weights, timestamps, main_thread)
+        def initialize(profile, categorizer, tid:, samples:, weights:, timestamps:, marker_names:, marker_timestamps:)
           @profile = profile
           @categorizer = categorizer
           @tid = tid
 
           @samples, @weights, @timestamps = samples, weights, timestamps
-          @main_thread = main_thread
+          @marker_names, @marker_timestamps = marker_names, marker_timestamps
 
           names = profile.func_table.fetch(:name)
           filenames = profile.func_table.fetch(:filename)
@@ -192,8 +204,8 @@ module Vernier
         end
 
         def markers_table
-          names = (profile.marker_names || [])
-          times = (profile.marker_timestamps || []).map { _1 / 1_000_000.0 }
+          names = (@marker_names || [])
+          times = (@marker_timestamps || []).map { _1 / 1_000_000.0 }
           size = times.size
 
           {

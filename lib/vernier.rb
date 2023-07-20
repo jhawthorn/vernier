@@ -10,7 +10,8 @@ module Vernier
 
   class Result
     attr_reader :weights, :samples, :stack_table, :frame_table, :func_table
-    attr_reader :timestamps, :marker_names, :marker_timestamps, :sample_threads
+    attr_reader :timestamps, :sample_threads
+    attr_reader :marker_names, :marker_timestamps, :marker_threads
 
     attr_accessor :pid, :start_time, :end_time
 
