@@ -11,3 +11,4 @@
 *.o
 *.a
 mkmf.log
+Gemfile.lock
