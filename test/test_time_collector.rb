@@ -14,6 +14,19 @@ class TestTimeCollector < Minitest::Test
     end
   end
 
+  def test_receives_gc_events
+    collector = Vernier::Collector.new(:wall)
+    collector.start
+    GC.start
+    GC.start
+    result = collector.stop
+
+    assert_valid_result result
+    # make sure we got all GC events (since we did GC.start twice)
+    assert_equal ["GC end marking", "GC end sweeping", "GC enter", "GC exit", "GC start"],
+      result.marker_names.uniq.sort
+  end
+
   def test_time_collector
     collector = Vernier::Collector.new(:wall)
     collector.start
