@@ -331,24 +331,27 @@ struct FrameList {
         }
 
         StackNode *node = &root_stack_node;
-        //for (int i = 0; i < stack.size(); i++) {
         for (int i = stack.size() - 1; i >= 0; i--) {
             const Frame &frame = stack.frame(i);
-            int next_node_idx = node->children[frame];
-            if (next_node_idx == 0) {
-                // insert a new node
-                next_node_idx = stack_node_list.size();
-                node->children[frame] = next_node_idx;
-                stack_node_list.emplace_back(
-                        frame,
-                        next_node_idx,
-                        node->index
-                        );
-            }
-
-            node = &stack_node_list[next_node_idx];
+            node = next_stack_node(node, frame);
         }
         return node->index;
+    }
+
+    StackNode *next_stack_node(StackNode *node, const Frame &frame) {
+        int next_node_idx = node->children[frame];
+        if (next_node_idx == 0) {
+            // insert a new node
+            next_node_idx = stack_node_list.size();
+            node->children[frame] = next_node_idx;
+            stack_node_list.emplace_back(
+                    frame,
+                    next_node_idx,
+                    node->index
+                    );
+        }
+
+        return &stack_node_list[next_node_idx];
     }
 
     // Converts Frames from stacks other tables. "Symbolicates" the frames
