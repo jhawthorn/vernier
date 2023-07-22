@@ -786,7 +786,6 @@ class TimeCollector : public BaseCollector {
     MarkerTable markers;
     ThreadTable threads;
 
-    pthread_t target_thread;
     pthread_t sample_thread;
 
     atomic_bool running;
@@ -897,9 +896,6 @@ class TimeCollector : public BaseCollector {
             case RUBY_INTERNAL_THREAD_EVENT_RESUMED:
                 collector->markers.record(Marker::Type::MARKER_GVL_THREAD_RESUMED);
                 collector->threads.set_state(Thread::State::RUNNING);
-
-                // Look at me! I have the GVL!
-                collector->target_thread = pthread_self();
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED:
                 collector->markers.record(Marker::Type::MARKER_GVL_THREAD_SUSPENDED);
@@ -922,8 +918,6 @@ class TimeCollector : public BaseCollector {
         }
 
 	started_at = TimeStamp::Now();
-
-        target_thread = pthread_self();
 
         struct sigaction sa;
         sa.sa_sigaction = signal_handler;
