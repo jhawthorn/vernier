@@ -110,8 +110,8 @@ module Vernier
           thread[:marker_timestamps] << profile.marker_timestamps[i]
         end
 
-        thread_data = threads.map.with_index do |(tid, data), i|
-          thread_info = profile.threads[tid]
+        thread_data = profile.threads.map do |tid, thread_info|
+          data = threads[tid]
           Thread.new(
             profile,
             @categorizer,

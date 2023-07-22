@@ -4,7 +4,39 @@ require "test_helper"
 
 class TestOutputFirefox < Minitest::Test
   def assert_valid_firefox_profile(profile)
-    JSON.parse(profile)
+    data = JSON.parse(profile)
+
+    meta = data["meta"]
+    assert meta
+    assert_equal 28, meta["version"]
+    assert_equal 1, meta["stackwalk"]
+    assert meta["interval"]
+    assert meta["startTime"]
+
+    threads = data["threads"]
+    assert_equal 1, threads.count { _1["isMainThread"] }
+    assert_operator threads.size, :>=, 1
+    threads.each do |thread|
+      assert thread["name"]
+      assert thread["pid"]
+      assert thread["tid"]
+      assert thread["registerTime"]
+
+      assert thread["frameTable"]
+      assert thread["funcTable"]
+      assert thread["stackTable"]
+      assert thread["stringArray"]
+
+      assert thread["markers"]
+
+      samples = thread["samples"]
+      assert thread["samples"]
+      assert_equal samples["length"], samples["stack"].size
+      assert_equal samples["length"], samples["weight"].size
+      assert_equal samples["length"], samples["time"].size
+
+      assert_operator samples["stack"].max || -1, :<, thread["stackTable"]["length"]
+    end
   end
 
   def test_retained_firefox_output
@@ -19,6 +51,13 @@ class TestOutputFirefox < Minitest::Test
 
     output = Vernier::Output::Firefox.new(result).output
 
+    assert_valid_firefox_profile(output)
+  end
+
+  def test_empty_block
+    result = Vernier.trace do
+    end
+    output = Vernier::Output::Firefox.new(result).output
     assert_valid_firefox_profile(output)
   end
 
