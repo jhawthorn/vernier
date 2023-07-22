@@ -123,7 +123,7 @@ module Vernier
         {
           meta: {
             interval: 1, # FIXME: memory vs wall
-            startTime: (profile.timestamps&.min || 0) / 1_000_000.0,
+            startTime: profile.meta[:started_at] / 1_000_000.0,
             endTime: (profile.timestamps&.max || 0) / 1_000_000.0,
             processType: 0,
             product: "Ruby/Vernier",
