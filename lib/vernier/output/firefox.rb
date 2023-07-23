@@ -13,6 +13,7 @@ module Vernier
           @categories = []
 
           add_category(name: "Default", color: "grey")
+          add_category(name: "Idle", color: "transparent")
           add_category(name: "GC", color: "red")
           add_category(
             name: "stdlib",
@@ -89,6 +90,7 @@ module Vernier
           timestamps: [],
           weights: [],
           samples: [],
+          categories: [],
           marker_names: [],
           marker_timestamps: [],
         }}
@@ -100,6 +102,7 @@ module Vernier
           thread[:timestamps] << profile.timestamps[i]
           thread[:weights] << profile.weights[i]
           thread[:samples] << profile.samples[i]
+          thread[:categories] << profile.sample_categories[i]
         end
 
         profile.marker_names.size.times do |i|
@@ -153,19 +156,25 @@ module Vernier
       class Thread
         attr_reader :profile
 
-        def initialize(profile, categorizer, name:, tid:, samples:, weights:, timestamps:, marker_names:, marker_timestamps:, started_at:, stopped_at: nil)
+        def initialize(profile, categorizer, name:, tid:, samples:, weights:, timestamps:, categories:, marker_names:, marker_timestamps:, started_at:, stopped_at: nil)
           @profile = profile
           @categorizer = categorizer
           @tid = tid
           @name = name
 
           @samples, @weights, @timestamps = samples, weights, timestamps
+          @sample_categories = categories
           @marker_names, @marker_timestamps = marker_names, marker_timestamps
 
           @started_at, @stopped_at = started_at, stopped_at
 
           names = profile.func_table.fetch(:name)
           filenames = profile.func_table.fetch(:filename)
+
+          stacks_size = profile.stack_table.fetch(:frame).size
+          @categorized_stacks = Hash.new do |h, k|
+            h[k] = h.size + stacks_size
+          end
 
           @strings = Hash.new { |h, k| h[k] = h.size }
           @func_names = names.map do |name|
@@ -174,7 +183,7 @@ module Vernier
           @filenames = filenames.map do |filename|
             @strings[filename]
           end
-          @categories = filenames.map do |filename|
+          @frame_categories = filenames.map do |filename|
             @categorizer.categorize(filename)
           end
         end
@@ -193,8 +202,8 @@ module Vernier
             frameTable: frame_table,
             funcTable: func_table,
             nativeSymbols: {},
-            stackTable: stack_table,
             samples: samples_table,
+            stackTable: stack_table,
             resourceTable: {
               length: 0,
               lib: [],
@@ -261,7 +270,11 @@ module Vernier
         def samples_table
           samples = @samples
           weights = @weights
+          categories = @sample_categories
           size = samples.size
+          if categories.empty?
+            categories = [0] * size
+          end
 
           if @timestamps
             times = @timestamps.map { _1 / 1_000_000.0 }
@@ -274,6 +287,14 @@ module Vernier
           raise unless weights.size == size
           raise unless times.size == size
 
+          samples = samples.zip(categories).map do |sample, category|
+            if category == 0
+              sample
+            else
+              @categorized_stacks[[sample, category]]
+            end
+          end
+
           {
             stack: samples,
             time: times,
@@ -285,14 +306,22 @@ module Vernier
         end
 
         def stack_table
-          frames = profile.stack_table.fetch(:frame)
-          prefixes = profile.stack_table.fetch(:parent)
+          frames = profile.stack_table.fetch(:frame).dup
+          prefixes = profile.stack_table.fetch(:parent).dup
+          categories  = frames.map{|idx| @frame_categories[idx].idx }
+
+          @categorized_stacks.keys.each do |(stack, category)|
+            frames << frames[stack]
+            prefixes << prefixes[stack]
+            categories << category
+          end
+
           size = frames.length
           raise unless frames.size == size
           raise unless prefixes.size == size
           {
             frame: frames,
-            category: frames.map{|idx| @categories[idx].idx },
+            category: categories,
             subcategory: [0] * size,
             prefix: prefixes,
             length: prefixes.length
@@ -304,7 +333,7 @@ module Vernier
           lines = profile.frame_table.fetch(:line)
           size = funcs.length
           none = [nil] * size
-          categories = @categories.map(&:idx)
+          categories = @frame_categories.map(&:idx)
 
           raise unless lines.size == funcs.size
 

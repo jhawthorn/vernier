@@ -793,10 +793,16 @@ class ThreadTable {
         }
 };
 
+enum Category{
+	CATEGORY_NORMAL,
+	CATEGORY_IDLE
+};
+
 class TimeCollector : public BaseCollector {
     std::vector<int> samples;
     std::vector<TimeStamp> timestamps;
     std::vector<native_thread_id_t> sample_threads;
+    std::vector<Category> sample_categories;
 
     MarkerTable markers;
     ThreadTable threads;
@@ -810,12 +816,13 @@ class TimeCollector : public BaseCollector {
 
     TimeStamp started_at;
 
-    void record_sample(const RawSample &sample, TimeStamp time, const Thread &thread) {
+    void record_sample(const RawSample &sample, TimeStamp time, const Thread &thread, Category category) {
         if (!sample.empty()) {
             int stack_index = frame_list.stack_index(sample);
             samples.push_back(stack_index);
             timestamps.push_back(time);
             sample_threads.push_back(thread.native_tid);
+            sample_categories.push_back(category);
         }
     }
 
@@ -845,10 +852,10 @@ class TimeCollector : public BaseCollector {
                     if (sample.sample.gc) {
                         // fprintf(stderr, "skipping GC sample\n");
                     } else {
-                        record_sample(sample.sample, sample_start, thread);
+                        record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
                     }
                 } else if (thread.state == Thread::State::SUSPENDED) {
-                    record_sample(thread.stack_on_suspend, sample_start, thread);
+                    record_sample(thread.stack_on_suspend, sample_start, thread, CATEGORY_IDLE);
                 } else {
                 }
             }
@@ -1019,6 +1026,12 @@ class TimeCollector : public BaseCollector {
         rb_ivar_set(result, rb_intern("@sample_threads"), sample_threads);
         for (auto& thread: this->sample_threads) {
             rb_ary_push(sample_threads, ULL2NUM(thread));
+        }
+
+        VALUE sample_categories = rb_ary_new();
+        rb_ivar_set(result, rb_intern("@sample_categories"), sample_categories);
+        for (auto& cat: this->sample_categories) {
+            rb_ary_push(sample_categories, INT2NUM(cat));
         }
 
         VALUE marker_strings[Marker::Type::MARKER_MAX] = {0};
