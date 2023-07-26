@@ -153,10 +153,11 @@ module Vernier
       class Thread
         attr_reader :profile
 
-        def initialize(profile, categorizer, tid:, samples:, weights:, timestamps:, marker_names:, marker_timestamps:, started_at:, stopped_at: nil)
+        def initialize(profile, categorizer, name:, tid:, samples:, weights:, timestamps:, marker_names:, marker_timestamps:, started_at:, stopped_at: nil)
           @profile = profile
           @categorizer = categorizer
           @tid = tid
+          @name = name
 
           @samples, @weights, @timestamps = samples, weights, timestamps
           @marker_names, @marker_timestamps = marker_names, marker_timestamps
@@ -180,7 +181,7 @@ module Vernier
 
         def data
           {
-            name: "thread #{@tid}",
+            name: @name,
             isMainThread: @tid == ::Thread.main.native_thread_id,
             processStartupTime: 0, # FIXME
             processShutdownTime: nil, # FIXME

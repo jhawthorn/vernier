@@ -666,6 +666,8 @@ class Thread {
 
         RawSample stack_on_suspend;
 
+        std::string name;
+
         Thread(State state) : state(state) {
             pthread_id = pthread_self();
             native_tid = get_native_thread_id();
@@ -685,7 +687,20 @@ class Thread {
                 started_at = now;
             } else if (new_state == State::STOPPED) {
                 stopped_at = now;
+
+                capture_name();
             }
+        }
+
+        bool running() {
+            return state != State::STOPPED;
+        }
+
+        void capture_name() {
+            char buf[128];
+            int rc = pthread_getname_np(pthread_id, buf, sizeof(buf));
+            if (rc == 0)
+                name = std::string(buf);
         }
 };
 
@@ -961,6 +976,13 @@ class TimeCollector : public BaseCollector {
         rb_internal_thread_remove_event_hook(thread_hook);
         rb_tracepoint_disable(gc_hook);
 
+        // capture thread names
+        for (auto& thread: this->threads.list) {
+            if (thread.running()) {
+                thread.capture_name();
+            }
+        }
+
         frame_list.finalize();
 
         VALUE result = build_collector_result();
@@ -1026,6 +1048,7 @@ class TimeCollector : public BaseCollector {
 
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
+
         for (const auto& thread: this->threads.list) {
             VALUE hash = rb_hash_new();
             rb_hash_aset(threads, ULL2NUM(thread.native_tid), hash);
@@ -1034,6 +1057,7 @@ class TimeCollector : public BaseCollector {
             if (!thread.stopped_at.zero()) {
                 rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread.stopped_at.nanoseconds()));
             }
+            rb_hash_aset(hash, sym("name"), rb_str_new(thread.name.data(), thread.name.length()));
 
         }
 
