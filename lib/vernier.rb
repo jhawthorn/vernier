@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "vernier/version"
+require_relative "vernier/collector"
 require_relative "vernier/vernier"
 require_relative "vernier/output/firefox"
 require_relative "vernier/output/top"

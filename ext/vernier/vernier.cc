@@ -1156,7 +1156,9 @@ static VALUE collector_new(VALUE self, VALUE mode) {
     } else {
         rb_raise(rb_eArgError, "invalid mode");
     }
-    return TypedData_Wrap_Struct(self, &rb_collector_type, collector);
+    VALUE obj = TypedData_Wrap_Struct(self, &rb_collector_type, collector);
+    rb_funcall(obj, rb_intern("initialize"), 1, mode);
+    return obj;
 }
 
 extern "C" void
