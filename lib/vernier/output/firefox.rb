@@ -8,13 +8,13 @@ module Vernier
     # https://github.com/firefox-devtools/profiler/blob/main/src/types/profile.js
     class Firefox
       class Categorizer
-        attr_reader :categories
+        attr_reader :categories, :gc_category, :jit_category
         def initialize
           @categories = []
 
           add_category(name: "Default", color: "grey")
           add_category(name: "Idle", color: "transparent")
-          add_category(name: "GC", color: "red")
+          @gc_category = add_category(name: "GC", color: "red")
           add_category(
             name: "stdlib",
             color: "red",
@@ -39,10 +39,16 @@ module Vernier
             name: "Application",
             color: "purple"
           )
+          @jit_category = add_category(
+            name: "JIT",
+            color: "blue"
+          )
         end
 
         def add_category(**kw)
-          @categories << Category.new(@categories.length, **kw)
+          category = Category.new(@categories.length, **kw)
+          @categories << category
+          category
         end
 
         def starts_with(*paths)
@@ -237,7 +243,7 @@ module Vernier
                 j = i + 1
                 phases << 1
                 string_indexes << @strings["GC pause"]
-                categories << 1 # Category 1 is GC :sweat_smile:
+                categories << gc_category.idx # Category 1 is GC :sweat_smile:
 
                 while j < size
                   if names[j] == "GC exit"
@@ -248,7 +254,7 @@ module Vernier
                   j += 1
                 end
               else
-                categories << (name =~ /GC/ ? 1 : 0)
+                categories << (name =~ /GC/ ? gc_category.idx : 0)
                 string_indexes << @strings[name]
                 phases << 0
                 end_times << nil
@@ -372,6 +378,12 @@ module Vernier
 
         def string_table
           @strings.keys
+        end
+
+        private
+
+        def gc_category
+          @categorizer.gc_category
         end
       end
     end
