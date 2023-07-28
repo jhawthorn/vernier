@@ -761,7 +761,7 @@ class ThreadTable {
             for (auto &thread : list) {
                 if (pthread_equal(current_thread, thread.pthread_id)) {
                     if (new_state == Thread::State::STARTED) {
-                        throw std::runtime_error("started event on existing thread");
+                        fprintf(stderr, "WARNING: started event on existring thread (previous state: %i)", thread.state);
                     }
 
                     thread.set_state(new_state);
