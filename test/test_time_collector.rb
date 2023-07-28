@@ -51,6 +51,7 @@ class TestTimeCollector < Minitest::Test
     result = collector.stop
 
     tally = result.sample_threads.tally
+    pp tally
     assert_includes (380..430), tally[Thread.current.native_thread_id]
     assert_includes (380..430), tally[th1id]
     assert_includes (380..430), tally[th2id]
