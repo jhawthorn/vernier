@@ -107,6 +107,22 @@ class TimeStamp {
         return *this;
     }
 
+    bool operator<(const TimeStamp &other) const {
+        return value_ns < other.value_ns;
+    }
+
+    bool operator<=(const TimeStamp &other) const {
+        return value_ns <= other.value_ns;
+    }
+
+    bool operator>(const TimeStamp &other) const {
+        return value_ns > other.value_ns;
+    }
+
+    bool operator>=(const TimeStamp &other) const {
+        return value_ns >= other.value_ns;
+    }
+
     uint64_t nanoseconds() const {
         return value_ns;
     }
@@ -864,6 +880,12 @@ class TimeCollector : public BaseCollector {
             TimeStamp sample_complete = TimeStamp::Now();
 
             next_sample_schedule += interval;
+
+            if (next_sample_schedule < sample_complete) {
+                fprintf(stderr, "fell behind\n")
+                next_sample_schedule = sample_complete + interval;
+            }
+
             TimeStamp sleep_time = next_sample_schedule - sample_complete;
             TimeStamp::Sleep(sleep_time);
         }
