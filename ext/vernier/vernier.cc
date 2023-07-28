@@ -820,6 +820,13 @@ class TimeCollector : public BaseCollector {
     static inline LiveSample *live_sample;
 
     TimeStamp started_at;
+    TimeStamp interval;
+
+    public:
+    TimeCollector(TimeStamp interval) : interval(interval) {
+    }
+
+    private:
 
     void record_sample(const RawSample &sample, TimeStamp time, const Thread &thread, Category category) {
         if (!sample.empty()) {
@@ -854,7 +861,6 @@ class TimeCollector : public BaseCollector {
         LiveSample sample;
         live_sample = &sample;
 
-        TimeStamp interval = TimeStamp::from_microseconds(500);
         TimeStamp next_sample_schedule = TimeStamp::Now();
         while (running) {
             TimeStamp sample_start = TimeStamp::Now();
@@ -1152,14 +1158,21 @@ collector_sample(VALUE self) {
     return Qtrue;
 }
 
-static VALUE collector_new(VALUE self, VALUE mode) {
+static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
     BaseCollector *collector;
     if (mode == sym("retained")) {
         collector = new RetainedCollector();
     } else if (mode == sym("custom")) {
         collector = new CustomCollector();
     } else if (mode == sym("wall")) {
-        collector = new TimeCollector();
+        VALUE intervalv = rb_hash_aref(options, sym("interval"));
+        TimeStamp interval;
+        if (NIL_P(intervalv)) {
+            interval = TimeStamp::from_microseconds(500);
+        } else {
+            interval = TimeStamp::from_microseconds(NUM2UINT(intervalv));
+        }
+        collector = new TimeCollector(interval);
     } else {
         rb_raise(rb_eArgError, "invalid mode");
     }
@@ -1198,7 +1211,7 @@ Init_vernier(void)
 
   rb_cVernierCollector = rb_define_class_under(rb_mVernier, "Collector", rb_cObject);
   rb_undef_alloc_func(rb_cVernierCollector);
-  rb_define_singleton_method(rb_cVernierCollector, "new", collector_new, 1);
+  rb_define_singleton_method(rb_cVernierCollector, "_new", collector_new, 2);
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
