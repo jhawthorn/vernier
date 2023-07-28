@@ -130,8 +130,8 @@ module Vernier
     end
   end
 
-  def self.trace(mode: :wall, out: nil)
-    collector = Vernier::Collector.new(mode)
+  def self.trace(mode: :wall, out: nil, interval: nil)
+    collector = Vernier::Collector.new(mode, { interval: })
     collector.start
 
     result = nil
@@ -170,5 +170,11 @@ module Vernier
       result.write(out:)
     end
     result
+  end
+
+  class Collector
+    def self.new(mode, options = {})
+      _new(mode, options)
+    end
   end
 end

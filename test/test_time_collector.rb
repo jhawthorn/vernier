@@ -28,21 +28,21 @@ class TestTimeCollector < Minitest::Test
   end
 
   def test_time_collector
-    collector = Vernier::Collector.new(:wall)
+    collector = Vernier::Collector.new(:wall, interval: 1000)
     collector.start
     foo
     result = collector.stop
 
     assert_valid_result result
-    assert_includes (380..420), result.samples.size
+    assert_includes (180..220), result.samples.size
 
     significant_stacks = result.samples.tally.select { |k,v| v > 10 }
     assert_equal 2, significant_stacks.size
-    assert significant_stacks.sum(&:last) > 350
+    assert significant_stacks.sum(&:last) > 150
   end
 
   def test_sleeping_threads
-    collector = Vernier::Collector.new(:wall)
+    collector = Vernier::Collector.new(:wall, interval: 1000)
     th1 = Thread.new { foo; Thread.current.native_thread_id }
     th2 = Thread.new { foo; Thread.current.native_thread_id }
     collector.start
@@ -52,9 +52,9 @@ class TestTimeCollector < Minitest::Test
 
     tally = result.sample_threads.tally
     pp tally
-    assert_includes (380..430), tally[Thread.current.native_thread_id]
-    assert_includes (380..430), tally[th1id]
-    assert_includes (380..430), tally[th2id]
+    assert_includes (180..230), tally[Thread.current.native_thread_id]
+    assert_includes (180..230), tally[th1id]
+    assert_includes (180..230), tally[th2id]
 
     assert_valid_result result
     # TODO: some assertions on behaviour
