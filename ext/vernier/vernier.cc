@@ -868,7 +868,7 @@ class TimeCollector : public BaseCollector {
             next_sample_schedule += interval;
 
             if (next_sample_schedule < sample_complete) {
-                fprintf(stderr, "fell behind\n")
+                //fprintf(stderr, "fell behind by %ius\n", (sample_complete - next_sample_schedule).microseconds());
                 next_sample_schedule = sample_complete + interval;
             }
 
