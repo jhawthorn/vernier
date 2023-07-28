@@ -796,20 +796,6 @@ class ThreadTable {
             pid_t native_tid = Thread::get_native_thread_id();
             list.emplace_back(new_state);
         }
-
-        std::optional<pthread_t> get_active() {
-            const std::lock_guard<std::mutex> lock(mutex);
-
-            for (auto thread : list) {
-                if (thread.state == Thread::State::RUNNING) {
-                    cerr << "active thread=" << thread.pthread_id << endl;
-                    return thread.pthread_id;
-                }
-            }
-            cerr << "not found :(" << endl;
-
-            return {};
-        }
 };
 
 enum Category{
