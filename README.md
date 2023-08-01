@@ -25,7 +25,7 @@ The output can then be viewed in the [Firefox Profiler (demo)](https://share.fir
 ### Time
 
 ```
-Vernier.trace(out: "time_profile.json") { some_slow_method }'
+Vernier.trace(out: "time_profile.json") { some_slow_method }
 ```
 
 ## Development
