@@ -12,11 +12,22 @@ module Vernier
   class Result
     attr_reader :weights, :samples, :stack_table, :frame_table, :func_table
     attr_reader :timestamps, :sample_threads, :sample_categories
-    attr_reader :marker_names, :marker_timestamps, :marker_threads
 
     attr_accessor :pid, :start_time, :end_time
     attr_accessor :threads
     attr_accessor :meta
+
+    def marker_names
+      @markers.map { _2 }
+    end
+
+    def marker_threads
+      @markers.map { _1 }
+    end
+
+    def marker_timestamps
+      @markers.map { _3 }
+    end
 
     def started_at
       meta[:started_at]
