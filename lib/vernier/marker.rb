@@ -32,7 +32,7 @@ module Vernier
     # Return an array of marker names.  The index of the string maps to the
     # value of the corresponding constant
     def self.name_table
-      MARKER_STRINGS.dup
+      MARKER_STRINGS
     end
   end
 end
