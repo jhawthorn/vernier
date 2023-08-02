@@ -470,7 +470,7 @@ class BaseCollector {
     };
 
     virtual VALUE get_markers() {
-        return Qnil;
+        return rb_ary_new();
     };
 };
 
