@@ -6,7 +6,6 @@ module Vernier
   class Collector
     def initialize(mode)
       @mode = mode
-      @marker_strings = Marker.name_table
     end
 
     def stop
@@ -16,9 +15,10 @@ module Vernier
         markers = []
         marker_list = self.markers
         size = marker_list.size
+        marker_strings = Marker.name_table
 
         marker_list.each_with_index do |(tid, id, ts), i|
-          name = @marker_strings[id]
+          name = marker_strings[id]
           finish = nil
           phase = Marker::Phase::INSTANT
 
