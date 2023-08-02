@@ -452,7 +452,7 @@ class BaseCollector {
         }
     }
 
-    virtual VALUE stop(VALUE self) {
+    virtual VALUE stop() {
         if (!running) {
             rb_raise(rb_eRuntimeError, "collector not running");
         }
@@ -485,19 +485,19 @@ class CustomCollector : public BaseCollector {
         samples.push_back(stack_index);
     }
 
-    VALUE stop(VALUE self) {
-        BaseCollector::stop(self);
+    VALUE stop() {
+        BaseCollector::stop();
 
         frame_list.finalize();
 
-        VALUE result = build_collector_result(self);
+        VALUE result = build_collector_result();
 
         reset();
 
         return result;
     }
 
-    VALUE build_collector_result(VALUE self) {
+    VALUE build_collector_result() {
         VALUE result = rb_obj_alloc(rb_cVernierResult);
 
         VALUE samples = rb_ary_new();
@@ -569,8 +569,8 @@ class RetainedCollector : public BaseCollector {
         return true;
     }
 
-    VALUE stop(VALUE self) {
-        BaseCollector::stop(self);
+    VALUE stop() {
+        BaseCollector::stop();
 
         // GC before we start turning stacks into strings
         rb_gc();
@@ -594,14 +594,14 @@ class RetainedCollector : public BaseCollector {
         rb_tracepoint_disable(tp_freeobj);
         tp_freeobj = Qnil;
 
-        VALUE result = build_collector_result(self);
+        VALUE result = build_collector_result();
 
         reset();
 
         return result;
     }
 
-    VALUE build_collector_result(VALUE self) {
+    VALUE build_collector_result() {
         RetainedCollector *collector = this;
         FrameList &frame_list = collector->frame_list;
 
@@ -987,8 +987,8 @@ class TimeCollector : public BaseCollector {
         return true;
     }
 
-    VALUE stop(VALUE self) {
-        BaseCollector::stop(self);
+    VALUE stop() {
+        BaseCollector::stop();
 
         running = false;
         thread_stopped.wait();
@@ -1011,14 +1011,14 @@ class TimeCollector : public BaseCollector {
 
         frame_list.finalize();
 
-        VALUE result = build_collector_result(self);
+        VALUE result = build_collector_result();
 
         reset();
 
         return result;
     }
 
-    VALUE build_collector_result(VALUE self) {
+    VALUE build_collector_result() {
         VALUE result = rb_obj_alloc(rb_cVernierResult);
 
         VALUE meta = rb_hash_new();
@@ -1127,7 +1127,7 @@ static VALUE
 collector_stop(VALUE self) {
     auto *collector = get_collector(self);
 
-    VALUE result = collector->stop(self);
+    VALUE result = collector->stop();
     return result;
 }
 
