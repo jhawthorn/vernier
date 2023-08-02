@@ -97,8 +97,7 @@ module Vernier
           weights: [],
           samples: [],
           categories: [],
-          marker_names: [],
-          marker_timestamps: [],
+          markers: [],
         }}
 
         profile.samples.size.times do |i|
@@ -111,14 +110,8 @@ module Vernier
           thread[:categories] << profile.sample_categories[i]
         end
 
-        marker_names = profile.marker_names
-
-        marker_names.size.times do |i|
-          tid = profile.marker_threads[i]
-          thread = threads[tid]
-
-          thread[:marker_names] << marker_names[i]
-          thread[:marker_timestamps] << profile.marker_timestamps[i]
+        profile.markers.each do |marker|
+          threads[marker[0]][:markers] << marker
         end
 
         thread_data = profile.threads.map do |tid, thread_info|
@@ -164,7 +157,7 @@ module Vernier
       class Thread
         attr_reader :profile
 
-        def initialize(profile, categorizer, name:, tid:, samples:, weights:, timestamps:, categories:, marker_names:, marker_timestamps:, started_at:, stopped_at: nil)
+        def initialize(profile, categorizer, name:, tid:, samples:, weights:, timestamps:, categories:, markers:, started_at:, stopped_at: nil)
           @profile = profile
           @categorizer = categorizer
           @tid = tid
@@ -172,7 +165,7 @@ module Vernier
 
           @samples, @weights, @timestamps = samples, weights, timestamps
           @sample_categories = categories
-          @marker_names, @marker_timestamps = marker_names, marker_timestamps
+          @markers = markers
 
           @started_at, @stopped_at = started_at, stopped_at
 
@@ -225,9 +218,7 @@ module Vernier
         end
 
         def markers_table
-          names = (@marker_names || [])
-          times = (@marker_timestamps || []).map { _1 / 1_000_000.0 }
-          size = times.size
+          size = @markers.size
 
           string_indexes = []
           start_times = []
@@ -235,34 +226,15 @@ module Vernier
           phases = []
           categories = []
 
-          names.each_with_index { |name, i|
-            if name == "GC exit"
-              # skip because these are incorporated in "GC enter"
-            else
-              start_times << times[i]
+          @markers.each_with_index do |(_, name, start, finish, phase), i|
+            string_indexes << @strings[name]
+            start_times << (start / 1_000_000.0)
 
-              if name == "GC enter"
-                j = i + 1
-                phases << 1
-                string_indexes << @strings["GC pause"]
-                categories << gc_category.idx # Category 1 is GC :sweat_smile:
-
-                while j < size
-                  if names[j] == "GC exit"
-                    end_times << times[j]
-                    break
-                  end
-
-                  j += 1
-                end
-              else
-                categories << (name =~ /GC/ ? gc_category.idx : 0)
-                string_indexes << @strings[name]
-                phases << 0
-                end_times << nil
-              end
-            end
-          }
+            # Please don't hate me. Divide by 1,000,000 only if finish is not nil
+            end_times << (finish&./(1_000_000.0))
+            phases << phase
+            categories << (name =~ /GC/ ? gc_category.idx : 0)
+          end
 
           {
             data: [nil] * start_times.size,

@@ -23,8 +23,8 @@ class TestTimeCollector < Minitest::Test
 
     assert_valid_result result
     # make sure we got all GC events (since we did GC.start twice)
-    assert_equal ["GC end marking", "GC end sweeping", "GC enter", "GC exit", "GC start"],
-      result.marker_names.uniq.sort
+    assert_equal ["GC end marking", "GC end sweeping", "GC pause", "GC start"].sort,
+      result.markers.map { |x| x[1] }.uniq.sort
   end
 
   def test_time_collector
