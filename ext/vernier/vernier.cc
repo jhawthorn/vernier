@@ -43,6 +43,7 @@ using namespace std;
 
 static VALUE rb_mVernier;
 static VALUE rb_cVernierResult;
+static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
 
 class TimeStamp {
@@ -451,7 +452,7 @@ class BaseCollector {
         }
     }
 
-    virtual VALUE stop() {
+    virtual VALUE stop(VALUE self) {
         if (!running) {
             rb_raise(rb_eRuntimeError, "collector not running");
         }
@@ -480,19 +481,19 @@ class CustomCollector : public BaseCollector {
         samples.push_back(stack_index);
     }
 
-    VALUE stop() {
-        BaseCollector::stop();
+    VALUE stop(VALUE self) {
+        BaseCollector::stop(self);
 
         frame_list.finalize();
 
-        VALUE result = build_collector_result();
+        VALUE result = build_collector_result(self);
 
         reset();
 
         return result;
     }
 
-    VALUE build_collector_result() {
+    VALUE build_collector_result(VALUE self) {
         VALUE result = rb_obj_alloc(rb_cVernierResult);
 
         VALUE samples = rb_ary_new();
@@ -564,8 +565,8 @@ class RetainedCollector : public BaseCollector {
         return true;
     }
 
-    VALUE stop() {
-        BaseCollector::stop();
+    VALUE stop(VALUE self) {
+        BaseCollector::stop(self);
 
         // GC before we start turning stacks into strings
         rb_gc();
@@ -589,14 +590,14 @@ class RetainedCollector : public BaseCollector {
         rb_tracepoint_disable(tp_freeobj);
         tp_freeobj = Qnil;
 
-        VALUE result = build_collector_result();
+        VALUE result = build_collector_result(self);
 
         reset();
 
         return result;
     }
 
-    VALUE build_collector_result() {
+    VALUE build_collector_result(VALUE self) {
         RetainedCollector *collector = this;
         FrameList &frame_list = collector->frame_list;
 
@@ -968,8 +969,8 @@ class TimeCollector : public BaseCollector {
         return true;
     }
 
-    VALUE stop() {
-        BaseCollector::stop();
+    VALUE stop(VALUE self) {
+        BaseCollector::stop(self);
 
         running = false;
         thread_stopped.wait();
@@ -992,14 +993,14 @@ class TimeCollector : public BaseCollector {
 
         frame_list.finalize();
 
-        VALUE result = build_collector_result();
+        VALUE result = build_collector_result(self);
 
         reset();
 
         return result;
     }
 
-    VALUE build_collector_result() {
+    VALUE build_collector_result(VALUE self) {
         VALUE result = rb_obj_alloc(rb_cVernierResult);
 
         VALUE meta = rb_hash_new();
@@ -1034,28 +1035,16 @@ class TimeCollector : public BaseCollector {
             rb_ary_push(sample_categories, INT2NUM(cat));
         }
 
-        VALUE marker_strings[Marker::Type::MARKER_MAX] = {0};
-        marker_strings[Marker::Type::MARKER_GVL_THREAD_STARTED] = rb_str_new_lit("thread started");
-        marker_strings[Marker::Type::MARKER_GVL_THREAD_READY] = rb_str_new_lit("thread ready");
-        marker_strings[Marker::Type::MARKER_GVL_THREAD_RESUMED] = rb_str_new_lit("thread resumed");
-        marker_strings[Marker::Type::MARKER_GVL_THREAD_SUSPENDED] = rb_str_new_lit("thread suspended");
-        marker_strings[Marker::Type::MARKER_GVL_THREAD_EXITED] = rb_str_new_lit("thread exited");
-
-        marker_strings[Marker::Type::MARKER_GC_START] = rb_str_new_lit("GC start");
-        marker_strings[Marker::Type::MARKER_GC_END_MARK] = rb_str_new_lit("GC end marking");
-        marker_strings[Marker::Type::MARKER_GC_END_SWEEP] = rb_str_new_lit("GC end sweeping");
-        marker_strings[Marker::Type::MARKER_GC_ENTER] = rb_str_new_lit("GC enter");
-        marker_strings[Marker::Type::MARKER_GC_EXIT] = rb_str_new_lit("GC exit");
-
         VALUE marker_timestamps = rb_ary_new();
-        VALUE marker_names = rb_ary_new();
         VALUE marker_threads = rb_ary_new();
+        VALUE marker_ids = rb_ary_new();
         rb_ivar_set(result, rb_intern("@marker_timestamps"), marker_timestamps);
-        rb_ivar_set(result, rb_intern("@marker_names"), marker_names);
         rb_ivar_set(result, rb_intern("@marker_threads"), marker_threads);
+        rb_ivar_set(result, rb_intern("@marker_strings"), rb_ivar_get(self, rb_intern("@marker_strings")));
+        rb_ivar_set(result, rb_intern("@marker_ids"), marker_ids);
         for (auto& marker: this->markers.list) {
             rb_ary_push(marker_timestamps, ULL2NUM(marker.timestamp.nanoseconds()));
-            rb_ary_push(marker_names, marker_strings[marker.type]);
+            rb_ary_push(marker_ids, INT2NUM(marker.type));
             rb_ary_push(marker_threads, ULL2NUM(marker.thread_id));
         }
 
@@ -1133,7 +1122,7 @@ static VALUE
 collector_stop(VALUE self) {
     auto *collector = get_collector(self);
 
-    VALUE result = collector->stop();
+    VALUE result = collector->stop(self);
     return result;
 }
 
@@ -1161,11 +1150,33 @@ static VALUE collector_new(VALUE self, VALUE mode) {
     return obj;
 }
 
+static void
+Init_consts() {
+#define MARKER_CONST(name) \
+    rb_define_const(rb_mVernierMarkerType, #name, INT2NUM(Marker::Type::MARKER_##name))
+
+    MARKER_CONST(GVL_THREAD_STARTED);
+    MARKER_CONST(GVL_THREAD_READY);
+    MARKER_CONST(GVL_THREAD_RESUMED);
+    MARKER_CONST(GVL_THREAD_SUSPENDED);
+    MARKER_CONST(GVL_THREAD_EXITED);
+
+    MARKER_CONST(GC_START);
+    MARKER_CONST(GC_END_MARK);
+    MARKER_CONST(GC_END_SWEEP);
+    MARKER_CONST(GC_ENTER);
+    MARKER_CONST(GC_EXIT);
+
+#undef MARKER_CONST
+}
+
 extern "C" void
 Init_vernier(void)
 {
   rb_mVernier = rb_define_module("Vernier");
   rb_cVernierResult = rb_define_class_under(rb_mVernier, "Result", rb_cObject);
+  VALUE rb_mVernierMarker = rb_define_module_under(rb_mVernier, "Marker");
+  rb_mVernierMarkerType = rb_define_module_under(rb_mVernierMarker, "Type");
 
   rb_cVernierCollector = rb_define_class_under(rb_mVernier, "Collector", rb_cObject);
   rb_undef_alloc_func(rb_cVernierCollector);
@@ -1173,6 +1184,8 @@ Init_vernier(void)
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
   rb_define_method(rb_cVernierCollector, "stop",  collector_stop, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
+
+  Init_consts();
 
   //static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, collector_mark, NULL, &_collector);
   //rb_global_variable(&gc_hook);

@@ -111,11 +111,13 @@ module Vernier
           thread[:categories] << profile.sample_categories[i]
         end
 
-        profile.marker_names.size.times do |i|
+        marker_names = profile.marker_names
+
+        marker_names.size.times do |i|
           tid = profile.marker_threads[i]
           thread = threads[tid]
 
-          thread[:marker_names] << profile.marker_names[i]
+          thread[:marker_names] << marker_names[i]
           thread[:marker_timestamps] << profile.marker_timestamps[i]
         end
 
