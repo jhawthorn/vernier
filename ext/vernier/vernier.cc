@@ -469,15 +469,7 @@ class BaseCollector {
         frame_list.mark_frames();
     };
 
-    virtual VALUE marker_timestamps() {
-        return Qnil;
-    };
-
-    virtual VALUE marker_threads() {
-        return Qnil;
-    };
-
-    virtual VALUE marker_ids() {
+    virtual VALUE get_markers() {
         return Qnil;
     };
 };
@@ -844,28 +836,15 @@ class TimeCollector : public BaseCollector {
         live_sample->sample_current_thread();
     }
 
-    VALUE marker_timestamps() {
+    VALUE get_markers() {
         VALUE list = rb_ary_new();
+
         for (auto& marker: this->markers.list) {
-            rb_ary_push(list, ULL2NUM(marker.timestamp.nanoseconds()));
-        }
-
-        return list;
-    }
-
-    VALUE marker_threads() {
-        VALUE list = rb_ary_new();
-        for (auto& marker: this->markers.list) {
-            rb_ary_push(list, ULL2NUM(marker.thread_id));
-        }
-
-        return list;
-    }
-
-    VALUE marker_ids() {
-        VALUE list = rb_ary_new();
-        for (auto& marker: this->markers.list) {
-            rb_ary_push(list, INT2NUM(marker.type));
+            VALUE record[3] = {0};
+            record[0] = ULL2NUM(marker.thread_id);
+            record[1] = INT2NUM(marker.type);
+            record[2] = ULL2NUM(marker.timestamp.nanoseconds());
+            rb_ary_push(list, rb_ary_new_from_values(3, record));
         }
 
         return list;
@@ -1153,24 +1132,10 @@ collector_stop(VALUE self) {
 }
 
 static VALUE
-marker_timestamps(VALUE self) {
+markers(VALUE self) {
     auto *collector = get_collector(self);
 
-    return collector->marker_timestamps();
-}
-
-static VALUE
-marker_threads(VALUE self) {
-    auto *collector = get_collector(self);
-
-    return collector->marker_threads();
-}
-
-static VALUE
-marker_ids(VALUE self) {
-    auto *collector = get_collector(self);
-
-    return collector->marker_ids();
+    return collector->get_markers();
 }
 
 static VALUE
@@ -1231,9 +1196,7 @@ Init_vernier(void)
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
-  rb_define_private_method(rb_cVernierCollector, "marker_timestamps",  marker_timestamps, 0);
-  rb_define_private_method(rb_cVernierCollector, "marker_threads",  marker_threads, 0);
-  rb_define_private_method(rb_cVernierCollector, "marker_ids",  marker_ids, 0);
+  rb_define_private_method(rb_cVernierCollector, "markers",  markers, 0);
 
   Init_consts();
 

@@ -13,10 +13,19 @@ module Vernier
       result = finish
 
       if @mode == :wall
+        marker_names = []
+        marker_timestamps = []
+        marker_threads = []
+
+        markers.each do |tid, id, ts|
+          marker_names << @marker_strings[id]
+          marker_timestamps << ts
+          marker_threads << tid
+        end
+
         result.instance_variable_set(:@marker_timestamps, marker_timestamps)
         result.instance_variable_set(:@marker_threads, marker_threads)
-        result.instance_variable_set(:@marker_strings, @marker_strings)
-        result.instance_variable_set(:@marker_ids, marker_ids)
+        result.instance_variable_set(:@marker_names, marker_names)
       end
 
       result

@@ -12,21 +12,14 @@ module Vernier
   class Result
     attr_reader :weights, :samples, :stack_table, :frame_table, :func_table
     attr_reader :timestamps, :sample_threads, :sample_categories
-    attr_reader :marker_timestamps, :marker_threads
-    attr_reader :marker_strings, :marker_ids
+    attr_reader :marker_names, :marker_timestamps, :marker_threads
 
     attr_accessor :pid, :start_time, :end_time
     attr_accessor :threads
     attr_accessor :meta
 
-    private :marker_ids
-
     def started_at
       meta[:started_at]
-    end
-
-    def marker_names
-      marker_ids.map { marker_strings[_1] }
     end
 
     def to_gecko
