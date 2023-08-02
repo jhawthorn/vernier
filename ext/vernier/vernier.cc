@@ -468,6 +468,18 @@ class BaseCollector {
     virtual void mark() {
         frame_list.mark_frames();
     };
+
+    virtual VALUE marker_timestamps() {
+        return Qnil;
+    };
+
+    virtual VALUE marker_threads() {
+        return Qnil;
+    };
+
+    virtual VALUE marker_ids() {
+        return Qnil;
+    };
 };
 
 class CustomCollector : public BaseCollector {
@@ -832,6 +844,33 @@ class TimeCollector : public BaseCollector {
         live_sample->sample_current_thread();
     }
 
+    VALUE marker_timestamps() {
+        VALUE list = rb_ary_new();
+        for (auto& marker: this->markers.list) {
+            rb_ary_push(list, ULL2NUM(marker.timestamp.nanoseconds()));
+        }
+
+        return list;
+    }
+
+    VALUE marker_threads() {
+        VALUE list = rb_ary_new();
+        for (auto& marker: this->markers.list) {
+            rb_ary_push(list, ULL2NUM(marker.thread_id));
+        }
+
+        return list;
+    }
+
+    VALUE marker_ids() {
+        VALUE list = rb_ary_new();
+        for (auto& marker: this->markers.list) {
+            rb_ary_push(list, INT2NUM(marker.type));
+        }
+
+        return list;
+    }
+
     void sample_thread_run() {
         LiveSample sample;
         live_sample = &sample;
@@ -1035,19 +1074,6 @@ class TimeCollector : public BaseCollector {
             rb_ary_push(sample_categories, INT2NUM(cat));
         }
 
-        VALUE marker_timestamps = rb_ary_new();
-        VALUE marker_threads = rb_ary_new();
-        VALUE marker_ids = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@marker_timestamps"), marker_timestamps);
-        rb_ivar_set(result, rb_intern("@marker_threads"), marker_threads);
-        rb_ivar_set(result, rb_intern("@marker_strings"), rb_ivar_get(self, rb_intern("@marker_strings")));
-        rb_ivar_set(result, rb_intern("@marker_ids"), marker_ids);
-        for (auto& marker: this->markers.list) {
-            rb_ary_push(marker_timestamps, ULL2NUM(marker.timestamp.nanoseconds()));
-            rb_ary_push(marker_ids, INT2NUM(marker.type));
-            rb_ary_push(marker_threads, ULL2NUM(marker.thread_id));
-        }
-
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
 
@@ -1127,6 +1153,27 @@ collector_stop(VALUE self) {
 }
 
 static VALUE
+marker_timestamps(VALUE self) {
+    auto *collector = get_collector(self);
+
+    return collector->marker_timestamps();
+}
+
+static VALUE
+marker_threads(VALUE self) {
+    auto *collector = get_collector(self);
+
+    return collector->marker_threads();
+}
+
+static VALUE
+marker_ids(VALUE self) {
+    auto *collector = get_collector(self);
+
+    return collector->marker_ids();
+}
+
+static VALUE
 collector_sample(VALUE self) {
     auto *collector = get_collector(self);
 
@@ -1182,8 +1229,11 @@ Init_vernier(void)
   rb_undef_alloc_func(rb_cVernierCollector);
   rb_define_singleton_method(rb_cVernierCollector, "new", collector_new, 1);
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
-  rb_define_method(rb_cVernierCollector, "stop",  collector_stop, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
+  rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
+  rb_define_private_method(rb_cVernierCollector, "marker_timestamps",  marker_timestamps, 0);
+  rb_define_private_method(rb_cVernierCollector, "marker_threads",  marker_threads, 0);
+  rb_define_private_method(rb_cVernierCollector, "marker_ids",  marker_ids, 0);
 
   Init_consts();
 
