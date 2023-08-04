@@ -29,6 +29,32 @@ class TestOutputFirefox < Minitest::Test
 
       assert thread["markers"]
 
+      markers = thread["markers"]
+      assert markers["data"]
+      assert markers["data"]
+      marker_keys = ["data", "name", "startTime", "endTime", "phase", "category", "length"]
+      assert_equal marker_keys.sort, markers.keys.sort
+
+      assert_operator markers["length"], :>=, 0
+
+      markers["length"].times do |i|
+        start_time = markers["startTime"][i]
+        assert start_time, "start time is required"
+
+        end_time = markers["endTime"][i]
+
+        phase = markers["phase"][i]
+        assert_operator phase, :>=, 0
+        case phase
+        when Vernier::Marker::Phase::INSTANT
+          assert_nil end_time
+        when Vernier::Marker::Phase::INTERVAL
+          assert end_time, "intervals must have an end time"
+          assert_operator start_time, :<=, end_time
+        else
+        end
+      end
+
       samples = thread["samples"]
       assert thread["samples"]
       assert_equal samples["length"], samples["stack"].size
@@ -37,6 +63,31 @@ class TestOutputFirefox < Minitest::Test
 
       assert_operator samples["stack"].max || -1, :<, thread["stackTable"]["length"]
     end
+  end
+
+  def test_gc_events_have_duration
+    result = Vernier.trace do
+      GC.start
+      GC.start
+    end
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    data = JSON.parse output
+    thread = data["threads"].first
+    markers = thread["markers"]
+    intervals = markers["length"].times.map { |i|
+      ["name", "startTime", "endTime", "phase"].map { |key|
+        markers[key][i]
+      }
+    }.select { |record| record.last == Vernier::Marker::Phase::INTERVAL }
+
+    # we should have _some_ intervals from GC
+    assert_operator intervals.length, :>, 0
+    names = intervals.map { |record| thread["stringArray"][record.first] }.uniq
+
+    # We should have a GC pause in there
+    assert_includes names, "GC pause"
   end
 
   def test_retained_firefox_output
