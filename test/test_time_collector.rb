@@ -92,4 +92,16 @@ class TestTimeCollector < Minitest::Test
 
     # TODO: some assertions on behaviour
   end
+
+  def test_sequential_threads
+    collector = Vernier::Collector.new(:wall)
+    collector.start
+    10.times do
+      10.times.map do
+        Thread.new { sleep 0.1 }
+      end.map(&:join)
+    end
+    result = collector.stop
+    assert_valid_result result
+  end
 end

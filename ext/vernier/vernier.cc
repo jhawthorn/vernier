@@ -689,7 +689,9 @@ class Thread {
             state = new_state;
             state_changed_at = now;
             if (new_state == State::STARTED) {
-                started_at = now;
+                if (started_at.zero()) {
+                    started_at = now;
+                }
             } else if (new_state == State::STOPPED) {
                 stopped_at = now;
 
@@ -765,10 +767,6 @@ class ThreadTable {
 
             for (auto &thread : list) {
                 if (pthread_equal(current_thread, thread.pthread_id)) {
-                    if (new_state == Thread::State::STARTED) {
-                        throw std::runtime_error("started event on existing thread");
-                    }
-
                     thread.set_state(new_state);
 
                     if (new_state == Thread::State::SUSPENDED) {
