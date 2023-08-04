@@ -10,6 +10,9 @@
 #include <atomic>
 #include <mutex>
 
+/* for gettid */
+#include <unistd.h>
+
 #include <sys/time.h>
 #include <signal.h>
 #ifdef __APPLE__
