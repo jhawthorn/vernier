@@ -9,7 +9,6 @@
 #include <cassert>
 #include <atomic>
 #include <mutex>
-#include <optional>
 
 #include <sys/time.h>
 #include <signal.h>
