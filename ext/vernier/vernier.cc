@@ -461,6 +461,8 @@ class BaseCollector {
     bool running = false;
     FrameList frame_list;
 
+    virtual ~BaseCollector() {}
+
     virtual bool start() {
         if (running) {
             return false;
@@ -819,7 +821,7 @@ class TimeCollector : public BaseCollector {
     atomic_bool running;
     SamplerSemaphore thread_stopped;
 
-    static inline LiveSample *live_sample;
+    static LiveSample *live_sample;
 
     TimeStamp started_at;
     TimeStamp interval;
@@ -1098,6 +1100,8 @@ class TimeCollector : public BaseCollector {
         // FIXME: How can we best mark buffered or pending frames?
     }
 };
+
+LiveSample *TimeCollector::live_sample;
 
 static void
 collector_mark(void *data) {
