@@ -34,11 +34,11 @@ class TestTimeCollector < Minitest::Test
     result = collector.stop
 
     assert_valid_result result
-    assert_includes (180..220), result.samples.size
+    assert_in_epsilon 200, result.samples.size, generous_epsilon
 
     significant_stacks = result.samples.tally.select { |k,v| v > 10 }
     assert_equal 2, significant_stacks.size
-    assert significant_stacks.sum(&:last) > 150
+    assert_in_epsilon 200, significant_stacks.sum(&:last), generous_epsilon
   end
 
   def test_sleeping_threads
@@ -51,9 +51,9 @@ class TestTimeCollector < Minitest::Test
     result = collector.stop
 
     tally = result.sample_threads.tally
-    assert_includes (150..250), tally[Thread.current.native_thread_id]
-    assert_includes (150..250), tally[th1id]
-    assert_includes (150..250), tally[th2id]
+    assert_in_epsilon 200, tally[Thread.current.native_thread_id], generous_epsilon
+    assert_in_epsilon 200, tally[th1id], generous_epsilon
+    assert_in_epsilon 200, tally[th2id], generous_epsilon
 
     assert_valid_result result
     # TODO: some assertions on behaviour
@@ -103,5 +103,14 @@ class TestTimeCollector < Minitest::Test
     end
     result = collector.stop
     assert_valid_result result
+  end
+
+  def generous_epsilon
+    if ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
+      # Timing on macOS Actions runners seem extremely unpredictable
+      0.75
+    else
+      0.1
+    end
   end
 end
