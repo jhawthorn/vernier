@@ -1,6 +1,6 @@
 # Vernier
 
-Experimental next-generation Ruby profiler.
+Experimental next-generation Ruby sampling profiler. Tracks multiple threads, GVL activity, GC pauses, idle time, and more.
 
 ## Installation
 
