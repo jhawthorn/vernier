@@ -10,15 +10,15 @@
 #include <atomic>
 #include <mutex>
 
-/* for gettid */
-#include <unistd.h>
-
 #include <sys/time.h>
 #include <signal.h>
 #ifdef __APPLE__
+/* macOS */
 #include <dispatch/dispatch.h>
 #else
+/* Linux */
 #include <semaphore.h>
+#include <sys/syscall.h> /* for SYS_gettid */
 #endif
 
 #include "vernier.hh"
@@ -732,7 +732,9 @@ class Thread {
             if (e != 0) rb_syserr_fail(e, "pthread_threadid_np");
             return thread_id;
 #else
-            return gettid();
+            // gettid() is only available as of glibc 2.30
+            pid_t tid = syscall(SYS_gettid);
+            return tid;
 #endif
         }
 
