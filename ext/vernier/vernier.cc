@@ -202,14 +202,16 @@ bool operator==(const Frame& lhs, const Frame& rhs) noexcept {
     return lhs.frame == rhs.frame && lhs.line == rhs.line;
 }
 
-template<>
-struct std::hash<Frame>
-{
-    std::size_t operator()(Frame const& s) const noexcept
+namespace std {
+    template<>
+    struct hash<Frame>
     {
-        return s.frame ^ s.line;
-    }
-};
+        std::size_t operator()(Frame const& s) const noexcept
+        {
+            return s.frame ^ s.line;
+        }
+    };
+}
 
 // A basic semaphore built on sem_wait/sem_post
 // post() is guaranteed to be async-signal-safe
