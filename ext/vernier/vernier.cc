@@ -22,7 +22,6 @@
 #endif
 
 #include "vernier.hh"
-#include "stack.hh"
 
 #include "ruby/ruby.h"
 #include "ruby/debug.h"
@@ -150,6 +149,67 @@ std::ostream& operator<<(std::ostream& os, const TimeStamp& info) {
     os << info.nanoseconds() << "ns";
     return os;
 }
+
+struct FrameInfo {
+    static const char *label_cstr(VALUE frame) {
+        VALUE label = rb_profile_frame_full_label(frame);
+        return StringValueCStr(label);
+    }
+
+    static const char *file_cstr(VALUE frame) {
+        VALUE file = rb_profile_frame_absolute_path(frame);
+        if (NIL_P(file))
+            file = rb_profile_frame_path(frame);
+        if (NIL_P(file)) {
+            return "";
+        } else {
+            return StringValueCStr(file);
+        }
+    }
+
+    static int first_lineno_int(VALUE frame) {
+        VALUE first_lineno = rb_profile_frame_first_lineno(frame);
+        return NIL_P(first_lineno) ? 0 : FIX2INT(first_lineno);
+    }
+
+    FrameInfo(VALUE frame) :
+        label(label_cstr(frame)),
+        file(file_cstr(frame)),
+        first_lineno(first_lineno_int(frame)) { }
+
+    std::string label;
+    std::string file;
+    int first_lineno;
+};
+
+bool operator==(const FrameInfo& lhs, const FrameInfo& rhs) noexcept {
+    return
+        lhs.label == rhs.label &&
+        lhs.file == rhs.file &&
+        lhs.first_lineno == rhs.first_lineno;
+}
+
+struct Frame {
+    VALUE frame;
+    int line;
+
+    FrameInfo info() const {
+        return FrameInfo(frame);
+    }
+};
+
+bool operator==(const Frame& lhs, const Frame& rhs) noexcept {
+    return lhs.frame == rhs.frame && lhs.line == rhs.line;
+}
+
+template<>
+struct std::hash<Frame>
+{
+    std::size_t operator()(Frame const& s) const noexcept
+    {
+        return s.frame ^ s.line;
+    }
+};
 
 // A basic semaphore built on sem_wait/sem_post
 // post() is guaranteed to be async-signal-safe
