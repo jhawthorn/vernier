@@ -13,9 +13,12 @@
 #include <sys/time.h>
 #include <signal.h>
 #ifdef __APPLE__
+/* macOS */
 #include <dispatch/dispatch.h>
 #else
+/* Linux */
 #include <semaphore.h>
+#include <sys/syscall.h> /* for SYS_gettid */
 #endif
 
 #include "vernier.hh"
@@ -23,9 +26,6 @@
 #include "ruby/ruby.h"
 #include "ruby/debug.h"
 #include "ruby/thread.h"
-
-/* for gettid */
-#include <unistd.h>
 
 // GC event's we'll monitor during profiling
 #define RUBY_GC_PHASE_EVENTS \
@@ -732,7 +732,9 @@ class Thread {
             if (e != 0) rb_syserr_fail(e, "pthread_threadid_np");
             return thread_id;
 #else
-            return gettid();
+            // gettid() is only available as of glibc 2.30
+            pid_t tid = syscall(SYS_gettid);
+            return tid;
 #endif
         }
 
