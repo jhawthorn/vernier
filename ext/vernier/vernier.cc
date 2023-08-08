@@ -10,9 +10,6 @@
 #include <atomic>
 #include <mutex>
 
-/* for gettid */
-#include <unistd.h>
-
 #include <sys/time.h>
 #include <signal.h>
 #ifdef __APPLE__
@@ -26,6 +23,9 @@
 #include "ruby/ruby.h"
 #include "ruby/debug.h"
 #include "ruby/thread.h"
+
+/* for gettid */
+#include <unistd.h>
 
 // GC event's we'll monitor during profiling
 #define RUBY_GC_PHASE_EVENTS \
