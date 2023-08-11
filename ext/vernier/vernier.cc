@@ -466,34 +466,20 @@ struct FrameList {
     void write_result(VALUE result) {
         FrameList &frame_list = *this;
 
-        rb_ivar_set(result, rb_intern("@stack_table"), stack_table());
-        rb_ivar_set(result, rb_intern("@frame_table"), frame_table());
-        rb_ivar_set(result, rb_intern("@func_table"), func_table());
-    }
-
-      private:
-
-    VALUE stack_table() {
-        FrameList &frame_list = *this;
-
         VALUE stack_table = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@stack_table"), stack_table);
         VALUE stack_table_parent = rb_ary_new();
         VALUE stack_table_frame = rb_ary_new();
+        rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
+        rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
         for (const auto &stack : frame_list.stack_node_list) {
             VALUE parent_val = stack.parent == -1 ? Qnil : INT2NUM(stack.parent);
             rb_ary_push(stack_table_parent, parent_val);
             rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
         }
-        rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
-        rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
-
-        return stack_table;
-    }
-
-    VALUE frame_table() {
-        FrameList &frame_list = *this;
 
         VALUE frame_table = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@frame_table"), frame_table);
         VALUE frame_table_func = rb_ary_new();
         VALUE frame_table_line = rb_ary_new();
         rb_hash_aset(frame_table, sym("func"), frame_table_func);
@@ -505,14 +491,9 @@ struct FrameList {
             rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
         }
 
-        return frame_table;
-    }
-
-    VALUE func_table() {
-        FrameList &frame_list = *this;
-
         // TODO: dedup funcs before this step
         VALUE func_table = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@func_table"), func_table);
         VALUE func_table_name = rb_ary_new();
         VALUE func_table_filename = rb_ary_new();
         VALUE func_table_first_line = rb_ary_new();
@@ -528,8 +509,6 @@ struct FrameList {
             rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
             rb_ary_push(func_table_first_line, INT2NUM(first_line));
         }
-
-        return func_table;
     }
 };
 
