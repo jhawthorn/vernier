@@ -18,8 +18,12 @@ module Vernier
     attr_accessor :threads
     attr_accessor :meta
 
+    # Realtime in milliseconds since the unix epoch
     def started_at
-      meta[:started_at]
+      started_at_mono_ns = meta[:started_at]
+      current_time_mono_ns = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
+      current_time_real_ns = Process.clock_gettime(Process::CLOCK_REALTIME, :nanosecond)
+      (current_time_real_ns - current_time_mono_ns + started_at_mono_ns)
     end
 
     def to_gecko
