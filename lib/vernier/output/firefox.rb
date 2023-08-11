@@ -8,7 +8,7 @@ module Vernier
     # https://github.com/firefox-devtools/profiler/blob/main/src/types/profile.js
     class Firefox
       class Categorizer
-        attr_reader :categories, :gc_category, :jit_category
+        attr_reader :categories, :gc_category
         def initialize
           @categories = []
 
@@ -38,10 +38,6 @@ module Vernier
           add_category(
             name: "Application",
             color: "purple"
-          )
-          @jit_category = add_category(
-            name: "JIT",
-            color: "blue"
           )
         end
 
@@ -184,6 +180,25 @@ module Vernier
           @filenames = filenames.map do |filename|
             @strings[filename]
           end
+
+          lines = profile.frame_table.fetch(:line)
+
+          @frame_implementations = filenames.zip(lines).map do |filename, line|
+            # Must match strings in `src/profile-logic/profile-data.js`
+            # inside the firefox profiler. See `getFriendlyStackTypeName`
+            if filename == "<cfunc>"
+              @strings["native"]
+            else
+              # FIXME: We need to get upstream support for JIT frames
+              if line == -1
+                @strings["yjit"]
+              else
+                # nil means interpreter
+                nil
+              end
+            end
+          end
+
           @frame_categories = filenames.map do |filename|
             @categorizer.categorize(filename)
           end
@@ -325,7 +340,7 @@ module Vernier
             func: funcs,
             nativeSymbol: none,
             innerWindowID: none,
-            implementation: none,
+            implementation: @frame_implementations,
             line: lines,
             column: none,
             length: size
