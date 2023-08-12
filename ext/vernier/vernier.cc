@@ -878,12 +878,14 @@ class SampleList {
         std::vector<TimeStamp> timestamps;
         std::vector<native_thread_id_t> threads;
         std::vector<Category> categories;
+        std::vector<int> weights;
 
         void record_sample(int stack_index, TimeStamp time, native_thread_id_t thread_id, Category category) {
             stacks.push_back(stack_index);
             timestamps.push_back(time);
             threads.push_back(thread_id);
             categories.push_back(category);
+            weights.push_back(1);
         }
 };
 
