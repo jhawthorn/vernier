@@ -891,16 +891,18 @@ class SampleList {
         void write_result(VALUE result) {
             VALUE samples = rb_ary_new();
             rb_ivar_set(result, rb_intern("@samples"), samples);
-            VALUE weights = rb_ary_new();
-            rb_ivar_set(result, rb_intern("@weights"), weights);
             for (auto& stack_index: this->stacks) {
                 rb_ary_push(samples, INT2NUM(stack_index));
-                rb_ary_push(weights, INT2NUM(1));
+            }
+
+            VALUE weights = rb_ary_new();
+            rb_ivar_set(result, rb_intern("@weights"), weights);
+            for (auto& weight: this->weights) {
+                rb_ary_push(weights, INT2NUM(weight));
             }
 
             VALUE timestamps = rb_ary_new();
             rb_ivar_set(result, rb_intern("@timestamps"), timestamps);
-
             for (auto& timestamp: this->timestamps) {
                 rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
             }
