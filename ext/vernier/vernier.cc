@@ -887,6 +887,36 @@ class SampleList {
             categories.push_back(category);
             weights.push_back(1);
         }
+
+        void write_result(VALUE result) {
+            VALUE samples = rb_ary_new();
+            rb_ivar_set(result, rb_intern("@samples"), samples);
+            VALUE weights = rb_ary_new();
+            rb_ivar_set(result, rb_intern("@weights"), weights);
+            for (auto& stack_index: this->stacks) {
+                rb_ary_push(samples, INT2NUM(stack_index));
+                rb_ary_push(weights, INT2NUM(1));
+            }
+
+            VALUE timestamps = rb_ary_new();
+            rb_ivar_set(result, rb_intern("@timestamps"), timestamps);
+
+            for (auto& timestamp: this->timestamps) {
+                rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
+            }
+
+            VALUE sample_threads = rb_ary_new();
+            rb_ivar_set(result, rb_intern("@sample_threads"), sample_threads);
+            for (auto& thread: this->threads) {
+                rb_ary_push(sample_threads, ULL2NUM(thread));
+            }
+
+            VALUE sample_categories = rb_ary_new();
+            rb_ivar_set(result, rb_intern("@sample_categories"), sample_categories);
+            for (auto& cat: this->categories) {
+                rb_ary_push(sample_categories, INT2NUM(cat));
+            }
+        }
 };
 
 class TimeCollector : public BaseCollector {
@@ -1122,33 +1152,7 @@ class TimeCollector : public BaseCollector {
         rb_ivar_set(result, rb_intern("@meta"), meta);
         rb_hash_aset(meta, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
 
-        VALUE samples = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@samples"), samples);
-        VALUE weights = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@weights"), weights);
-        for (auto& stack_index: this->samples.stacks) {
-            rb_ary_push(samples, INT2NUM(stack_index));
-            rb_ary_push(weights, INT2NUM(1));
-        }
-
-        VALUE timestamps = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@timestamps"), timestamps);
-
-        for (auto& timestamp: this->samples.timestamps) {
-            rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
-        }
-
-        VALUE sample_threads = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@sample_threads"), sample_threads);
-        for (auto& thread: this->samples.threads) {
-            rb_ary_push(sample_threads, ULL2NUM(thread));
-        }
-
-        VALUE sample_categories = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@sample_categories"), sample_categories);
-        for (auto& cat: this->samples.categories) {
-            rb_ary_push(sample_categories, INT2NUM(cat));
-        }
+        samples.write_result(result);
 
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
