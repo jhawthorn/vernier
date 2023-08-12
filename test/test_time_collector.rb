@@ -34,9 +34,12 @@ class TestTimeCollector < Minitest::Test
     result = collector.stop
 
     assert_valid_result result
-    assert_in_epsilon 200, result.samples.size, generous_epsilon
+    assert_in_epsilon 200, result.weights.sum, generous_epsilon
 
-    significant_stacks = result.samples.tally.select { |k,v| v > 10 }
+    samples_by_stack = result.samples.zip(result.weights).group_by(&:first).transform_values do |samples|
+      samples.map(&:last).sum
+    end
+    significant_stacks = samples_by_stack.select { |k,v| v > 10 }
     assert_equal 2, significant_stacks.size
     assert_in_epsilon 200, significant_stacks.sum(&:last), generous_epsilon
   end

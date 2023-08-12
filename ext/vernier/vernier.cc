@@ -880,12 +880,30 @@ class SampleList {
         std::vector<Category> categories;
         std::vector<int> weights;
 
+        size_t size() {
+            return stacks.size();
+        }
+
+        bool empty() {
+            return size() == 0;
+        }
+
         void record_sample(int stack_index, TimeStamp time, native_thread_id_t thread_id, Category category) {
-            stacks.push_back(stack_index);
-            timestamps.push_back(time);
-            threads.push_back(thread_id);
-            categories.push_back(category);
-            weights.push_back(1);
+            if (
+                    !empty() &&
+                    stacks.back() == stack_index &&
+                    threads.back() == thread_id &&
+                    categories.back() == category)
+            {
+                // We don't compare timestamps for de-duplication
+                weights.back() += 1;
+            } else {
+                stacks.push_back(stack_index);
+                timestamps.push_back(time);
+                threads.push_back(thread_id);
+                categories.push_back(category);
+                weights.push_back(1);
+            }
         }
 
         void write_result(VALUE result) {
