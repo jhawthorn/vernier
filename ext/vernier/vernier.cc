@@ -871,11 +871,24 @@ enum Category{
 	CATEGORY_IDLE
 };
 
+class SampleList {
+    public:
+
+        std::vector<int> stacks;
+        std::vector<TimeStamp> timestamps;
+        std::vector<native_thread_id_t> threads;
+        std::vector<Category> categories;
+
+        void record_sample(int stack_index, TimeStamp time, native_thread_id_t thread_id, Category category) {
+            stacks.push_back(stack_index);
+            timestamps.push_back(time);
+            threads.push_back(thread_id);
+            categories.push_back(category);
+        }
+};
+
 class TimeCollector : public BaseCollector {
-    std::vector<int> samples;
-    std::vector<TimeStamp> timestamps;
-    std::vector<native_thread_id_t> sample_threads;
-    std::vector<Category> sample_categories;
+    SampleList samples;
 
     MarkerTable markers;
     ThreadTable threads;
@@ -899,10 +912,12 @@ class TimeCollector : public BaseCollector {
     void record_sample(const RawSample &sample, TimeStamp time, const Thread &thread, Category category) {
         if (!sample.empty()) {
             int stack_index = frame_list.stack_index(sample);
-            samples.push_back(stack_index);
-            timestamps.push_back(time);
-            sample_threads.push_back(thread.native_tid);
-            sample_categories.push_back(category);
+            samples.record_sample(
+                    stack_index,
+                    time,
+                    thread.native_tid,
+                    category
+                    );
         }
     }
 
@@ -1109,7 +1124,7 @@ class TimeCollector : public BaseCollector {
         rb_ivar_set(result, rb_intern("@samples"), samples);
         VALUE weights = rb_ary_new();
         rb_ivar_set(result, rb_intern("@weights"), weights);
-        for (auto& stack_index: this->samples) {
+        for (auto& stack_index: this->samples.stacks) {
             rb_ary_push(samples, INT2NUM(stack_index));
             rb_ary_push(weights, INT2NUM(1));
         }
@@ -1117,19 +1132,19 @@ class TimeCollector : public BaseCollector {
         VALUE timestamps = rb_ary_new();
         rb_ivar_set(result, rb_intern("@timestamps"), timestamps);
 
-        for (auto& timestamp: this->timestamps) {
+        for (auto& timestamp: this->samples.timestamps) {
             rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
         }
 
         VALUE sample_threads = rb_ary_new();
         rb_ivar_set(result, rb_intern("@sample_threads"), sample_threads);
-        for (auto& thread: this->sample_threads) {
+        for (auto& thread: this->samples.threads) {
             rb_ary_push(sample_threads, ULL2NUM(thread));
         }
 
         VALUE sample_categories = rb_ary_new();
         rb_ivar_set(result, rb_intern("@sample_categories"), sample_categories);
-        for (auto& cat: this->sample_categories) {
+        for (auto& cat: this->samples.categories) {
             rb_ary_push(sample_categories, INT2NUM(cat));
         }
 
