@@ -10,13 +10,17 @@ module Vernier
   class Error < StandardError; end
 
   class Result
-    attr_reader :weights, :samples, :stack_table, :frame_table, :func_table
-    attr_reader :timestamps, :sample_threads, :sample_categories
+    attr_reader :stack_table, :frame_table, :func_table
     attr_reader :markers
 
     attr_accessor :pid, :start_time, :end_time
     attr_accessor :threads
     attr_accessor :meta
+
+    # TODO: remove these
+    def weights; threads.values.flat_map { _1[:weights] }; end
+    def samples; threads.values.flat_map { _1[:samples] }; end
+    def sample_categories; threads.values.flat_map { _1[:sample_categories] }; end
 
     # Realtime in milliseconds since the unix epoch
     def started_at
@@ -36,9 +40,9 @@ module Vernier
 
     def each_sample
       return enum_for(__method__) unless block_given?
-      @samples.size.times do |sample_idx|
-        weight = @weights[sample_idx]
-        stack_idx = @samples[sample_idx]
+      samples.size.times do |sample_idx|
+        weight = weights[sample_idx]
+        stack_idx = samples[sample_idx]
         yield stack(stack_idx), weight
       end
     end
@@ -131,7 +135,7 @@ module Vernier
     end
 
     def total_bytes
-      @weights.sum
+      weights.sum
     end
   end
 

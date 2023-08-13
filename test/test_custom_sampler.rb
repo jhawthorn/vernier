@@ -12,6 +12,6 @@ class TestCustomSampler < Minitest::Test
     result = collector.stop
 
     assert_valid_result result
-    assert_equal 10, result.samples.size
+    assert_equal 10, result.weights.sum
   end
 end

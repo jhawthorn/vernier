@@ -12,7 +12,9 @@ class Minitest::Test
 
     stack_table_size = result.stack_table[:parent].length
     assert_equal stack_table_size, result.stack_table[:frame].length
+
     result.samples.each do |stack_idx|
+      assert_kind_of Integer, stack_idx
       assert stack_idx < stack_table_size
     end
 

@@ -512,6 +512,218 @@ struct FrameList {
     }
 };
 
+typedef uint64_t native_thread_id_t;
+static native_thread_id_t get_native_thread_id() {
+#ifdef __APPLE__
+    uint64_t thread_id;
+    int e = pthread_threadid_np(pthread_self(), &thread_id);
+    if (e != 0) rb_syserr_fail(e, "pthread_threadid_np");
+    return thread_id;
+#else
+    // gettid() is only available as of glibc 2.30
+    pid_t tid = syscall(SYS_gettid);
+    return tid;
+#endif
+}
+
+
+class Marker {
+    public:
+    enum Type {
+        MARKER_GVL_THREAD_STARTED,
+        MARKER_GVL_THREAD_READY,
+        MARKER_GVL_THREAD_RESUMED,
+        MARKER_GVL_THREAD_SUSPENDED,
+        MARKER_GVL_THREAD_EXITED,
+
+        MARKER_GC_START,
+        MARKER_GC_END_MARK,
+        MARKER_GC_END_SWEEP,
+        MARKER_GC_ENTER,
+        MARKER_GC_EXIT,
+
+        MARKER_MAX,
+    };
+    Type type;
+    TimeStamp timestamp;
+    native_thread_id_t thread_id;
+};
+
+class MarkerTable {
+    public:
+        std::vector<Marker> list;
+        std::mutex mutex;
+
+        void record(Marker::Type type) {
+            const std::lock_guard<std::mutex> lock(mutex);
+
+            list.push_back({ type, TimeStamp::Now(), get_native_thread_id() });
+        }
+};
+
+enum Category{
+	CATEGORY_NORMAL,
+	CATEGORY_IDLE
+};
+
+class SampleList {
+    public:
+
+        std::vector<int> stacks;
+        std::vector<TimeStamp> timestamps;
+        std::vector<native_thread_id_t> threads;
+        std::vector<Category> categories;
+        std::vector<int> weights;
+
+        size_t size() {
+            return stacks.size();
+        }
+
+        bool empty() {
+            return size() == 0;
+        }
+
+        void record_sample(int stack_index, TimeStamp time, native_thread_id_t thread_id, Category category) {
+            if (
+                    !empty() &&
+                    stacks.back() == stack_index &&
+                    threads.back() == thread_id &&
+                    categories.back() == category)
+            {
+                // We don't compare timestamps for de-duplication
+                weights.back() += 1;
+            } else {
+                stacks.push_back(stack_index);
+                timestamps.push_back(time);
+                threads.push_back(thread_id);
+                categories.push_back(category);
+                weights.push_back(1);
+            }
+        }
+
+        void write_result(VALUE result) const {
+            VALUE samples = rb_ary_new();
+            rb_hash_aset(result, sym("samples"), samples);
+            for (auto& stack_index: this->stacks) {
+                rb_ary_push(samples, INT2NUM(stack_index));
+            }
+
+            VALUE weights = rb_ary_new();
+            rb_hash_aset(result, sym("weights"), weights);
+            for (auto& weight: this->weights) {
+                rb_ary_push(weights, INT2NUM(weight));
+            }
+
+            VALUE timestamps = rb_ary_new();
+            rb_hash_aset(result, sym("timestamps"), timestamps);
+            for (auto& timestamp: this->timestamps) {
+                rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
+            }
+
+            VALUE sample_categories = rb_ary_new();
+            rb_hash_aset(result, sym("sample_categories"), sample_categories);
+            for (auto& cat: this->categories) {
+                rb_ary_push(sample_categories, INT2NUM(cat));
+            }
+        }
+};
+
+class Thread {
+    public:
+        SampleList samples;
+
+        enum State {
+            STARTED,
+            RUNNING,
+            SUSPENDED,
+            STOPPED
+        };
+
+        pthread_t pthread_id;
+        native_thread_id_t native_tid;
+        State state;
+
+        TimeStamp state_changed_at;
+        TimeStamp started_at;
+        TimeStamp stopped_at;
+
+        RawSample stack_on_suspend;
+
+        std::string name;
+
+        Thread(State state) : state(state) {
+            pthread_id = pthread_self();
+            native_tid = get_native_thread_id();
+            started_at = state_changed_at = TimeStamp::Now();
+        }
+
+        void set_state(State new_state) {
+            if (state == Thread::State::STOPPED) {
+                return;
+            }
+
+            auto now = TimeStamp::Now();
+
+            state = new_state;
+            state_changed_at = now;
+            if (new_state == State::STARTED) {
+                if (started_at.zero()) {
+                    started_at = now;
+                }
+            } else if (new_state == State::STOPPED) {
+                stopped_at = now;
+
+                capture_name();
+            }
+        }
+
+        bool running() {
+            return state != State::STOPPED;
+        }
+
+        void capture_name() {
+            char buf[128];
+            int rc = pthread_getname_np(pthread_id, buf, sizeof(buf));
+            if (rc == 0)
+                name = std::string(buf);
+        }
+};
+
+class ThreadTable {
+    public:
+        std::vector<Thread> list;
+        std::mutex mutex;
+
+        void started() {
+            //const std::lock_guard<std::mutex> lock(mutex);
+
+            //list.push_back(Thread{pthread_self(), Thread::State::SUSPENDED});
+            set_state(Thread::State::STARTED);
+        }
+
+        void set_state(Thread::State new_state) {
+            const std::lock_guard<std::mutex> lock(mutex);
+
+            pthread_t current_thread = pthread_self();
+            //cerr << "set state=" << new_state << " thread=" << gettid() << endl;
+
+            for (auto &thread : list) {
+                if (pthread_equal(current_thread, thread.pthread_id)) {
+                    thread.set_state(new_state);
+
+                    if (new_state == Thread::State::SUSPENDED) {
+                        thread.stack_on_suspend.sample();
+                        //cerr << gettid() << " suspended! Stack size:" << thread.stack_on_suspend.size() << endl;
+                    }
+                    return;
+                }
+            }
+
+            pid_t native_tid = get_native_thread_id();
+            list.emplace_back(new_state);
+        }
+};
+
 class BaseCollector {
     protected:
 
@@ -557,14 +769,15 @@ class BaseCollector {
 };
 
 class CustomCollector : public BaseCollector {
-    std::vector<int> samples;
+    SampleList samples;
 
     void sample() {
         RawSample sample;
         sample.sample();
         int stack_index = frame_list.stack_index(sample);
 
-        samples.push_back(stack_index);
+	native_thread_id_t thread_id = 0;
+        samples.record_sample(stack_index, TimeStamp::Now(), thread_id, CATEGORY_NORMAL);
     }
 
     VALUE stop() {
@@ -582,15 +795,14 @@ class CustomCollector : public BaseCollector {
     VALUE build_collector_result() {
         VALUE result = rb_obj_alloc(rb_cVernierResult);
 
-        VALUE samples = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@samples"), samples);
-        VALUE weights = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@weights"), weights);
+        VALUE threads = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@threads"), threads);
 
-        for (auto& stack_index: this->samples) {
-            rb_ary_push(samples, INT2NUM(stack_index));
-            rb_ary_push(weights, INT2NUM(1));
-        }
+	VALUE thread_hash = rb_hash_new();
+	samples.write_result(thread_hash);
+
+	rb_hash_aset(threads, ULL2NUM(0), thread_hash);
+	rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
 
         frame_list.write_result(result);
 
@@ -689,10 +901,16 @@ class RetainedCollector : public BaseCollector {
 
         VALUE result = rb_obj_alloc(rb_cVernierResult);
 
+        VALUE threads = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@threads"), threads);
+        VALUE thread_hash = rb_hash_new();
+        rb_hash_aset(threads, ULL2NUM(0), thread_hash);
+
+        rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
         VALUE samples = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@samples"), samples);
+        rb_hash_aset(thread_hash, sym("samples"), samples);
         VALUE weights = rb_ary_new();
-        rb_ivar_set(result, rb_intern("@weights"), weights);
+        rb_hash_aset(thread_hash, sym("weights"), weights);
 
         for (auto& obj: collector->object_list) {
             const auto search = collector->object_frames.find(obj);
@@ -721,227 +939,8 @@ class RetainedCollector : public BaseCollector {
     }
 };
 
-typedef uint64_t native_thread_id_t;
-
-class Thread {
-    public:
-        static native_thread_id_t get_native_thread_id() {
-#ifdef __APPLE__
-            uint64_t thread_id;
-            int e = pthread_threadid_np(pthread_self(), &thread_id);
-            if (e != 0) rb_syserr_fail(e, "pthread_threadid_np");
-            return thread_id;
-#else
-            // gettid() is only available as of glibc 2.30
-            pid_t tid = syscall(SYS_gettid);
-            return tid;
-#endif
-        }
-
-        enum State {
-            STARTED,
-            RUNNING,
-            SUSPENDED,
-            STOPPED
-        };
-
-        pthread_t pthread_id;
-        native_thread_id_t native_tid;
-        State state;
-
-        TimeStamp state_changed_at;
-        TimeStamp started_at;
-        TimeStamp stopped_at;
-
-        RawSample stack_on_suspend;
-
-        std::string name;
-
-        Thread(State state) : state(state) {
-            pthread_id = pthread_self();
-            native_tid = get_native_thread_id();
-            started_at = state_changed_at = TimeStamp::Now();
-        }
-
-        void set_state(State new_state) {
-            if (state == Thread::State::STOPPED) {
-                return;
-            }
-
-            auto now = TimeStamp::Now();
-
-            state = new_state;
-            state_changed_at = now;
-            if (new_state == State::STARTED) {
-                if (started_at.zero()) {
-                    started_at = now;
-                }
-            } else if (new_state == State::STOPPED) {
-                stopped_at = now;
-
-                capture_name();
-            }
-        }
-
-        bool running() {
-            return state != State::STOPPED;
-        }
-
-        void capture_name() {
-            char buf[128];
-            int rc = pthread_getname_np(pthread_id, buf, sizeof(buf));
-            if (rc == 0)
-                name = std::string(buf);
-        }
-};
-
-class Marker {
-    public:
-    enum Type {
-        MARKER_GVL_THREAD_STARTED,
-        MARKER_GVL_THREAD_READY,
-        MARKER_GVL_THREAD_RESUMED,
-        MARKER_GVL_THREAD_SUSPENDED,
-        MARKER_GVL_THREAD_EXITED,
-
-        MARKER_GC_START,
-        MARKER_GC_END_MARK,
-        MARKER_GC_END_SWEEP,
-        MARKER_GC_ENTER,
-        MARKER_GC_EXIT,
-
-        MARKER_MAX,
-    };
-    Type type;
-    TimeStamp timestamp;
-    native_thread_id_t thread_id;
-};
-
-class MarkerTable {
-    public:
-        std::vector<Marker> list;
-        std::mutex mutex;
-
-        void record(Marker::Type type) {
-            const std::lock_guard<std::mutex> lock(mutex);
-
-            list.push_back({ type, TimeStamp::Now(), Thread::get_native_thread_id() });
-        }
-};
-
-extern "C" int ruby_thread_has_gvl_p(void);
-
-class ThreadTable {
-    public:
-        std::vector<Thread> list;
-        std::mutex mutex;
-
-        void started() {
-            //const std::lock_guard<std::mutex> lock(mutex);
-
-            //list.push_back(Thread{pthread_self(), Thread::State::SUSPENDED});
-            set_state(Thread::State::STARTED);
-        }
-
-        void set_state(Thread::State new_state) {
-            const std::lock_guard<std::mutex> lock(mutex);
-
-            pthread_t current_thread = pthread_self();
-            //cerr << "set state=" << new_state << " thread=" << gettid() << endl;
-
-            for (auto &thread : list) {
-                if (pthread_equal(current_thread, thread.pthread_id)) {
-                    thread.set_state(new_state);
-
-                    if (new_state == Thread::State::SUSPENDED) {
-                        thread.stack_on_suspend.sample();
-                        //cerr << gettid() << " suspended! Stack size:" << thread.stack_on_suspend.size() << endl;
-                    }
-                    return;
-                }
-            }
-
-            pid_t native_tid = Thread::get_native_thread_id();
-            list.emplace_back(new_state);
-        }
-};
-
-enum Category{
-	CATEGORY_NORMAL,
-	CATEGORY_IDLE
-};
-
-class SampleList {
-    public:
-
-        std::vector<int> stacks;
-        std::vector<TimeStamp> timestamps;
-        std::vector<native_thread_id_t> threads;
-        std::vector<Category> categories;
-        std::vector<int> weights;
-
-        size_t size() {
-            return stacks.size();
-        }
-
-        bool empty() {
-            return size() == 0;
-        }
-
-        void record_sample(int stack_index, TimeStamp time, native_thread_id_t thread_id, Category category) {
-            if (
-                    !empty() &&
-                    stacks.back() == stack_index &&
-                    threads.back() == thread_id &&
-                    categories.back() == category)
-            {
-                // We don't compare timestamps for de-duplication
-                weights.back() += 1;
-            } else {
-                stacks.push_back(stack_index);
-                timestamps.push_back(time);
-                threads.push_back(thread_id);
-                categories.push_back(category);
-                weights.push_back(1);
-            }
-        }
-
-        void write_result(VALUE result) {
-            VALUE samples = rb_ary_new();
-            rb_ivar_set(result, rb_intern("@samples"), samples);
-            for (auto& stack_index: this->stacks) {
-                rb_ary_push(samples, INT2NUM(stack_index));
-            }
-
-            VALUE weights = rb_ary_new();
-            rb_ivar_set(result, rb_intern("@weights"), weights);
-            for (auto& weight: this->weights) {
-                rb_ary_push(weights, INT2NUM(weight));
-            }
-
-            VALUE timestamps = rb_ary_new();
-            rb_ivar_set(result, rb_intern("@timestamps"), timestamps);
-            for (auto& timestamp: this->timestamps) {
-                rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
-            }
-
-            VALUE sample_threads = rb_ary_new();
-            rb_ivar_set(result, rb_intern("@sample_threads"), sample_threads);
-            for (auto& thread: this->threads) {
-                rb_ary_push(sample_threads, ULL2NUM(thread));
-            }
-
-            VALUE sample_categories = rb_ary_new();
-            rb_ivar_set(result, rb_intern("@sample_categories"), sample_categories);
-            for (auto& cat: this->categories) {
-                rb_ary_push(sample_categories, INT2NUM(cat));
-            }
-        }
-};
 
 class TimeCollector : public BaseCollector {
-    SampleList samples;
-
     MarkerTable markers;
     ThreadTable threads;
 
@@ -961,10 +960,10 @@ class TimeCollector : public BaseCollector {
 
     private:
 
-    void record_sample(const RawSample &sample, TimeStamp time, const Thread &thread, Category category) {
+    void record_sample(const RawSample &sample, TimeStamp time, Thread &thread, Category category) {
         if (!sample.empty()) {
             int stack_index = frame_list.stack_index(sample);
-            samples.record_sample(
+            thread.samples.record_sample(
                     stack_index,
                     time,
                     thread.native_tid,
@@ -1001,7 +1000,7 @@ class TimeCollector : public BaseCollector {
             TimeStamp sample_start = TimeStamp::Now();
 
             threads.mutex.lock();
-            for (auto thread : threads.list) {
+            for (auto &thread : threads.list) {
                 //if (thread.state == Thread::State::RUNNING) {
                 if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend.size() == 0)) {
                     if (pthread_kill(thread.pthread_id, SIGPROF)) {
@@ -1172,13 +1171,13 @@ class TimeCollector : public BaseCollector {
         rb_ivar_set(result, rb_intern("@meta"), meta);
         rb_hash_aset(meta, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
 
-        samples.write_result(result);
-
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
 
         for (const auto& thread: this->threads.list) {
             VALUE hash = rb_hash_new();
+            thread.samples.write_result(hash);
+
             rb_hash_aset(threads, ULL2NUM(thread.native_tid), hash);
             rb_hash_aset(hash, sym("tid"), ULL2NUM(thread.native_tid));
             rb_hash_aset(hash, sym("started_at"), ULL2NUM(thread.started_at.nanoseconds()));

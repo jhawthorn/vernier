@@ -53,7 +53,9 @@ class TestTimeCollector < Minitest::Test
     th2id = th2.value
     result = collector.stop
 
-    tally = result.sample_threads.tally
+    tally = result.threads.transform_values do |thread|
+      thread[:weights].sum
+    end.to_h
     assert_in_epsilon 200, tally[Thread.current.native_thread_id], generous_epsilon
     assert_in_epsilon 200, tally[th1id], generous_epsilon
     assert_in_epsilon 200, tally[th2id], generous_epsilon

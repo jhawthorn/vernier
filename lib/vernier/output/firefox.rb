@@ -88,35 +88,15 @@ module Vernier
       attr_reader :profile
 
       def data
-        threads = Hash.new {|h,k| h[k] = {
-          timestamps: [],
-          weights: [],
-          samples: [],
-          categories: [],
-          markers: [],
-        }}
-
-        profile.samples.size.times do |i|
-          tid = profile.sample_threads[i]
-          thread = threads[tid]
-
-          thread[:timestamps] << profile.timestamps[i]
-          thread[:weights] << profile.weights[i]
-          thread[:samples] << profile.samples[i]
-          thread[:categories] << profile.sample_categories[i]
-        end
-
-        profile.markers.each do |marker|
-          threads[marker[0]][:markers] << marker
-        end
+        markers_by_thread = profile.markers.group_by { |marker| marker[0] }
 
         thread_data = profile.threads.map do |tid, thread_info|
-          data = threads[tid]
+          markers = markers_by_thread[tid] || []
           Thread.new(
             profile,
             @categorizer,
+            markers: markers,
             **thread_info,
-            **data
           ).data
         end
 
@@ -153,14 +133,14 @@ module Vernier
       class Thread
         attr_reader :profile
 
-        def initialize(profile, categorizer, name:, tid:, samples:, weights:, timestamps:, categories:, markers:, started_at:, stopped_at: nil)
+        def initialize(profile, categorizer, name:, tid:, samples:, weights:, timestamps:, sample_categories:, markers:, started_at:, stopped_at: nil)
           @profile = profile
           @categorizer = categorizer
           @tid = tid
           @name = name
 
           @samples, @weights, @timestamps = samples, weights, timestamps
-          @sample_categories = categories
+          @sample_categories = sample_categories
           @markers = markers
 
           @started_at, @stopped_at = started_at, stopped_at
