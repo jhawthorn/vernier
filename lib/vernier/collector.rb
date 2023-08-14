@@ -18,6 +18,7 @@ module Vernier
 
       marker_list.each_with_index do |(tid, id, ts), i|
         name = marker_strings[id]
+        sym = Marker::MARKER_SYMBOLS[id]
         finish = nil
         phase = Marker::Phase::INSTANT
 
@@ -40,7 +41,7 @@ module Vernier
             end
           end
 
-          markers << [tid, name, ts, finish, phase]
+          markers << [tid, name, sym, ts, finish, phase]
         end
       end
 

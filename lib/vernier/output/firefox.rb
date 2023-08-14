@@ -111,7 +111,7 @@ module Vernier
             version: 28,
             preprocessedProfileVersion: 47,
             symbolicated: true,
-            markerSchema: [],
+            markerSchema: marker_schema,
             sampleUnits: {
               time: "ms",
               eventDelay: "ms",
@@ -128,6 +128,21 @@ module Vernier
           libs: [],
           threads: thread_data
         }
+      end
+
+      def marker_schema
+        [
+          {
+            name: "GVL_THREAD_RESUMED",
+            display: [ "marker-chart", "marker-table" ],
+            data: [
+              {
+                label: "Description",
+                value: "The thread has acquired the GVL and is executing"
+              }
+            ]
+          }
+        ]
       end
 
       class Thread
@@ -220,8 +235,9 @@ module Vernier
           end_times = []
           phases = []
           categories = []
+          data = []
 
-          @markers.each_with_index do |(_, name, start, finish, phase), i|
+          @markers.each_with_index do |(_, name, sym, start, finish, phase), i|
             string_indexes << @strings[name]
             start_times << (start / 1_000_000.0)
 
@@ -229,10 +245,11 @@ module Vernier
             end_times << (finish&./(1_000_000.0))
             phases << phase
             categories << (name =~ /GC/ ? gc_category.idx : 0)
+            data << { type: sym }
           end
 
           {
-            data: [nil] * start_times.size,
+            data: data,
             name: string_indexes,
             startTime: start_times,
             endTime: end_times,

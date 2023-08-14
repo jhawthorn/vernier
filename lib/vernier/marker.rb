@@ -12,6 +12,12 @@ module Vernier
       INTERVAL_END = 3
     end
 
+    MARKER_SYMBOLS = []
+    Type.constants.each do |name|
+      MARKER_SYMBOLS[Type.const_get(name)] = name
+    end
+    MARKER_SYMBOLS.freeze
+
     MARKER_STRINGS = []
 
     MARKER_STRINGS[Type::GVL_THREAD_STARTED] = "thread started"
