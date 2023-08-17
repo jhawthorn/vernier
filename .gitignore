@@ -12,3 +12,5 @@
 *.a
 mkmf.log
 Gemfile.lock
+/*.json
+/.cache
