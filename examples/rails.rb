@@ -28,6 +28,10 @@ class MyApp < Rails::Application
   config.log_level = :warn
   config.enable_site_error_reporting = false
 
+  logger           = ActiveSupport::Logger.new(STDOUT)
+  logger.formatter = config.log_formatter
+  config.logger    = ActiveSupport::TaggedLogging.new(logger)
+
   routes.append do
     root to: "home#show"
   end
