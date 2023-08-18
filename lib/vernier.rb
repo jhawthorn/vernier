@@ -145,7 +145,7 @@ module Vernier
 
     result = nil
     begin
-      yield
+      yield collector
     ensure
       result = collector.stop
     end
@@ -166,7 +166,7 @@ module Vernier
 
     result = nil
     begin
-      yield
+      yield collector
     ensure
       result = collector.stop
       end_time = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)

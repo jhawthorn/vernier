@@ -137,4 +137,19 @@ class TestOutputFirefox < Minitest::Test
 
     assert_valid_firefox_profile(output)
   end
+
+  def test_custom_intervals
+    result = Vernier.trace do |collector|
+      collector.record_interval("custom") do
+        sleep 0.01
+      end
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+
+    assert_valid_firefox_profile(output)
+
+    markers = JSON.parse(output)["threads"].flat_map { _1["markers"]["data"] }
+    assert_includes markers, {"type" => "custom"}
+  end
 end
