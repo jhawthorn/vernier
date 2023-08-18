@@ -8,12 +8,14 @@ module Vernier
     # https://github.com/firefox-devtools/profiler/blob/main/src/types/profile.js
     class Firefox
       class Categorizer
-        attr_reader :categories, :gc_category
+        attr_reader :categories
         def initialize
           @categories = []
+          @categories_by_name = {}
 
           add_category(name: "Default", color: "grey")
           add_category(name: "Idle", color: "transparent")
+
           @gc_category = add_category(name: "GC", color: "red")
           add_category(
             name: "stdlib",
@@ -41,10 +43,15 @@ module Vernier
           )
         end
 
-        def add_category(**kw)
-          category = Category.new(@categories.length, **kw)
+        def add_category(name:, **kw)
+          category = Category.new(@categories.length, name: name, **kw)
           @categories << category
+          @categories_by_name[name] = category
           category
+        end
+
+        def get_category(name)
+          @categories_by_name[name]
         end
 
         def starts_with(*paths)
@@ -369,7 +376,7 @@ module Vernier
         private
 
         def gc_category
-          @categorizer.gc_category
+          @categorizer.get_category("GC")
         end
       end
     end
