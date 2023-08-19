@@ -559,6 +559,23 @@ class Marker {
     TimeStamp timestamp;
     TimeStamp finish;
     native_thread_id_t thread_id;
+
+    VALUE to_array() {
+        VALUE record[5] = {0};
+        record[0] = ULL2NUM(thread_id);
+        record[1] = INT2NUM(type);
+        record[2] = INT2NUM(phase);
+        record[3] = ULL2NUM(timestamp.nanoseconds());
+
+        if (phase == Marker::Phase::INTERVAL) {
+            record[4] = ULL2NUM(finish.nanoseconds());
+        }
+        else {
+            record[4] = Qnil;
+        }
+
+        return rb_ary_new_from_values(5, record);
+    }
 };
 
 class MarkerTable {
@@ -1003,18 +1020,7 @@ class TimeCollector : public BaseCollector {
         VALUE list = rb_ary_new();
 
         for (auto& marker: this->markers.list) {
-            VALUE record[5] = {0};
-            record[0] = ULL2NUM(marker.thread_id);
-            record[1] = INT2NUM(marker.type);
-            record[2] = INT2NUM(marker.phase);
-            record[3] = ULL2NUM(marker.timestamp.nanoseconds());
-            if (marker.phase == Marker::Phase::INTERVAL) {
-              record[4] = ULL2NUM(marker.finish.nanoseconds());
-            }
-            else {
-              record[4] = Qnil;
-            }
-            rb_ary_push(list, rb_ary_new_from_values(5, record));
+            rb_ary_push(list, marker.to_array());
         }
 
         return list;
