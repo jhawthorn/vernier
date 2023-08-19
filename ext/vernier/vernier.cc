@@ -541,23 +541,45 @@ class Marker {
         MARKER_GC_END_SWEEP,
         MARKER_GC_ENTER,
         MARKER_GC_EXIT,
+        MARKER_GC_PAUSE,
 
         MARKER_MAX,
     };
+
+    // Must match phase types from Gecko
+    enum Phase {
+      INSTANT,
+      INTERVAL,
+      INTERVAL_START,
+      INTERVAL_END
+    };
+
     Type type;
+    Phase phase;
     TimeStamp timestamp;
+    TimeStamp finish;
     native_thread_id_t thread_id;
 };
 
 class MarkerTable {
+    TimeStamp last_gc_entry;
+
     public:
         std::vector<Marker> list;
         std::mutex mutex;
 
+        void record_gc_entered() {
+          last_gc_entry = TimeStamp::Now();
+        }
+
+        void record_gc_leave() {
+          list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), get_native_thread_id() });
+        }
+
         void record(Marker::Type type) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            list.push_back({ type, TimeStamp::Now(), get_native_thread_id() });
+            list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), get_native_thread_id() });
         }
 };
 
@@ -981,11 +1003,18 @@ class TimeCollector : public BaseCollector {
         VALUE list = rb_ary_new();
 
         for (auto& marker: this->markers.list) {
-            VALUE record[3] = {0};
+            VALUE record[5] = {0};
             record[0] = ULL2NUM(marker.thread_id);
             record[1] = INT2NUM(marker.type);
-            record[2] = ULL2NUM(marker.timestamp.nanoseconds());
-            rb_ary_push(list, rb_ary_new_from_values(3, record));
+            record[2] = INT2NUM(marker.phase);
+            record[3] = ULL2NUM(marker.timestamp.nanoseconds());
+            if (marker.phase == Marker::Phase::INTERVAL) {
+              record[4] = ULL2NUM(marker.finish.nanoseconds());
+            }
+            else {
+              record[4] = Qnil;
+            }
+            rb_ary_push(list, rb_ary_new_from_values(5, record));
         }
 
         return list;
@@ -1060,10 +1089,10 @@ class TimeCollector : public BaseCollector {
                 collector->markers.record(Marker::Type::MARKER_GC_END_SWEEP);
                 break;
             case RUBY_INTERNAL_EVENT_GC_ENTER:
-                collector->markers.record(Marker::Type::MARKER_GC_ENTER);
+                collector->markers.record_gc_entered();
                 break;
             case RUBY_INTERNAL_EVENT_GC_EXIT:
-                collector->markers.record(Marker::Type::MARKER_GC_EXIT);
+                collector->markers.record_gc_leave();
                 break;
         }
     }
@@ -1292,7 +1321,7 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
 }
 
 static void
-Init_consts() {
+Init_consts(VALUE rb_mVernierMarkerPhase) {
 #define MARKER_CONST(name) \
     rb_define_const(rb_mVernierMarkerType, #name, INT2NUM(Marker::Type::MARKER_##name))
 
@@ -1307,8 +1336,18 @@ Init_consts() {
     MARKER_CONST(GC_END_SWEEP);
     MARKER_CONST(GC_ENTER);
     MARKER_CONST(GC_EXIT);
+    MARKER_CONST(GC_PAUSE);
 
 #undef MARKER_CONST
+
+#define PHASE_CONST(name) \
+    rb_define_const(rb_mVernierMarkerPhase, #name, INT2NUM(Marker::Phase::name))
+
+    PHASE_CONST(INSTANT);
+    PHASE_CONST(INTERVAL);
+    PHASE_CONST(INTERVAL_START);
+    PHASE_CONST(INTERVAL_END);
+#undef PHASE_CONST
 }
 
 extern "C" void
@@ -1317,6 +1356,7 @@ Init_vernier(void)
   rb_mVernier = rb_define_module("Vernier");
   rb_cVernierResult = rb_define_class_under(rb_mVernier, "Result", rb_cObject);
   VALUE rb_mVernierMarker = rb_define_module_under(rb_mVernier, "Marker");
+  VALUE rb_mVernierMarkerPhase = rb_define_module_under(rb_mVernierMarker, "Phase");
   rb_mVernierMarkerType = rb_define_module_under(rb_mVernierMarker, "Type");
 
   rb_cVernierCollector = rb_define_class_under(rb_mVernier, "Collector", rb_cObject);
@@ -1327,7 +1367,7 @@ Init_vernier(void)
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
   rb_define_private_method(rb_cVernierCollector, "markers",  markers, 0);
 
-  Init_consts();
+  Init_consts(rb_mVernierMarkerPhase);
 
   //static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, collector_mark, NULL, &_collector);
   //rb_global_variable(&gc_hook);

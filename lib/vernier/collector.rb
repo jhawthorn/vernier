@@ -47,38 +47,12 @@ module Vernier
     def stop
       result = finish
 
-      markers = []
-      marker_list = self.markers
-      size = marker_list.size
       marker_strings = Marker.name_table
 
-      marker_list.each_with_index do |(tid, id, ts), i|
-        name = marker_strings[id]
-        sym = Marker::MARKER_SYMBOLS[id]
-        finish = nil
-        phase = Marker::Phase::INSTANT
-
-        if id == Marker::Type::GC_EXIT
-          # skip because these are incorporated in "GC enter"
-        else
-          if id == Marker::Type::GC_ENTER
-            j = i + 1
-
-            name = "GC pause"
-            phase = Marker::Phase::INTERVAL
-
-            while j < size
-              if marker_list[j][1] == Marker::Type::GC_EXIT
-                finish = marker_list[j][2]
-                break
-              end
-
-              j += 1
-            end
-          end
-
-          markers << [tid, name, sym, ts, finish, phase]
-        end
+      markers = self.markers.map do |(tid, type, phase, ts, te)|
+        name = marker_strings[type]
+        sym = Marker::MARKER_SYMBOLS[type]
+        [tid, name, sym, ts, te, phase]
       end
 
       markers.concat @markers
