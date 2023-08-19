@@ -4,14 +4,6 @@ require_relative "vernier" # Make sure constants are loaded
 
 module Vernier
   module Marker
-    # These are equal to the marker phase types from gecko-profile.js
-    module Phase # :nodoc:
-      INSTANT = 0
-      INTERVAL = 1
-      INTERVAL_START = 2
-      INTERVAL_END = 3
-    end
-
     MARKER_SYMBOLS = []
     Type.constants.each do |name|
       MARKER_SYMBOLS[Type.const_get(name)] = name
@@ -31,6 +23,7 @@ module Vernier
     MARKER_STRINGS[Type::GC_END_SWEEP] = "GC end sweeping"
     MARKER_STRINGS[Type::GC_ENTER] = "GC enter"
     MARKER_STRINGS[Type::GC_EXIT] = "GC exit"
+    MARKER_STRINGS[Type::GC_PAUSE] = "GC pause"
 
     MARKER_STRINGS.freeze
 
