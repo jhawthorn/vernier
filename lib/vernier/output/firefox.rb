@@ -16,7 +16,7 @@ module Vernier
           add_category(name: "Default", color: "grey")
           add_category(name: "Idle", color: "transparent")
 
-          @gc_category = add_category(name: "GC", color: "red")
+          add_category(name: "GC", color: "red")
           add_category(
             name: "stdlib",
             color: "red",
@@ -41,6 +41,8 @@ module Vernier
             name: "Application",
             color: "purple"
           )
+
+          add_category(name: "Thread", color: "grey")
         end
 
         def add_category(name:, **kw)
@@ -251,7 +253,15 @@ module Vernier
             # Please don't hate me. Divide by 1,000,000 only if finish is not nil
             end_times << (finish&./(1_000_000.0))
             phases << phase
-            categories << (name =~ /GC/ ? gc_category.idx : 0)
+
+            category = case name
+            when /\AGC/ then gc_category.idx
+            when /\AThread/ then thread_category.idx
+            else
+              0
+            end
+
+            categories << category
             data << { type: sym }
           end
 
@@ -377,6 +387,10 @@ module Vernier
 
         def gc_category
           @categorizer.get_category("GC")
+        end
+
+        def thread_category
+          @categorizer.get_category("Thread")
         end
       end
     end
