@@ -1017,7 +1017,7 @@ class TimeCollector : public BaseCollector {
     }
 
     VALUE get_markers() {
-        VALUE list = rb_ary_new();
+        VALUE list = rb_ary_new2(this->markers.list.size());
 
         for (auto& marker: this->markers.list) {
             rb_ary_push(list, marker.to_array());
