@@ -537,9 +537,6 @@ class Marker {
     public:
     enum Type {
         MARKER_GVL_THREAD_STARTED,
-        MARKER_GVL_THREAD_READY,
-        MARKER_GVL_THREAD_RESUMED,
-        MARKER_GVL_THREAD_SUSPENDED,
         MARKER_GVL_THREAD_EXITED,
 
         MARKER_GC_START,
@@ -721,12 +718,12 @@ class Thread {
             TimeStamp from = state_changed_at;
             auto now = TimeStamp::Now();
 
+            if (started_at.zero()) {
+                started_at = now;
+            }
+
             switch (new_state) {
                 case State::STARTED:
-                    // Can this happen?
-                    if (started_at.zero()) {
-                        started_at = now;
-                    }
                     break;
                 case State::RUNNING:
                     assert(state == State::READY);
@@ -793,17 +790,14 @@ class ThreadTable {
         }
 
         void ready(MarkerTable *markers) {
-            markers->record(Marker::Type::MARKER_GVL_THREAD_READY);
             set_state(Thread::State::READY, markers);
         }
 
         void resumed(MarkerTable *markers) {
-            markers->record(Marker::Type::MARKER_GVL_THREAD_RESUMED);
             set_state(Thread::State::RUNNING, markers);
         }
 
         void suspended(MarkerTable *markers) {
-            markers->record(Marker::Type::MARKER_GVL_THREAD_SUSPENDED);
             set_state(Thread::State::SUSPENDED, markers);
         }
 
@@ -1405,9 +1399,6 @@ Init_consts(VALUE rb_mVernierMarkerPhase) {
     rb_define_const(rb_mVernierMarkerType, #name, INT2NUM(Marker::Type::MARKER_##name))
 
     MARKER_CONST(GVL_THREAD_STARTED);
-    MARKER_CONST(GVL_THREAD_READY);
-    MARKER_CONST(GVL_THREAD_RESUMED);
-    MARKER_CONST(GVL_THREAD_SUSPENDED);
     MARKER_CONST(GVL_THREAD_EXITED);
 
     MARKER_CONST(GC_START);
