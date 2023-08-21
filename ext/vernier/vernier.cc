@@ -733,13 +733,34 @@ class ThreadTable {
         std::vector<Thread> list;
         std::mutex mutex;
 
-        void started() {
+        void started(MarkerTable *markers) {
             //const std::lock_guard<std::mutex> lock(mutex);
 
             //list.push_back(Thread{pthread_self(), Thread::State::SUSPENDED});
+            markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
             set_state(Thread::State::STARTED);
         }
 
+        void ready(MarkerTable *markers) {
+            markers->record(Marker::Type::MARKER_GVL_THREAD_READY);
+        }
+
+        void resumed(MarkerTable *markers) {
+            markers->record(Marker::Type::MARKER_GVL_THREAD_RESUMED);
+            set_state(Thread::State::RUNNING);
+        }
+
+        void suspended(MarkerTable *markers) {
+            markers->record(Marker::Type::MARKER_GVL_THREAD_SUSPENDED);
+            set_state(Thread::State::SUSPENDED);
+        }
+
+        void stopped(MarkerTable *markers) {
+            markers->record(Marker::Type::MARKER_GVL_THREAD_EXITED);
+            set_state(Thread::State::STOPPED);
+        }
+
+    private:
         void set_state(Thread::State new_state) {
             const std::lock_guard<std::mutex> lock(mutex);
 
@@ -1109,23 +1130,19 @@ class TimeCollector : public BaseCollector {
 
         switch (event) {
             case RUBY_INTERNAL_THREAD_EVENT_STARTED:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_STARTED);
-                collector->threads.started();
+                collector->threads.started(&collector->markers);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_READY:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_READY);
+                collector->threads.ready(&collector->markers);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_RESUMED:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_RESUMED);
-                collector->threads.set_state(Thread::State::RUNNING);
+                collector->threads.resumed(&collector->markers);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_SUSPENDED);
-                collector->threads.set_state(Thread::State::SUSPENDED);
+                collector->threads.suspended(&collector->markers);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_EXITED:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_EXITED);
-                collector->threads.set_state(Thread::State::STOPPED);
+                collector->threads.stopped(&collector->markers);
                 break;
 
         }
@@ -1159,7 +1176,7 @@ class TimeCollector : public BaseCollector {
         // We want to have at least one thread in our thread list because it's
         // possible that the profile might be such that we don't get any
         // thread switch events and we need at least one
-        this->threads.set_state(Thread::State::RUNNING);
+        this->threads.started(&this->markers);
 
         thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
         gc_hook = rb_tracepoint_new(0, RUBY_GC_PHASE_EVENTS, internal_gc_event_cb, (void *)this);
