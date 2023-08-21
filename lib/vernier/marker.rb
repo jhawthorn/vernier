@@ -25,6 +25,10 @@ module Vernier
     MARKER_STRINGS[Type::GC_EXIT] = "GC exit"
     MARKER_STRINGS[Type::GC_PAUSE] = "GC pause"
 
+    MARKER_STRINGS[Type::THREAD_RUNNING] = "Thread Running"
+    MARKER_STRINGS[Type::THREAD_STALLED] = "Thread Stalled"
+    MARKER_STRINGS[Type::THREAD_SUSPENDED] = "Thread Suspended"
+
     MARKER_STRINGS.freeze
 
     ##
