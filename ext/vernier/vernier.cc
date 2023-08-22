@@ -724,6 +724,7 @@ class Thread {
 
             switch (new_state) {
                 case State::STARTED:
+                    new_state = State::RUNNING;
                     break;
                 case State::RUNNING:
                     assert(state == State::READY);
