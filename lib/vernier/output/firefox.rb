@@ -246,7 +246,7 @@ module Vernier
           categories = []
           data = []
 
-          @markers.each_with_index do |(_, name, sym, start, finish, phase), i|
+          @markers.each_with_index do |(_, name, start, finish, phase, datum), i|
             string_indexes << @strings[name]
             start_times << (start / 1_000_000.0)
 
@@ -262,7 +262,7 @@ module Vernier
             end
 
             categories << category
-            data << { type: sym }
+            data << datum
           end
 
           {
