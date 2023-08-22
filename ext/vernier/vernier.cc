@@ -27,13 +27,19 @@
 #include "ruby/debug.h"
 #include "ruby/thread.h"
 
-// GC event's we'll monitor during profiling
-#define RUBY_GC_PHASE_EVENTS \
+# define PTR2NUM(x)   (rb_int2inum((intptr_t)(void *)(x)))
+
+// Internal TracePoint events we'll monitor during profiling
+#define RUBY_INTERNAL_EVENTS \
   RUBY_INTERNAL_EVENT_GC_START | \
   RUBY_INTERNAL_EVENT_GC_END_MARK | \
   RUBY_INTERNAL_EVENT_GC_END_SWEEP | \
   RUBY_INTERNAL_EVENT_GC_ENTER | \
   RUBY_INTERNAL_EVENT_GC_EXIT
+
+#define RUBY_NORMAL_EVENTS \
+  RUBY_EVENT_THREAD_BEGIN | \
+  RUBY_EVENT_THREAD_END
 
 #define sym(name) ID2SYM(rb_intern_const(name))
 
@@ -531,9 +537,6 @@ class Marker {
     public:
     enum Type {
         MARKER_GVL_THREAD_STARTED,
-        MARKER_GVL_THREAD_READY,
-        MARKER_GVL_THREAD_RESUMED,
-        MARKER_GVL_THREAD_SUSPENDED,
         MARKER_GVL_THREAD_EXITED,
 
         MARKER_GC_START,
@@ -542,6 +545,10 @@ class Marker {
         MARKER_GC_ENTER,
         MARKER_GC_EXIT,
         MARKER_GC_PAUSE,
+
+        MARKER_THREAD_RUNNING,
+        MARKER_THREAD_STALLED,
+        MARKER_THREAD_SUSPENDED,
 
         MARKER_MAX,
     };
@@ -591,6 +598,12 @@ class MarkerTable {
 
         void record_gc_leave() {
           list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), get_native_thread_id() });
+        }
+
+        void record_interval(Marker::Type type, TimeStamp from, TimeStamp to) {
+            const std::lock_guard<std::mutex> lock(mutex);
+
+            list.push_back({ type, Marker::INTERVAL, from, to, get_native_thread_id() });
         }
 
         void record(Marker::Type type) {
@@ -674,6 +687,7 @@ class Thread {
         enum State {
             STARTED,
             RUNNING,
+            READY,
             SUSPENDED,
             STOPPED
         };
@@ -696,24 +710,58 @@ class Thread {
             started_at = state_changed_at = TimeStamp::Now();
         }
 
-        void set_state(State new_state) {
+        void set_state(State new_state, MarkerTable *markers) {
             if (state == Thread::State::STOPPED) {
                 return;
             }
 
+            TimeStamp from = state_changed_at;
             auto now = TimeStamp::Now();
+
+            if (started_at.zero()) {
+                started_at = now;
+            }
+
+            switch (new_state) {
+                case State::STARTED:
+                    break;
+                case State::RUNNING:
+                    assert(state == State::READY);
+                    markers->record_interval(Marker::Type::MARKER_THREAD_STALLED, from, now);
+                    break;
+                case State::READY:
+                    // The ready state means "I would like to do some work, but I can't
+                    // do it right now either because I blocked on IO and now I want the GVL back,
+                    // or because the VM timer put me to sleep"
+                    //
+                    // Threads can be preempted, which means they will have been in "Running"
+                    // state, and then the VM was like "no I need to stop you from working,
+                    // so I'll put you in the 'ready' (or stalled) state"
+                    assert(state == State::SUSPENDED || state == State::RUNNING);
+                    if (state == State::SUSPENDED) {
+                        markers->record_interval(Marker::Type::MARKER_THREAD_SUSPENDED, from, now);
+                    }
+                    else {
+                        markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
+                    }
+                    break;
+                case State::SUSPENDED:
+                    // We can go from RUNNING or STARTED to SUSPENDED
+                    assert(state == State::RUNNING || state == State::STARTED);
+                    markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
+                    break;
+                case State::STOPPED:
+                    // We can go from RUNNING or STARTED to STOPPED
+                    assert(state == State::RUNNING || state == State::STARTED);
+                    markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
+                    stopped_at = now;
+                    capture_name();
+
+                    break;
+            }
 
             state = new_state;
             state_changed_at = now;
-            if (new_state == State::STARTED) {
-                if (started_at.zero()) {
-                    started_at = now;
-                }
-            } else if (new_state == State::STOPPED) {
-                stopped_at = now;
-
-                capture_name();
-            }
         }
 
         bool running() {
@@ -733,14 +781,33 @@ class ThreadTable {
         std::vector<Thread> list;
         std::mutex mutex;
 
-        void started() {
+        void started(MarkerTable *markers) {
             //const std::lock_guard<std::mutex> lock(mutex);
 
             //list.push_back(Thread{pthread_self(), Thread::State::SUSPENDED});
-            set_state(Thread::State::STARTED);
+            markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
+            set_state(Thread::State::STARTED, markers);
         }
 
-        void set_state(Thread::State new_state) {
+        void ready(MarkerTable *markers) {
+            set_state(Thread::State::READY, markers);
+        }
+
+        void resumed(MarkerTable *markers) {
+            set_state(Thread::State::RUNNING, markers);
+        }
+
+        void suspended(MarkerTable *markers) {
+            set_state(Thread::State::SUSPENDED, markers);
+        }
+
+        void stopped(MarkerTable *markers) {
+            markers->record(Marker::Type::MARKER_GVL_THREAD_EXITED);
+            set_state(Thread::State::STOPPED, markers);
+        }
+
+    private:
+        void set_state(Thread::State new_state, MarkerTable *markers) {
             const std::lock_guard<std::mutex> lock(mutex);
 
             pthread_t current_thread = pthread_self();
@@ -748,7 +815,7 @@ class ThreadTable {
 
             for (auto &thread : list) {
                 if (pthread_equal(current_thread, thread.pthread_id)) {
-                    thread.set_state(new_state);
+                    thread.set_state(new_state, markers);
 
                     if (new_state == Thread::State::SUSPENDED) {
                         thread.stack_on_suspend.sample();
@@ -1079,10 +1146,21 @@ class TimeCollector : public BaseCollector {
         return NULL;
     }
 
-    static void internal_gc_event_cb(VALUE tpval, void *data) {
-        TimeCollector *collector = static_cast<TimeCollector *>(data);
-        rb_trace_arg_t *tparg = rb_tracearg_from_tracepoint(tpval);
-        int event = rb_tracearg_event_flag(tparg);
+    static void internal_thread_event_cb(rb_event_flag_t event, VALUE data, VALUE self, ID mid, VALUE klass) {
+        TimeCollector *collector = static_cast<TimeCollector *>((void *)NUM2ULL(data));
+
+        switch (event) {
+            case RUBY_EVENT_THREAD_BEGIN:
+                collector->threads.started(&collector->markers);
+                break;
+            case RUBY_EVENT_THREAD_END:
+                collector->threads.stopped(&collector->markers);
+                break;
+        }
+    }
+
+    static void internal_gc_event_cb(rb_event_flag_t event, VALUE data, VALUE self, ID mid, VALUE klass) {
+        TimeCollector *collector = static_cast<TimeCollector *>((void *)NUM2ULL(data));
 
         switch (event) {
             case RUBY_INTERNAL_EVENT_GC_START:
@@ -1108,31 +1186,20 @@ class TimeCollector : public BaseCollector {
         //cerr << "internal thread event" << event << " at " << TimeStamp::Now() << endl;
 
         switch (event) {
-            case RUBY_INTERNAL_THREAD_EVENT_STARTED:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_STARTED);
-                collector->threads.started();
-                break;
             case RUBY_INTERNAL_THREAD_EVENT_READY:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_READY);
+                collector->threads.ready(&collector->markers);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_RESUMED:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_RESUMED);
-                collector->threads.set_state(Thread::State::RUNNING);
+                collector->threads.resumed(&collector->markers);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_SUSPENDED);
-                collector->threads.set_state(Thread::State::SUSPENDED);
-                break;
-            case RUBY_INTERNAL_THREAD_EVENT_EXITED:
-                collector->markers.record(Marker::Type::MARKER_GVL_THREAD_EXITED);
-                collector->threads.set_state(Thread::State::STOPPED);
+                collector->threads.suspended(&collector->markers);
                 break;
 
         }
     }
 
     rb_internal_thread_event_hook_t *thread_hook;
-    VALUE gc_hook;
 
     bool start() {
         if (!BaseCollector::start()) {
@@ -1159,11 +1226,11 @@ class TimeCollector : public BaseCollector {
         // We want to have at least one thread in our thread list because it's
         // possible that the profile might be such that we don't get any
         // thread switch events and we need at least one
-        this->threads.set_state(Thread::State::RUNNING);
+        this->threads.started(&this->markers);
 
         thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
-        gc_hook = rb_tracepoint_new(0, RUBY_GC_PHASE_EVENTS, internal_gc_event_cb, (void *)this);
-        rb_tracepoint_enable(gc_hook);
+        rb_add_event_hook(internal_gc_event_cb, RUBY_INTERNAL_EVENTS, PTR2NUM((void *)this));
+        rb_add_event_hook(internal_thread_event_cb, RUBY_NORMAL_EVENTS, PTR2NUM((void *)this));
 
         return true;
     }
@@ -1181,7 +1248,8 @@ class TimeCollector : public BaseCollector {
         sigaction(SIGPROF, &sa, NULL);
 
         rb_internal_thread_remove_event_hook(thread_hook);
-        rb_tracepoint_disable(gc_hook);
+        rb_remove_event_hook(internal_gc_event_cb);
+        rb_remove_event_hook(internal_thread_event_cb);
 
         // capture thread names
         for (auto& thread: this->threads.list) {
@@ -1230,7 +1298,6 @@ class TimeCollector : public BaseCollector {
 
     void mark() {
         frame_list.mark_frames();
-        rb_gc_mark(gc_hook);
 
         //for (int i = 0; i < queued_length; i++) {
         //    rb_gc_mark(queued_frames[i]);
@@ -1332,9 +1399,6 @@ Init_consts(VALUE rb_mVernierMarkerPhase) {
     rb_define_const(rb_mVernierMarkerType, #name, INT2NUM(Marker::Type::MARKER_##name))
 
     MARKER_CONST(GVL_THREAD_STARTED);
-    MARKER_CONST(GVL_THREAD_READY);
-    MARKER_CONST(GVL_THREAD_RESUMED);
-    MARKER_CONST(GVL_THREAD_SUSPENDED);
     MARKER_CONST(GVL_THREAD_EXITED);
 
     MARKER_CONST(GC_START);
@@ -1343,6 +1407,10 @@ Init_consts(VALUE rb_mVernierMarkerPhase) {
     MARKER_CONST(GC_ENTER);
     MARKER_CONST(GC_EXIT);
     MARKER_CONST(GC_PAUSE);
+
+    MARKER_CONST(THREAD_RUNNING);
+    MARKER_CONST(THREAD_STALLED);
+    MARKER_CONST(THREAD_SUSPENDED);
 
 #undef MARKER_CONST
 

@@ -13,9 +13,6 @@ module Vernier
     MARKER_STRINGS = []
 
     MARKER_STRINGS[Type::GVL_THREAD_STARTED] = "Thread started"
-    MARKER_STRINGS[Type::GVL_THREAD_READY] = "Thread ready"
-    MARKER_STRINGS[Type::GVL_THREAD_RESUMED] = "Thread resumed"
-    MARKER_STRINGS[Type::GVL_THREAD_SUSPENDED] = "Thread suspended"
     MARKER_STRINGS[Type::GVL_THREAD_EXITED] = "Thread exited"
 
     MARKER_STRINGS[Type::GC_START] = "GC start"
@@ -24,6 +21,10 @@ module Vernier
     MARKER_STRINGS[Type::GC_ENTER] = "GC enter"
     MARKER_STRINGS[Type::GC_EXIT] = "GC exit"
     MARKER_STRINGS[Type::GC_PAUSE] = "GC pause"
+
+    MARKER_STRINGS[Type::THREAD_RUNNING] = "Thread Running"
+    MARKER_STRINGS[Type::THREAD_STALLED] = "Thread Stalled"
+    MARKER_STRINGS[Type::THREAD_SUSPENDED] = "Thread Suspended"
 
     MARKER_STRINGS.freeze
 
