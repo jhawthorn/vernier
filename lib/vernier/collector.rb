@@ -19,10 +19,9 @@ module Vernier
       Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
     end
 
-    def add_marker(name:, type: name.to_sym, start:, finish:, thread: Thread.current.native_thread_id, phase: Marker::Phase::INTERVAL, data: nil)
+    def add_marker(name:, start:, finish:, thread: Thread.current.native_thread_id, phase: Marker::Phase::INTERVAL, data: nil)
       @markers << [thread,
                    name,
-                   type,
                    start,
                    finish,
                    phase,
@@ -30,17 +29,18 @@ module Vernier
     end
 
     ##
-    # Record an interval with a name.  Yields to a block and records the amount
-    # of time spent in the block as an interval marker.
-    def record_interval name
+    # Record an interval with a category and name.  Yields to a block and
+    # records the amount of time spent in the block as an interval marker.
+    def record_interval(category, name = category)
       start = current_time
       yield
       add_marker(
-        name:,
+        name: category,
         start:,
         finish: current_time,
         phase: Marker::Phase::INTERVAL,
-        thread: Thread.current.native_thread_id
+        thread: Thread.current.native_thread_id,
+        data: { :type => 'UserTiming', :entryType => 'measure', :name => name }
       )
     end
 
@@ -52,7 +52,7 @@ module Vernier
       markers = self.markers.map do |(tid, type, phase, ts, te)|
         name = marker_strings[type]
         sym = Marker::MARKER_SYMBOLS[type]
-        [tid, name, sym, ts, te, phase]
+        [tid, name, ts, te, phase, { type: sym }]
       end
 
       markers.concat @markers

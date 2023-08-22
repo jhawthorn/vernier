@@ -150,6 +150,6 @@ class TestOutputFirefox < Minitest::Test
     assert_valid_firefox_profile(output)
 
     markers = JSON.parse(output)["threads"].flat_map { _1["markers"]["data"] }
-    assert_includes markers, {"type" => "custom"}
+    assert_includes markers, {"type"=>"UserTiming", "entryType"=>"measure", "name"=>"custom"}
   end
 end
