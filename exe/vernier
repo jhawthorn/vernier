@@ -1,0 +1,38 @@
+#!/usr/bin/env ruby
+
+require "optparse"
+
+banner = <<-END
+Usage: vernier run [FLAGS] -- COMMAND
+
+FLAGS:
+END
+
+options = {}
+parser = OptionParser.new(banner) do |o|
+  o.on('--output [FILENAME]', String, "output filename") do |s|
+    options[:output] = s
+  end
+  o.on('--interval [MICROSECONDS]', Integer, "sampling interval (default 500)") do |i|
+    options[:interval] = i
+  end
+  o.on('--signal [NAME]', String, "specify a signal to start and stop the profiler") do |s|
+    options[:signal] = s
+  end
+  o.on('--start-paused', "don't automatically start the profiler") do
+    options[:start_paused] = true
+  end
+end
+
+parser.parse!
+parser.abort(parser.help) if ARGV.shift != "run"
+parser.abort(parser.help) if ARGV.empty?
+
+env = {}
+options.each do |k, v|
+  env["VERNIER_#{k.to_s.upcase}"] = v.to_s
+end
+vernier_path = File.expand_path('../lib', __dir__)
+env['RUBYOPT'] = "-I #{vernier_path} -r vernier/autorun #{ENV['RUBYOPT']}"
+
+Kernel.exec(env, *ARGV)
