@@ -1222,11 +1222,12 @@ class TimeCollector : public BaseCollector {
             rb_bug("pthread_create");
         }
 
-        // Set the state of the current Ruby thread to RUNNING.
-        // We want to have at least one thread in our thread list because it's
-        // possible that the profile might be such that we don't get any
-        // thread switch events and we need at least one
-        this->threads.started(&this->markers);
+        // Set the state of the current Ruby thread to RUNNING, which we know it
+        // is as it must have held the GVL to start the collector. We want to
+        // have at least one thread in our thread list because it's possible
+        // that the profile might be such that we don't get any thread switch
+        // events and we need at least one
+        this->threads.resumed(&this->markers);
 
         thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
         rb_add_event_hook(internal_gc_event_cb, RUBY_INTERNAL_EVENTS, PTR2NUM((void *)this));
