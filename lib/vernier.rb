@@ -30,8 +30,6 @@ module Vernier
   def self.trace_retained(out: nil, gc: true)
     3.times { GC.start } if gc
 
-    start_time = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
-
     collector = Vernier::Collector.new(:retained)
     collector.start
 
@@ -40,10 +38,6 @@ module Vernier
       yield collector
     ensure
       result = collector.stop
-      end_time = Process.clock_gettime(Process::CLOCK_REALTIME, :millisecond)
-      result.pid = Process.pid
-      result.start_time = start_time
-      result.end_time = end_time
     end
 
     if out

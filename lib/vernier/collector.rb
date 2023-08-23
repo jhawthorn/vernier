@@ -47,6 +47,10 @@ module Vernier
     def stop
       result = finish
 
+      end_time = Process.clock_gettime(Process::CLOCK_REALTIME, :nanosecond)
+      result.pid = Process.pid
+      result.end_time = end_time
+
       marker_strings = Marker.name_table
 
       markers = self.markers.map do |(tid, type, phase, ts, te)|

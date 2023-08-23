@@ -3,7 +3,7 @@ module Vernier
     attr_reader :stack_table, :frame_table, :func_table
     attr_reader :markers
 
-    attr_accessor :pid, :start_time, :end_time
+    attr_accessor :pid, :end_time
     attr_accessor :threads
     attr_accessor :meta
 
@@ -12,7 +12,7 @@ module Vernier
     def samples; threads.values.flat_map { _1[:samples] }; end
     def sample_categories; threads.values.flat_map { _1[:sample_categories] }; end
 
-    # Realtime in milliseconds since the unix epoch
+    # Realtime in nanoseconds since the unix epoch
     def started_at
       started_at_mono_ns = meta[:started_at]
       current_time_mono_ns = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
