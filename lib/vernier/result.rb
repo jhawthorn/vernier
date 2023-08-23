@@ -28,6 +28,14 @@ module Vernier
       File.write(out, to_gecko)
     end
 
+    def elapsed_seconds
+      (end_time - started_at) / 1_000_000_000.0
+    end
+
+    def inspect
+      "#<#{self.class} #{elapsed_seconds} seconds, #{threads.count} threads, #{samples.count} samples>"
+    end
+
     def each_sample
       return enum_for(__method__) unless block_given?
       samples.size.times do |sample_idx|

@@ -842,15 +842,19 @@ class BaseCollector {
     bool running = false;
     FrameList frame_list;
 
+    TimeStamp started_at;
+
     virtual ~BaseCollector() {}
 
     virtual bool start() {
         if (running) {
             return false;
-        } else {
-            running = true;
-            return true;
         }
+
+        started_at = TimeStamp::Now();
+
+        running = true;
+        return true;
     }
 
     virtual VALUE stop() {
@@ -860,6 +864,21 @@ class BaseCollector {
         running = false;
 
         return Qnil;
+    }
+
+    void write_meta(VALUE result) {
+        VALUE meta = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@meta"), meta);
+        rb_hash_aset(meta, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
+
+    }
+
+    virtual VALUE build_collector_result() {
+        VALUE result = rb_obj_alloc(rb_cVernierResult);
+
+        write_meta(result);
+
+        return result;
     }
 
     virtual void sample() {
@@ -900,7 +919,7 @@ class CustomCollector : public BaseCollector {
     }
 
     VALUE build_collector_result() {
-        VALUE result = rb_obj_alloc(rb_cVernierResult);
+        VALUE result = BaseCollector::build_collector_result();
 
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
@@ -1006,7 +1025,7 @@ class RetainedCollector : public BaseCollector {
         RetainedCollector *collector = this;
         FrameList &frame_list = collector->frame_list;
 
-        VALUE result = rb_obj_alloc(rb_cVernierResult);
+        VALUE result = BaseCollector::build_collector_result();
 
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
@@ -1058,7 +1077,6 @@ class TimeCollector : public BaseCollector {
 
     static LiveSample *live_sample;
 
-    TimeStamp started_at;
     TimeStamp interval;
 
     public:
@@ -1207,8 +1225,6 @@ class TimeCollector : public BaseCollector {
             return false;
         }
 
-	started_at = TimeStamp::Now();
-
         struct sigaction sa;
         sa.sa_sigaction = signal_handler;
         sa.sa_flags = SA_RESTART | SA_SIGINFO;
@@ -1270,11 +1286,7 @@ class TimeCollector : public BaseCollector {
     }
 
     VALUE build_collector_result() {
-        VALUE result = rb_obj_alloc(rb_cVernierResult);
-
-        VALUE meta = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@meta"), meta);
-        rb_hash_aset(meta, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
+        VALUE result = BaseCollector::build_collector_result();
 
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
