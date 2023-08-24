@@ -131,6 +131,14 @@ class TimeStamp {
         return value_ns >= other.value_ns;
     }
 
+    bool operator==(const TimeStamp &other) const {
+        return value_ns == other.value_ns;
+    }
+
+    bool operator!=(const TimeStamp &other) const {
+        return value_ns != other.value_ns;
+    }
+
     uint64_t nanoseconds() const {
         return value_ns;
     }
@@ -728,7 +736,12 @@ class Thread {
                     break;
                 case State::RUNNING:
                     assert(state == State::READY);
-                    markers->record_interval(Marker::Type::MARKER_THREAD_STALLED, from, now);
+
+                    // If the GVL is immediately ready, and we measure no times
+                    // stalled, skip emitting the interval.
+                    if (from != now) {
+			    markers->record_interval(Marker::Type::MARKER_THREAD_STALLED, from, now);
+		    }
                     break;
                 case State::READY:
                     // The ready state means "I would like to do some work, but I can't
