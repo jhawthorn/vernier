@@ -30,7 +30,9 @@ module Vernier
       output_path = options[:output]
       output_path ||= Tempfile.create(["profile", ".vernier.json"]).path
       File.write(output_path, Vernier::Output::Firefox.new(result).output)
-      STDERR.puts("profile written to #{output_path}")
+
+      STDERR.puts(result.inspect)
+      STDERR.puts("written to #{output_path}")
     end
 
     def self.running?
