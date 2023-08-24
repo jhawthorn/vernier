@@ -150,7 +150,66 @@ module Vernier
                 value: "The thread has acquired the GVL and is executing"
               }
             ]
-          }
+          },
+          {
+            name: "sql.active_record",
+            display: [ "marker-chart", "marker-table" ],
+            data: [
+              {
+                key: "sql",
+                format: "string"
+              },
+              {
+                key: "name",
+                format: "string"
+              },
+              {
+                key: "type_casted_binds",
+                label: "binds",
+                format: "string"
+              }
+            ]
+          },
+          {
+            name: "instantiation.active_record",
+            display: [ "marker-chart", "marker-table" ],
+            data: [
+              {
+                key: "record_count",
+                format: "integer"
+              },
+              {
+                key: "class_name",
+                format: "string"
+              }
+            ]
+          },
+          {
+            name: "process_action.action_controller",
+            display: [ "marker-chart", "marker-table" ],
+            data: [
+              {
+                key: "controller",
+                format: "string"
+              },
+              {
+                key: "action",
+                format: "string"
+              },
+              {
+                key: "status",
+                format: "integer"
+              },
+              {
+                key: "path",
+                format: "string"
+              },
+              {
+                key: "method",
+                format: "string"
+              }
+            ]
+          },
         ]
       end
 

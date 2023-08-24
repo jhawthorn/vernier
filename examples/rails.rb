@@ -106,6 +106,7 @@ Vernier.trace(out: "rails.json") do |collector|
       name:,
       start: (start * 1_000_000_000).to_i,
       finish: (finish * 1_000_000_000).to_i,
+      data: {type: name}.merge(payload)
     )
   end
 
