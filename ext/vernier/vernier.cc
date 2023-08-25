@@ -351,24 +351,6 @@ struct LiveSample {
     }
 };
 
-struct TraceArg {
-    rb_trace_arg_t *tparg;
-    VALUE obj;
-    VALUE path;
-    VALUE line;
-    VALUE mid;
-    VALUE klass;
-
-    TraceArg(VALUE tpval) {
-        tparg = rb_tracearg_from_tracepoint(tpval);
-        obj = rb_tracearg_object(tparg);
-        path = rb_tracearg_path(tparg);
-        line = rb_tracearg_lineno(tparg);
-        mid = rb_tracearg_method_id(tparg);
-        klass = rb_tracearg_defined_class(tparg);
-    }
-};
-
 struct FrameList {
     std::unordered_map<std::string, int> string_to_idx;
     std::vector<std::string> string_list;
@@ -974,16 +956,18 @@ class RetainedCollector : public BaseCollector {
 
     static void newobj_i(VALUE tpval, void *data) {
         RetainedCollector *collector = static_cast<RetainedCollector *>(data);
-        TraceArg tp(tpval);
+        rb_trace_arg_t *tparg = rb_tracearg_from_tracepoint(tpval);
+        VALUE obj = rb_tracearg_object(tparg);
 
-        collector->record(tp.obj);
+        collector->record(obj);
     }
 
     static void freeobj_i(VALUE tpval, void *data) {
         RetainedCollector *collector = static_cast<RetainedCollector *>(data);
-        TraceArg tp(tpval);
+        rb_trace_arg_t *tparg = rb_tracearg_from_tracepoint(tpval);
+        VALUE obj = rb_tracearg_object(tparg);
 
-        collector->object_frames.erase(tp.obj);
+        collector->object_frames.erase(obj);
     }
 
     public:
