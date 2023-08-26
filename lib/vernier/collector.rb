@@ -53,10 +53,18 @@ module Vernier
 
       marker_strings = Marker.name_table
 
-      markers = self.markers.map do |(tid, type, phase, ts, te)|
+      markers = self.markers.map do |(tid, type, phase, ts, te, data)|
         name = marker_strings[type]
         sym = Marker::MARKER_SYMBOLS[type]
-        [tid, name, ts, te, phase, { type: sym }]
+        data_hash = { type: sym }
+        if data
+          data.split(";").each do |line|
+            k,v = line.split(":", 2)
+            data_hash[k.to_sym] = v
+          end
+          p data_hash
+        end
+        [tid, name, ts, te, phase, data_hash]
       end
 
       markers.concat @markers

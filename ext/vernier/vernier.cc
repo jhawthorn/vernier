@@ -53,6 +53,8 @@ static VALUE rb_cVernierResult;
 static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
 
+static VALUE sym_state, sym_gc_by;
+
 class TimeStamp {
     static const uint64_t nanoseconds_per_second = 1000000000;
     uint64_t value_ns;
@@ -556,9 +558,10 @@ class Marker {
     TimeStamp timestamp;
     TimeStamp finish;
     native_thread_id_t thread_id;
+    string data;
 
     VALUE to_array() {
-        VALUE record[5] = {0};
+        VALUE record[6] = {0};
         record[0] = ULL2NUM(thread_id);
         record[1] = INT2NUM(type);
         record[2] = INT2NUM(phase);
@@ -571,12 +574,19 @@ class Marker {
             record[4] = Qnil;
         }
 
-        return rb_ary_new_from_values(5, record);
+        if (!data.empty()) {
+            record[5] = rb_str_new(data.data(), data.size());
+        } else {
+            record[5] = Qnil;
+        }
+
+        return rb_ary_new_from_values(6, record);
     }
 };
 
 class MarkerTable {
     TimeStamp last_gc_entry;
+    VALUE last_gc_reason;
 
     public:
         std::vector<Marker> list;
@@ -587,7 +597,37 @@ class MarkerTable {
         }
 
         void record_gc_leave() {
-          list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), get_native_thread_id() });
+            string str;
+
+            VALUE gc_state = rb_gc_latest_gc_info(sym_state);
+            const char *state_name = rb_id2name(SYM2ID(gc_state));
+
+            str += "state:";
+            str += string(state_name);
+            str += ";";
+            if (RTEST(last_gc_reason)) {
+                str += "gc_by:";
+                str += string(rb_id2name(SYM2ID(last_gc_reason)));
+                str += ";";
+            }
+
+            list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), get_native_thread_id(), str});
+        }
+
+        void record_gc_start() {
+            last_gc_reason = rb_gc_latest_gc_info(sym_gc_by);
+
+            record(Marker::Type::MARKER_GC_START);
+        }
+
+        void record_gc_end_mark() {
+            record_gc_leave();
+            record(Marker::Type::MARKER_GC_END_MARK);
+            record_gc_entered();
+        }
+
+        void record_gc_end_sweep() {
+            record(Marker::Type::MARKER_GC_END_SWEEP);
         }
 
         void record_interval(Marker::Type type, TimeStamp from, TimeStamp to) {
@@ -1180,10 +1220,10 @@ class TimeCollector : public BaseCollector {
 
         switch (event) {
             case RUBY_INTERNAL_EVENT_GC_START:
-                collector->markers.record(Marker::Type::MARKER_GC_START);
+                collector->markers.record_gc_start();
                 break;
             case RUBY_INTERNAL_EVENT_GC_END_MARK:
-                collector->markers.record(Marker::Type::MARKER_GC_END_MARK);
+                collector->markers.record_gc_end_mark();
                 break;
             case RUBY_INTERNAL_EVENT_GC_END_SWEEP:
                 collector->markers.record(Marker::Type::MARKER_GC_END_SWEEP);
@@ -1438,6 +1478,10 @@ Init_consts(VALUE rb_mVernierMarkerPhase) {
 extern "C" void
 Init_vernier(void)
 {
+    sym_state = sym("state");
+    sym_gc_by = sym("gc_by");
+    rb_gc_latest_gc_info(sym_state); // needs to be warmed so that it can be called during GC
+
   rb_mVernier = rb_define_module("Vernier");
   rb_cVernierResult = rb_define_class_under(rb_mVernier, "Result", rb_cObject);
   VALUE rb_mVernierMarker = rb_define_module_under(rb_mVernier, "Marker");
