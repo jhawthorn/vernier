@@ -949,6 +949,65 @@ class CustomCollector : public BaseCollector {
     }
 };
 
+class SideExitCollector : public BaseCollector {
+    SampleList samples;
+
+    void sample() {
+        RawSample sample;
+        sample.sample();
+        int stack_index = frame_list.stack_index(sample);
+
+        native_thread_id_t thread_id = 0;
+        samples.record_sample(stack_index, TimeStamp::Now(), thread_id, CATEGORY_NORMAL);
+    }
+
+    static void side_exit_cb(rb_event_flag_t evflag, VALUE data, VALUE self, ID mid, VALUE klass) {
+        SideExitCollector *collector = static_cast<SideExitCollector *>((void *)NUM2ULL(data));
+        collector->sample();
+    }
+
+    bool start() {
+        if (!BaseCollector::start()) {
+            return false;
+        }
+
+        rb_add_event_hook(side_exit_cb, RUBY_INTERNAL_EVENT_JIT_SIDE_EXIT, PTR2NUM(this));
+
+        return true;
+    }
+
+    VALUE stop() {
+        BaseCollector::stop();
+
+        frame_list.finalize();
+
+        VALUE result = build_collector_result();
+
+        reset();
+
+        return result;
+    }
+
+    VALUE build_collector_result() {
+        VALUE result = BaseCollector::build_collector_result();
+
+        VALUE threads = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@threads"), threads);
+
+        VALUE thread_hash = rb_hash_new();
+        samples.write_result(thread_hash);
+
+        rb_hash_aset(threads, ULL2NUM(0), thread_hash);
+        rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
+        rb_hash_aset(thread_hash, sym("name"), rb_str_new_cstr("side exits"));
+        rb_hash_aset(thread_hash, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
+
+        frame_list.write_result(result);
+
+        return result;
+    }
+};
+
 class RetainedCollector : public BaseCollector {
     void reset() {
         object_frames.clear();
@@ -1403,6 +1462,8 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         collector = new RetainedCollector();
     } else if (mode == sym("custom")) {
         collector = new CustomCollector();
+    } else if (mode == sym("jit_side_exit")) {
+        collector = new SideExitCollector();
     } else if (mode == sym("wall")) {
         VALUE intervalv = rb_hash_aref(options, sym("interval"));
         TimeStamp interval;

@@ -1,6 +1,6 @@
 require "vernier"
 
-Vernier.trace(out: "http_requests.json") do
+Vernier.trace(out: "http_requests.json", mode: :jit_side_exit) do
 
 require "net/http"
 require "uri"
