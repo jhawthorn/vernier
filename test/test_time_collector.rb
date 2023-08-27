@@ -110,6 +110,19 @@ class TestTimeCollector < Minitest::Test
     assert_valid_result result
   end
 
+  def test_nested_collections
+    outer_result = inner_result = nil
+    outer_result = Vernier.trace do
+      inner_result = Vernier.trace do
+        sleep 0.1
+      end
+      sleep 0.1
+    end
+
+    assert_in_epsilon 200, inner_result.weights.sum, generous_epsilon
+    assert_in_epsilon 400, outer_result.weights.sum, generous_epsilon
+  end
+
   def generous_epsilon
     if ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
       # Timing on macOS Actions runners seem extremely unpredictable
