@@ -1062,6 +1062,66 @@ class RetainedCollector : public BaseCollector {
     }
 };
 
+class GlobalSignalHandler {
+    static LiveSample *live_sample;
+
+    public:
+        static GlobalSignalHandler *get_instance() {
+            static GlobalSignalHandler instance;
+            return &instance;
+        }
+
+        void install() {
+            const std::lock_guard<std::mutex> lock(mutex);
+            count++;
+
+            if (count == 1) setup_signal_handler();
+        }
+
+        void uninstall() {
+            const std::lock_guard<std::mutex> lock(mutex);
+            count--;
+
+            if (count == 0) clear_signal_handler();
+        }
+
+        void record_sample(LiveSample &sample, pthread_t pthread_id) {
+            const std::lock_guard<std::mutex> lock(mutex);
+
+            live_sample = &sample;
+            if (pthread_kill(pthread_id, SIGPROF)) {
+                rb_bug("pthread_kill failed");
+            }
+            sample.wait();
+            live_sample = NULL;
+        }
+
+    private:
+        std::mutex mutex;
+        int count;
+
+        static void signal_handler(int sig, siginfo_t* sinfo, void* ucontext) {
+            assert(live_sample);
+            live_sample->sample_current_thread();
+        }
+
+        void setup_signal_handler() {
+            struct sigaction sa;
+            sa.sa_sigaction = signal_handler;
+            sa.sa_flags = SA_RESTART | SA_SIGINFO;
+            sigemptyset(&sa.sa_mask);
+            sigaction(SIGPROF, &sa, NULL);
+        }
+
+        void clear_signal_handler() {
+            struct sigaction sa;
+            sa.sa_handler = SIG_IGN;
+            sa.sa_flags = SA_RESTART;
+            sigemptyset(&sa.sa_mask);
+            sigaction(SIGPROF, &sa, NULL);
+        }
+};
+LiveSample *GlobalSignalHandler::live_sample;
 
 class TimeCollector : public BaseCollector {
     MarkerTable markers;
@@ -1071,8 +1131,6 @@ class TimeCollector : public BaseCollector {
 
     atomic_bool running;
     SamplerSemaphore thread_stopped;
-
-    static LiveSample *live_sample;
 
     TimeStamp interval;
 
@@ -1094,11 +1152,6 @@ class TimeCollector : public BaseCollector {
         }
     }
 
-    static void signal_handler(int sig, siginfo_t* sinfo, void* ucontext) {
-        assert(live_sample);
-        live_sample->sample_current_thread();
-    }
-
     VALUE get_markers() {
         VALUE list = rb_ary_new2(this->markers.list.size());
 
@@ -1111,7 +1164,6 @@ class TimeCollector : public BaseCollector {
 
     void sample_thread_run() {
         LiveSample sample;
-        live_sample = &sample;
 
         TimeStamp next_sample_schedule = TimeStamp::Now();
         while (running) {
@@ -1121,10 +1173,7 @@ class TimeCollector : public BaseCollector {
             for (auto &thread : threads.list) {
                 //if (thread.state == Thread::State::RUNNING) {
                 if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend.size() == 0)) {
-                    if (pthread_kill(thread.pthread_id, SIGPROF)) {
-                        rb_bug("pthread_kill failed");
-                    }
-                    sample.wait();
+                    GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
 
                     if (sample.sample.gc) {
                         // fprintf(stderr, "skipping GC sample\n");
@@ -1150,8 +1199,6 @@ class TimeCollector : public BaseCollector {
             TimeStamp sleep_time = next_sample_schedule - sample_complete;
             TimeStamp::Sleep(sleep_time);
         }
-
-        live_sample = NULL;
 
         thread_stopped.post();
     }
@@ -1222,11 +1269,7 @@ class TimeCollector : public BaseCollector {
             return false;
         }
 
-        struct sigaction sa;
-        sa.sa_sigaction = signal_handler;
-        sa.sa_flags = SA_RESTART | SA_SIGINFO;
-        sigemptyset(&sa.sa_mask);
-        sigaction(SIGPROF, &sa, NULL);
+        GlobalSignalHandler::get_instance()->install();
 
         running = true;
 
@@ -1256,11 +1299,7 @@ class TimeCollector : public BaseCollector {
         running = false;
         thread_stopped.wait();
 
-        struct sigaction sa;
-        sa.sa_handler = SIG_IGN;
-        sa.sa_flags = SA_RESTART;
-        sigemptyset(&sa.sa_mask);
-        sigaction(SIGPROF, &sa, NULL);
+        GlobalSignalHandler::get_instance()->uninstall();
 
         rb_internal_thread_remove_event_hook(thread_hook);
         rb_remove_event_hook(internal_gc_event_cb);
@@ -1317,8 +1356,6 @@ class TimeCollector : public BaseCollector {
         // FIXME: How can we best mark buffered or pending frames?
     }
 };
-
-LiveSample *TimeCollector::live_sample;
 
 static void
 collector_mark(void *data) {
