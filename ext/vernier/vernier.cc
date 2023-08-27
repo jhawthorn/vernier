@@ -216,6 +216,10 @@ bool operator==(const Frame& lhs, const Frame& rhs) noexcept {
     return lhs.frame == rhs.frame && lhs.line == rhs.line;
 }
 
+bool operator!=(const Frame& lhs, const Frame& rhs) noexcept {
+    return !(lhs == rhs);
+}
+
 namespace std {
     template<>
     struct hash<Frame>
@@ -289,7 +293,9 @@ struct RawSample {
     }
 
     Frame frame(int i) const {
-        const Frame frame = {frames[i], lines[i]};
+        int idx = len - i - 1;
+        if (idx < 0) throw std::out_of_range("out of range");
+        const Frame frame = {frames[idx], lines[idx]};
         return frame;
     }
 
@@ -408,27 +414,29 @@ struct FrameList {
         }
 
         StackNode *node = &root_stack_node;
-        for (int i = stack.size() - 1; i >= 0; i--) {
-            const Frame &frame = stack.frame(i);
+        for (int i = 0; i < stack.size(); i++) {
+            Frame frame = stack.frame(i);
             node = next_stack_node(node, frame);
         }
         return node->index;
     }
 
-    StackNode *next_stack_node(StackNode *node, const Frame &frame) {
-        int next_node_idx = node->children[frame];
-        if (next_node_idx == 0) {
+    StackNode *next_stack_node(StackNode *node, Frame frame) {
+        auto search = node->children.find(frame);
+        if (search == node->children.end()) {
             // insert a new node
-            next_node_idx = stack_node_list.size();
+            int next_node_idx = stack_node_list.size();
             node->children[frame] = next_node_idx;
             stack_node_list.emplace_back(
                     frame,
                     next_node_idx,
                     node->index
                     );
+            return &stack_node_list[next_node_idx];
+        } else {
+            int node_idx = search->second;
+            return &stack_node_list[node_idx];
         }
-
-        return &stack_node_list[next_node_idx];
     }
 
     // Converts Frames from stacks other tables. "Symbolicates" the frames
@@ -506,6 +514,41 @@ struct FrameList {
             rb_ary_push(func_table_first_line, INT2NUM(first_line));
         }
     }
+};
+
+class SampleTranslator {
+    public:
+        int last_stack_index;
+
+        Frame frames[RawSample::MAX_LEN];
+        int frame_indexes[RawSample::MAX_LEN];
+        int len;
+
+        SampleTranslator() : len(0), last_stack_index(-1) {
+        }
+
+        int translate(FrameList &frame_list, const RawSample &sample) {
+            int i = 0;
+            for (; i < len && i < sample.size(); i++) {
+                if (frames[i] != sample.frame(i)) {
+                    break;
+                }
+            }
+
+            FrameList::StackNode *node = i == 0 ? &frame_list.root_stack_node : &frame_list.stack_node_list[frame_indexes[i - 1]];
+
+            for (; i < sample.size(); i++) {
+                Frame frame = sample.frame(i);
+                node = frame_list.next_stack_node(node, frame);
+
+                frames[i] = frame;
+                frame_indexes[i] = node->index;
+            }
+            len = i;
+
+            last_stack_index = node->index;
+            return last_stack_index;
+        }
 };
 
 typedef uint64_t native_thread_id_t;
@@ -691,6 +734,7 @@ class Thread {
         TimeStamp stopped_at;
 
         RawSample stack_on_suspend;
+        SampleTranslator translator;
 
         std::string name;
 
@@ -1142,7 +1186,7 @@ class TimeCollector : public BaseCollector {
 
     void record_sample(const RawSample &sample, TimeStamp time, Thread &thread, Category category) {
         if (!sample.empty()) {
-            int stack_index = frame_list.stack_index(sample);
+            int stack_index = thread.translator.translate(frame_list, sample);
             thread.samples.record_sample(
                     stack_index,
                     time,
@@ -1185,6 +1229,7 @@ class TimeCollector : public BaseCollector {
                 } else {
                 }
             }
+
             threads.mutex.unlock();
 
             TimeStamp sample_complete = TimeStamp::Now();
