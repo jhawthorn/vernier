@@ -2,7 +2,17 @@ require 'bundler/inline'
 
 gemfile do
   source 'https://rubygems.org'
-  gem "rails"
+  rails_version = ENV["RAILS"]
+  case rails_version
+  when nil
+    gem "rails"
+  when "edge", "main"
+    gem "rails", github: "rails/rails"
+  when /\//
+    gem "rails", path: rails_version
+  else
+    gem "rails", rails_version
+  end
   gem "sqlite3"
   gem "vernier", path: "#{__dir__}/.."
 end
@@ -92,7 +102,7 @@ make_request = -> () do
   body.close if body.respond_to?(:close)
   if status
   end
-  body = body.join("")
+  body = body.each.to_a.join("")
   raise body if status != 200
   [status, headers, body]
 end
