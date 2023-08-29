@@ -733,12 +733,12 @@ class Thread {
         TimeStamp started_at;
         TimeStamp stopped_at;
 
-        RawSample stack_on_suspend;
+        int stack_on_suspend_idx;
         SampleTranslator translator;
 
         std::string name;
 
-        Thread(State state) : state(state) {
+        Thread(State state) : state(state), stack_on_suspend_idx(-1) {
             pthread_id = pthread_self();
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
@@ -818,8 +818,13 @@ class Thread {
 
 class ThreadTable {
     public:
+        FrameList &frame_list;
+
         std::vector<Thread> list;
         std::mutex mutex;
+
+        ThreadTable(FrameList &frame_list) : frame_list(frame_list) {
+        }
 
         void started(MarkerTable *markers) {
             //const std::lock_guard<std::mutex> lock(mutex);
@@ -855,12 +860,17 @@ class ThreadTable {
 
             for (auto &thread : list) {
                 if (pthread_equal(current_thread, thread.pthread_id)) {
-                    thread.set_state(new_state, markers);
-
                     if (new_state == Thread::State::SUSPENDED) {
-                        thread.stack_on_suspend.sample();
+
+                        RawSample sample;
+                        sample.sample();
+
+                        thread.stack_on_suspend_idx = thread.translator.translate(frame_list, sample);
                         //cerr << gettid() << " suspended! Stack size:" << thread.stack_on_suspend.size() << endl;
                     }
+
+                    thread.set_state(new_state, markers);
+
                     return;
                 }
             }
@@ -1179,7 +1189,7 @@ class TimeCollector : public BaseCollector {
     TimeStamp interval;
 
     public:
-    TimeCollector(TimeStamp interval) : interval(interval) {
+    TimeCollector(TimeStamp interval) : interval(interval), threads(frame_list) {
     }
 
     private:
@@ -1216,7 +1226,7 @@ class TimeCollector : public BaseCollector {
             threads.mutex.lock();
             for (auto &thread : threads.list) {
                 //if (thread.state == Thread::State::RUNNING) {
-                if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend.size() == 0)) {
+                if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
                     GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
 
                     if (sample.sample.gc) {
@@ -1225,7 +1235,11 @@ class TimeCollector : public BaseCollector {
                         record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
                     }
                 } else if (thread.state == Thread::State::SUSPENDED) {
-                    record_sample(thread.stack_on_suspend, sample_start, thread, CATEGORY_IDLE);
+                    thread.samples.record_sample(
+                            thread.stack_on_suspend_idx,
+                            sample_start,
+                            thread.native_tid,
+                            CATEGORY_IDLE);
                 } else {
                 }
             }
