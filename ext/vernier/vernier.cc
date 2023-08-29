@@ -599,9 +599,10 @@ class Marker {
     TimeStamp timestamp;
     TimeStamp finish;
     native_thread_id_t thread_id;
+    int stack_index = -1;
 
     VALUE to_array() {
-        VALUE record[5] = {0};
+        VALUE record[6] = {0};
         record[0] = ULL2NUM(thread_id);
         record[1] = INT2NUM(type);
         record[2] = INT2NUM(phase);
@@ -613,8 +614,9 @@ class Marker {
         else {
             record[4] = Qnil;
         }
+        record[5] = stack_index == -1 ? Qnil : INT2NUM(stack_index);
 
-        return rb_ary_new_from_values(5, record);
+        return rb_ary_new_from_values(6, record);
     }
 };
 
@@ -630,19 +632,19 @@ class MarkerTable {
         }
 
         void record_gc_leave() {
-          list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), get_native_thread_id() });
+          list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), get_native_thread_id(), -1 });
         }
 
-        void record_interval(Marker::Type type, TimeStamp from, TimeStamp to) {
+        void record_interval(Marker::Type type, TimeStamp from, TimeStamp to, int stack_index = -1) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            list.push_back({ type, Marker::INTERVAL, from, to, get_native_thread_id() });
+            list.push_back({ type, Marker::INTERVAL, from, to, get_native_thread_id(), stack_index });
         }
 
-        void record(Marker::Type type) {
+        void record(Marker::Type type, int stack_index = -1) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), get_native_thread_id() });
+            list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), get_native_thread_id(), stack_index });
         }
 };
 
@@ -766,8 +768,8 @@ class Thread {
                     // If the GVL is immediately ready, and we measure no times
                     // stalled, skip emitting the interval.
                     if (from != now) {
-			    markers->record_interval(Marker::Type::MARKER_THREAD_STALLED, from, now);
-		    }
+                        markers->record_interval(Marker::Type::MARKER_THREAD_STALLED, from, now);
+                    }
                     break;
                 case State::READY:
                     // The ready state means "I would like to do some work, but I can't
@@ -779,7 +781,7 @@ class Thread {
                     // so I'll put you in the 'ready' (or stalled) state"
                     assert(state == State::SUSPENDED || state == State::RUNNING);
                     if (state == State::SUSPENDED) {
-                        markers->record_interval(Marker::Type::MARKER_THREAD_SUSPENDED, from, now);
+                        markers->record_interval(Marker::Type::MARKER_THREAD_SUSPENDED, from, now, stack_on_suspend_idx);
                     }
                     else {
                         markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);

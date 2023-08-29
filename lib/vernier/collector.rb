@@ -53,10 +53,12 @@ module Vernier
 
       marker_strings = Marker.name_table
 
-      markers = self.markers.map do |(tid, type, phase, ts, te)|
+      markers = self.markers.map do |(tid, type, phase, ts, te, stack)|
         name = marker_strings[type]
         sym = Marker::MARKER_SYMBOLS[type]
-        [tid, name, ts, te, phase, { type: sym }]
+        data = { type: sym }
+        data[:cause] = { stack: stack } if stack
+        [tid, name, ts, te, phase, data]
       end
 
       markers.concat @markers
