@@ -1,6 +1,17 @@
 # Vernier
 
-Experimental next-generation Ruby sampling profiler. Tracks multiple threads, GVL activity, GC pauses, idle time, and more.
+Next-generation Ruby sampling profiler. Tracks multiple threads, GVL activity, GC pauses, idle time, and more.
+
+## Examples
+
+Sidekiq jobs from Mastodon (time, threded)
+: https://share.firefox.dev/44jZRf3
+
+Rails benchmark - lobste.rs (time)
+: https://share.firefox.dev/3Ld89id
+
+`require "irb"` (retained memory)
+: https://share.firefox.dev/3DhLsFa
 
 ## Installation
 
@@ -18,7 +29,7 @@ Record a flamegraph of all **retained** allocations from loading `irb`.
 ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "irb" }'
 ```
 
-The output can then be viewed in the [Firefox Profiler (demo)](https://share.firefox.dev/3DhLsFa) or the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (a Ruby-customized version of the firefox profiler.
+The output can then be viewed in the [Firefox Profiler (demo)]() or the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (a Ruby-customized version of the firefox profiler.
 
 ![Screenshot 2023-07-16 at 21-06-19 Ruby_Vernier – 1970-01-01 12 00 00 a m  UTC – Firefox Profiler](https://github.com/jhawthorn/vernier/assets/131752/9ca0b593-70fb-4c8b-aed9-cb33e0e0bc06)
 
