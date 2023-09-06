@@ -4,6 +4,8 @@ Next-generation Ruby sampling profiler. Tracks multiple threads, GVL activity, G
 
 ## Examples
 
+[Livestreamed demo: Pairin' with Aaron (YouTube)](https://www.youtube.com/watch?v=9nvX3OHykGQ#t=27m43)
+
 Sidekiq jobs from Mastodon (time, threded)
 : https://share.firefox.dev/44jZRf3
 
