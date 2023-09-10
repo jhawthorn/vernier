@@ -123,6 +123,20 @@ class TestTimeCollector < Minitest::Test
     assert_in_epsilon 400, outer_result.weights.sum, generous_epsilon
   end
 
+  ExpectedError = Class.new(StandardError)
+  def test_raised_exceptions_will_output
+    output_file = File.join(__dir__, "../tmp/exception_output.json")
+
+    result = nil
+    assert_raises(ExpectedError) do
+      Vernier.trace(out: output_file) do
+        raise ExpectedError
+      end
+    end
+
+    assert File.exist?(output_file)
+  end
+
   def generous_epsilon
     if ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
       # Timing on macOS Actions runners seem extremely unpredictable
