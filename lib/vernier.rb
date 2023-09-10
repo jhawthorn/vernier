@@ -19,11 +19,11 @@ module Vernier
       yield collector
     ensure
       result = collector.stop
+      if out
+        File.write(out, Output::Firefox.new(result).output)
+      end
     end
 
-    if out
-      File.write(out, Output::Firefox.new(result).output)
-    end
     result
   end
 
