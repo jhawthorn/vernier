@@ -9,6 +9,9 @@ Next-generation Ruby sampling profiler. Tracks multiple threads, GVL activity, G
 Sidekiq jobs from Mastodon (time, threded)
 : https://share.firefox.dev/44jZRf3
 
+Puma web requests from Mastodon (time, threded)
+: https://share.firefox.dev/48FOTnF
+
 Rails benchmark - lobste.rs (time)
 : https://share.firefox.dev/3Ld89id
 
