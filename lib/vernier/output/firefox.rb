@@ -237,8 +237,6 @@ module Vernier
         end
 
         def markers_table
-          size = @markers.size
-
           string_indexes = []
           start_times = []
           end_times = []
@@ -292,7 +290,6 @@ module Vernier
             times = (0...size).to_a
           end
 
-          raise unless samples.size == size
           raise unless weights.size == size
           raise unless times.size == size
 
