@@ -72,13 +72,17 @@ class TimeStamp {
         return TimeStamp(0);
     }
 
-    static void Sleep(const TimeStamp &time) {
-        struct timespec ts = time.timespec();
+    // SleepUntil a specified timestamp
+    // Highly accurate manual sleep time
+    static void SleepUntil(const TimeStamp &target_time) {
+        if (target_time.zero()) return;
+        struct timespec ts = target_time.timespec();
 
         int res;
         do {
-            res = nanosleep(&ts, &ts);
-        } while (res && errno == EINTR);
+            // do nothing until it's time :)
+            sleep(0);
+        } while (target_time > TimeStamp::Now());
     }
 
     static TimeStamp from_microseconds(uint64_t us) {
@@ -1252,13 +1256,12 @@ class TimeCollector : public BaseCollector {
 
             next_sample_schedule += interval;
 
+            // If sampling falls behind, restart, and check in another interval
             if (next_sample_schedule < sample_complete) {
-                //fprintf(stderr, "fell behind by %ius\n", (sample_complete - next_sample_schedule).microseconds());
                 next_sample_schedule = sample_complete + interval;
             }
 
-            TimeStamp sleep_time = next_sample_schedule - sample_complete;
-            TimeStamp::Sleep(sleep_time);
+            TimeStamp::SleepUntil(next_sample_schedule);
         }
 
         thread_stopped.post();
