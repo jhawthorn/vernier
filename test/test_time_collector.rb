@@ -3,8 +3,11 @@
 require "test_helper"
 
 class TestTimeCollector < Minitest::Test
+  SAMPLE_SCALE = 10
+  SAMPLE_SCALE_INTERVAL = 10_000 * SAMPLE_SCALE
+
   def bar
-    sleep 0.1
+    sleep SAMPLE_SCALE
   end
 
   def foo
@@ -28,7 +31,7 @@ class TestTimeCollector < Minitest::Test
   end
 
   def test_time_collector
-    collector = Vernier::Collector.new(:wall, interval: 1000)
+    collector = Vernier::Collector.new(:wall, interval: SAMPLE_SCALE_INTERVAL)
     collector.start
     foo
     result = collector.stop
@@ -45,7 +48,7 @@ class TestTimeCollector < Minitest::Test
   end
 
   def test_sleeping_threads
-    collector = Vernier::Collector.new(:wall, interval: 1000)
+    collector = Vernier::Collector.new(:wall, interval: SAMPLE_SCALE_INTERVAL)
     th1 = Thread.new { foo; Thread.current.native_thread_id }
     th2 = Thread.new { foo; Thread.current.native_thread_id }
     collector.start
