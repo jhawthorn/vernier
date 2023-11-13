@@ -3,8 +3,11 @@
 require "test_helper"
 
 class TestTimeCollector < Minitest::Test
+  SLEEP_SCALE = ENV.fetch("TEST_SLEEP_SCALE", 0.1).to_f # seconds/100ms
+  SAMPLE_SCALE_INTERVAL = 10_000 * SLEEP_SCALE # Microseconds
+
   def bar
-    sleep 0.1
+    sleep SLEEP_SCALE
   end
 
   def foo
@@ -28,7 +31,7 @@ class TestTimeCollector < Minitest::Test
   end
 
   def test_time_collector
-    collector = Vernier::Collector.new(:wall, interval: 1000)
+    collector = Vernier::Collector.new(:wall, interval: SAMPLE_SCALE_INTERVAL)
     collector.start
     foo
     result = collector.stop
@@ -45,7 +48,7 @@ class TestTimeCollector < Minitest::Test
   end
 
   def test_sleeping_threads
-    collector = Vernier::Collector.new(:wall, interval: 1000)
+    collector = Vernier::Collector.new(:wall, interval: SAMPLE_SCALE_INTERVAL)
     th1 = Thread.new { foo; Thread.current.native_thread_id }
     th2 = Thread.new { foo; Thread.current.native_thread_id }
     collector.start
@@ -54,8 +57,10 @@ class TestTimeCollector < Minitest::Test
     result = collector.stop
 
     tally = result.threads.transform_values do |thread|
+      # Number of samples
       thread[:weights].sum
     end.to_h
+
     assert_in_epsilon 200, tally[Thread.current.native_thread_id], generous_epsilon
     assert_in_epsilon 200, tally[th1id], generous_epsilon
     assert_in_epsilon 200, tally[th2id], generous_epsilon
