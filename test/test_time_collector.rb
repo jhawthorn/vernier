@@ -143,11 +143,6 @@ class TestTimeCollector < Minitest::Test
   end
 
   def generous_epsilon
-    if ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
-      # Timing on macOS Actions runners seem extremely unpredictable
-      0.75
-    else
-      0.1
-    end
+    0.1
   end
 end
