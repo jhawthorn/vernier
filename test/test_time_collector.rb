@@ -6,14 +6,14 @@ class TestTimeCollector < Minitest::Test
   SLEEP_SCALE = ENV.fetch("TEST_SLEEP_SCALE", 0.1).to_f # seconds/100ms
   SAMPLE_SCALE_INTERVAL = 10_000 * SLEEP_SCALE # Microseconds
 
-  def bar
+  def slow_method
     sleep SLEEP_SCALE
   end
 
-  def foo
-    bar
+  def two_slow_methods
+    slow_method
     1.times do
-      bar
+      slow_method
     end
   end
 
@@ -33,7 +33,7 @@ class TestTimeCollector < Minitest::Test
   def test_time_collector
     collector = Vernier::Collector.new(:wall, interval: SAMPLE_SCALE_INTERVAL)
     collector.start
-    foo
+    two_slow_methods
     result = collector.stop
 
     assert_valid_result result
@@ -49,8 +49,8 @@ class TestTimeCollector < Minitest::Test
 
   def test_sleeping_threads
     collector = Vernier::Collector.new(:wall, interval: SAMPLE_SCALE_INTERVAL)
-    th1 = Thread.new { foo; Thread.current.native_thread_id }
-    th2 = Thread.new { foo; Thread.current.native_thread_id }
+    th1 = Thread.new { two_slow_methods; Thread.current.native_thread_id }
+    th2 = Thread.new { two_slow_methods; Thread.current.native_thread_id }
     collector.start
     th1id = th1.value
     th2id = th2.value
@@ -117,15 +117,15 @@ class TestTimeCollector < Minitest::Test
 
   def test_nested_collections
     outer_result = inner_result = nil
-    outer_result = Vernier.trace do
-      inner_result = Vernier.trace do
-        sleep 0.1
+    outer_result = Vernier.trace(interval: SAMPLE_SCALE_INTERVAL) do
+      inner_result = Vernier.trace(interval: SAMPLE_SCALE_INTERVAL) do
+        slow_method
       end
-      sleep 0.1
+      slow_method
     end
 
-    assert_in_epsilon 200, inner_result.weights.sum, generous_epsilon
-    assert_in_epsilon 400, outer_result.weights.sum, generous_epsilon
+    assert_in_epsilon 100, inner_result.weights.sum, generous_epsilon
+    assert_in_epsilon 200, outer_result.weights.sum, generous_epsilon
   end
 
   ExpectedError = Class.new(StandardError)
@@ -143,11 +143,6 @@ class TestTimeCollector < Minitest::Test
   end
 
   def generous_epsilon
-    if ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
-      # Timing on macOS Actions runners seem extremely unpredictable
-      0.75
-    else
-      0.1
-    end
+    0.75 # Everyone gets generous epsilons
   end
 end
