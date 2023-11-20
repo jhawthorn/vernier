@@ -731,6 +731,7 @@ class Thread {
             STOPPED
         };
 
+	VALUE ruby_thread;
         pthread_t pthread_id;
         native_thread_id_t native_tid;
         State state;
@@ -742,12 +743,14 @@ class Thread {
         int stack_on_suspend_idx;
         SampleTranslator translator;
 
-        std::string name;
+	std::string name;
 
-        Thread(State state) : state(state), stack_on_suspend_idx(-1) {
-            pthread_id = pthread_self();
+	// FIXME: don't use pthread at start
+        Thread(State state, pthread_t pthread_id) : pthread_id(pthread_id), state(state), stack_on_suspend_idx(-1) {
+            name = Qnil;
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
+            ruby_thread = rb_thread_current();
         }
 
         void set_state(State new_state, MarkerTable *markers) {
@@ -820,6 +823,9 @@ class Thread {
             if (rc == 0)
                 name = std::string(buf);
         }
+
+        void mark() {
+        }
 };
 
 class ThreadTable {
@@ -832,40 +838,47 @@ class ThreadTable {
         ThreadTable(FrameList &frame_list) : frame_list(frame_list) {
         }
 
-        void started(MarkerTable *markers) {
+        void mark() {
+            for (auto &thread : list) {
+                thread.mark();
+            }
+        }
+
+        void started(MarkerTable *markers, VALUE th) {
             //const std::lock_guard<std::mutex> lock(mutex);
 
             //list.push_back(Thread{pthread_self(), Thread::State::SUSPENDED});
             markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
-            set_state(Thread::State::STARTED, markers);
+            set_state(Thread::State::STARTED, markers, th);
         }
 
-        void ready(MarkerTable *markers) {
-            set_state(Thread::State::READY, markers);
+        void ready(MarkerTable *markers, VALUE th) {
+            set_state(Thread::State::READY, markers, th);
         }
 
-        void resumed(MarkerTable *markers) {
-            set_state(Thread::State::RUNNING, markers);
+        void resumed(MarkerTable *markers, VALUE th) {
+            set_state(Thread::State::RUNNING, markers, th);
         }
 
-        void suspended(MarkerTable *markers) {
-            set_state(Thread::State::SUSPENDED, markers);
+        void suspended(MarkerTable *markers, VALUE th) {
+            set_state(Thread::State::SUSPENDED, markers, th);
         }
 
-        void stopped(MarkerTable *markers) {
+        void stopped(MarkerTable *markers, VALUE th) {
             markers->record(Marker::Type::MARKER_GVL_THREAD_EXITED);
-            set_state(Thread::State::STOPPED, markers);
+            set_state(Thread::State::STOPPED, markers, th);
         }
 
     private:
-        void set_state(Thread::State new_state, MarkerTable *markers) {
+        void set_state(Thread::State new_state, MarkerTable *markers, VALUE th) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            pthread_t current_thread = pthread_self();
             //cerr << "set state=" << new_state << " thread=" << gettid() << endl;
 
+            //fprintf(stderr, "th %p to %d\n", (void *)th, new_state);
+
             for (auto &thread : list) {
-                if (pthread_equal(current_thread, thread.pthread_id)) {
+                if (thread_equal(th, thread.ruby_thread)) {
                     if (new_state == Thread::State::SUSPENDED) {
 
                         RawSample sample;
@@ -882,7 +895,11 @@ class ThreadTable {
             }
 
             pid_t native_tid = get_native_thread_id();
-            list.emplace_back(new_state);
+            list.emplace_back(new_state, pthread_self());
+        }
+
+        bool thread_equal(VALUE a, VALUE b) {
+            return a == b;
         }
 };
 
@@ -1281,10 +1298,10 @@ class TimeCollector : public BaseCollector {
 
         switch (event) {
             case RUBY_EVENT_THREAD_BEGIN:
-                collector->threads.started(&collector->markers);
+                collector->threads.started(&collector->markers, self);
                 break;
             case RUBY_EVENT_THREAD_END:
-                collector->threads.stopped(&collector->markers);
+                collector->threads.stopped(&collector->markers, self);
                 break;
         }
     }
@@ -1313,17 +1330,29 @@ class TimeCollector : public BaseCollector {
 
     static void internal_thread_event_cb(rb_event_flag_t event, const rb_internal_thread_event_data_t *event_data, void *data) {
         TimeCollector *collector = static_cast<TimeCollector *>(data);
+        VALUE thread = Qnil;
+
+#if HAVE_RB_INTERNAL_THREAD_EVENT_DATA_T_THREAD
+        thread = event_data->thread;
+#else
+        // We may arrive here when starting a thread with
+        // RUBY_INTERNAL_THREAD_EVENT_READY before the thread is actually set up.
+        if (!ruby_native_thread_p()) return;
+
+        thread = rb_thread_current();
+#endif
+
         //cerr << "internal thread event" << event << " at " << TimeStamp::Now() << endl;
 
         switch (event) {
             case RUBY_INTERNAL_THREAD_EVENT_READY:
-                collector->threads.ready(&collector->markers);
+                collector->threads.ready(&collector->markers, thread);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_RESUMED:
-                collector->threads.resumed(&collector->markers);
+                collector->threads.resumed(&collector->markers, thread);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED:
-                collector->threads.suspended(&collector->markers);
+                collector->threads.suspended(&collector->markers, thread);
                 break;
 
         }
@@ -1351,7 +1380,7 @@ class TimeCollector : public BaseCollector {
         // have at least one thread in our thread list because it's possible
         // that the profile might be such that we don't get any thread switch
         // events and we need at least one
-        this->threads.resumed(&this->markers);
+        this->threads.resumed(&this->markers, rb_thread_current());
 
         thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
         rb_add_event_hook(internal_gc_event_cb, RUBY_INTERNAL_EVENTS, PTR2NUM((void *)this));
@@ -1415,6 +1444,7 @@ class TimeCollector : public BaseCollector {
 
     void mark() {
         frame_list.mark_frames();
+        threads.mark();
 
         //for (int i = 0; i < queued_length; i++) {
         //    rb_gc_mark(queued_frames[i]);
