@@ -304,16 +304,15 @@ struct RawSample {
     }
 
     void sample() {
+        clear();
+
         if (!ruby_native_thread_p()) {
-            clear();
             return;
         }
 
         if (rb_during_gc()) {
           gc = true;
-          len = 0;
         } else {
-          gc = false;
           len = rb_profile_frames(0, MAX_LEN, frames, lines);
         }
     }
@@ -746,11 +745,11 @@ class Thread {
 	std::string name;
 
 	// FIXME: don't use pthread at start
-        Thread(State state, pthread_t pthread_id) : pthread_id(pthread_id), state(state), stack_on_suspend_idx(-1) {
+        Thread(State state, pthread_t pthread_id, VALUE ruby_thread) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(state), stack_on_suspend_idx(-1) {
             name = Qnil;
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
-            ruby_thread = rb_thread_current();
+            name = "";
         }
 
         void set_state(State new_state, MarkerTable *markers) {
@@ -768,9 +767,11 @@ class Thread {
             switch (new_state) {
                 case State::STARTED:
                     new_state = State::RUNNING;
+                    pthread_id = pthread_self();
                     break;
                 case State::RUNNING:
                     assert(state == State::READY);
+                    pthread_id = pthread_self();
 
                     // If the GVL is immediately ready, and we measure no times
                     // stalled, skip emitting the interval.
@@ -818,10 +819,10 @@ class Thread {
         }
 
         void capture_name() {
-            char buf[128];
-            int rc = pthread_getname_np(pthread_id, buf, sizeof(buf));
-            if (rc == 0)
-                name = std::string(buf);
+            //char buf[128];
+            //int rc = pthread_getname_np(pthread_id, buf, sizeof(buf));
+            //if (rc == 0)
+            //    name = std::string(buf);
         }
 
         void mark() {
@@ -845,8 +846,6 @@ class ThreadTable {
         }
 
         void started(MarkerTable *markers, VALUE th) {
-            //const std::lock_guard<std::mutex> lock(mutex);
-
             //list.push_back(Thread{pthread_self(), Thread::State::SUSPENDED});
             markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
             set_state(Thread::State::STARTED, markers, th);
@@ -875,9 +874,15 @@ class ThreadTable {
 
             //cerr << "set state=" << new_state << " thread=" << gettid() << endl;
 
-            //fprintf(stderr, "th %p to %d\n", (void *)th, new_state);
+            pid_t native_tid = get_native_thread_id();
+            pid_t pthread_id = pthread_self();
+
+            fprintf(stderr, "th %p (tid: %i) to %d\n", (void *)th, native_tid, new_state);
 
             for (auto &thread : list) {
+                if (thread.pthread_id == pthread_id) {
+                    thread.pthread_id = 0;
+                }
                 if (thread_equal(th, thread.ruby_thread)) {
                     if (new_state == Thread::State::SUSPENDED) {
 
@@ -890,12 +895,19 @@ class ThreadTable {
 
                     thread.set_state(new_state, markers);
 
+                    if (thread.state == Thread::State::RUNNING) {
+                        thread.pthread_id = pthread_self();
+                    } else {
+                        thread.pthread_id = 0;
+                    }
+
+
                     return;
                 }
             }
 
-            pid_t native_tid = get_native_thread_id();
-            list.emplace_back(new_state, pthread_self());
+            fprintf(stderr, "NEW THREAD: th: %p, state: %i\n", th, new_state);
+            list.emplace_back(new_state, pthread_self(), th);
         }
 
         bool thread_equal(VALUE a, VALUE b) {
@@ -1168,6 +1180,10 @@ class GlobalSignalHandler {
         void record_sample(LiveSample &sample, pthread_t pthread_id) {
             const std::lock_guard<std::mutex> lock(mutex);
 
+            if (!pthread_id) {
+                abort();
+            }
+
             live_sample = &sample;
             if (pthread_kill(pthread_id, SIGPROF)) {
                 rb_bug("pthread_kill failed");
@@ -1252,7 +1268,9 @@ class TimeCollector : public BaseCollector {
             threads.mutex.lock();
             for (auto &thread : threads.list) {
                 //if (thread.state == Thread::State::RUNNING) {
-                if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
+                //if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
+                if (thread.state == Thread::State::RUNNING) {
+                    fprintf(stderr, "sampling %p on tid:%i\n", thread.ruby_thread, thread.native_tid);
                     GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
 
                     if (sample.sample.gc) {
@@ -1427,7 +1445,7 @@ class TimeCollector : public BaseCollector {
             VALUE hash = rb_hash_new();
             thread.samples.write_result(hash);
 
-            rb_hash_aset(threads, ULL2NUM(thread.native_tid), hash);
+            rb_hash_aset(threads, ULL2NUM(thread.ruby_thread), hash);
             rb_hash_aset(hash, sym("tid"), ULL2NUM(thread.native_tid));
             rb_hash_aset(hash, sym("started_at"), ULL2NUM(thread.started_at.nanoseconds()));
             if (!thread.stopped_at.zero()) {
