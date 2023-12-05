@@ -163,7 +163,7 @@ module Vernier
           @tid = tid
           @name = name
 
-          timestamps ||= (0 ... samples.size).to_a
+          timestamps ||= [0] * samples.size
           @samples, @weights, @timestamps = samples, weights, timestamps
           @sample_categories = sample_categories || ([0] * samples.size)
           @markers = markers
