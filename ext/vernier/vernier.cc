@@ -1095,6 +1095,9 @@ class RetainedCollector : public BaseCollector {
         VALUE weights = rb_ary_new();
         rb_hash_aset(thread_hash, sym("weights"), weights);
 
+        rb_hash_aset(thread_hash, sym("name"), rb_str_new_cstr("retained memory"));
+        rb_hash_aset(thread_hash, sym("started_at"), ULL2NUM(collector->started_at.nanoseconds()));
+
         for (auto& obj: collector->object_list) {
             const auto search = collector->object_frames.find(obj);
             if (search != collector->object_frames.end()) {

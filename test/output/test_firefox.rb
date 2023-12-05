@@ -91,7 +91,6 @@ class TestOutputFirefox < Minitest::Test
   end
 
   def test_retained_firefox_output
-    skip "retained is broken"
     retained = []
 
     result = Vernier.trace_retained do
