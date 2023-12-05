@@ -29,6 +29,9 @@
 #include "ruby/debug.h"
 #include "ruby/thread.h"
 
+#undef assert
+#define assert RUBY_ASSERT_ALWAYS
+
 # define PTR2NUM(x)   (rb_int2inum((intptr_t)(void *)(x)))
 
 // Internal TracePoint events we'll monitor during profiling
@@ -54,6 +57,22 @@ static VALUE rb_mVernier;
 static VALUE rb_cVernierResult;
 static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
+
+static const char *gvl_event_name(rb_event_flag_t event) {
+    switch (event) {
+      case RUBY_INTERNAL_THREAD_EVENT_STARTED:
+        return "started";
+      case RUBY_INTERNAL_THREAD_EVENT_READY:
+        return "ready";
+      case RUBY_INTERNAL_THREAD_EVENT_RESUMED:
+        return "resumed";
+      case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED:
+        return "suspended";
+      case RUBY_INTERNAL_THREAD_EVENT_EXITED:
+        return "exited";
+    }
+    return "no-event";
+}
 
 class TimeStamp {
     static const uint64_t nanoseconds_per_second = 1000000000;
@@ -87,8 +106,16 @@ class TimeStamp {
         } while (target_time > TimeStamp::Now());
     }
 
+    static TimeStamp from_seconds(uint64_t s) {
+        return TimeStamp::from_milliseconds(s * 1000);
+    }
+
+    static TimeStamp from_milliseconds(uint64_t ms) {
+        return TimeStamp::from_microseconds(ms * 1000);
+    }
+
     static TimeStamp from_microseconds(uint64_t us) {
-        return TimeStamp(us * 1000);
+        return TimeStamp::from_nanoseconds(us * 1000);
     }
 
     static TimeStamp from_nanoseconds(uint64_t ns) {
@@ -268,6 +295,10 @@ class SamplerSemaphore {
 #ifdef __APPLE__
         dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
 #else
+        // Use sem_timedwait so that we get a crash instead of a deadlock for
+        // easier debugging
+        auto ts = (TimeStamp::Now() + TimeStamp::from_seconds(5)).timespec();
+
         int ret;
         do {
             ret = sem_wait(&sem);
@@ -756,15 +787,24 @@ class Thread {
 	// FIXME: don't use pthread at start
         Thread(State state, pthread_t pthread_id, VALUE ruby_thread) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(state), stack_on_suspend_idx(-1) {
             name = Qnil;
-	    ruby_thread_id = rb_obj_id(ruby_thread);
+            ruby_thread_id = rb_obj_id(ruby_thread);
+	    //ruby_thread_id = ULL2NUM(ruby_thread);
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
             name = "";
             markers = new MarkerTable();
+
+            if (state == State::STARTED) {
+                markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
+            }
         }
 
         void set_state(State new_state) {
             if (state == Thread::State::STOPPED) {
+                return;
+            }
+            if (new_state == Thread::State::SUSPENDED && state == new_state) {
+                // on Ruby 3.2 (only?) we may see duplicate suspended states
                 return;
             }
 
@@ -778,12 +818,12 @@ class Thread {
             switch (new_state) {
                 case State::STARTED:
                     markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
-                    new_state = State::RUNNING;
-                    pthread_id = pthread_self();
+                    return; // no mutation of current state
                     break;
                 case State::RUNNING:
-                    assert(state == State::READY);
+                    assert(state == State::READY || state == State::RUNNING);
                     pthread_id = pthread_self();
+                    native_tid = get_native_thread_id();
 
                     // If the GVL is immediately ready, and we measure no times
                     // stalled, skip emitting the interval.
@@ -799,17 +839,17 @@ class Thread {
                     // Threads can be preempted, which means they will have been in "Running"
                     // state, and then the VM was like "no I need to stop you from working,
                     // so I'll put you in the 'ready' (or stalled) state"
-                    assert(state == State::SUSPENDED || state == State::RUNNING);
+                    assert(state == State::STARTED || state == State::SUSPENDED || state == State::RUNNING);
                     if (state == State::SUSPENDED) {
                         markers->record_interval(Marker::Type::MARKER_THREAD_SUSPENDED, from, now, stack_on_suspend_idx);
                     }
-                    else {
+                    else if (state == State::RUNNING) {
                         markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
                     }
                     break;
                 case State::SUSPENDED:
                     // We can go from RUNNING or STARTED to SUSPENDED
-                    assert(state == State::RUNNING || state == State::STARTED);
+                    assert(state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
                     markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
                     break;
                 case State::STOPPED:
@@ -889,7 +929,7 @@ class ThreadTable {
             pid_t native_tid = get_native_thread_id();
             pid_t pthread_id = pthread_self();
 
-            fprintf(stderr, "th %p (tid: %i) to %d\n", (void *)th, native_tid, new_state);
+            //fprintf(stderr, "th %p (tid: %i) from %s to %s\n", (void *)th, native_tid, gvl_event_name(state), gvl_event_name(new_state));
 
             for (auto &thread : list) {
                 if (thread.pthread_id == pthread_id) {
@@ -909,8 +949,10 @@ class ThreadTable {
 
                     if (thread.state == Thread::State::RUNNING) {
                         thread.pthread_id = pthread_self();
+                        thread.native_tid = get_native_thread_id();
                     } else {
                         thread.pthread_id = 0;
+                        thread.native_tid = 0;
                     }
 
 
@@ -918,7 +960,7 @@ class ThreadTable {
                 }
             }
 
-            fprintf(stderr, "NEW THREAD: th: %p, state: %i\n", th, new_state);
+            //fprintf(stderr, "NEW THREAD: th: %p, state: %i\n", th, new_state);
             list.emplace_back(new_state, pthread_self(), th);
         }
 
@@ -1289,7 +1331,7 @@ class TimeCollector : public BaseCollector {
                 //if (thread.state == Thread::State::RUNNING) {
                 //if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
                 if (thread.state == Thread::State::RUNNING) {
-                    fprintf(stderr, "sampling %p on tid:%i\n", thread.ruby_thread, thread.native_tid);
+                    //fprintf(stderr, "sampling %p on tid:%i\n", thread.ruby_thread, thread.native_tid);
                     GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
 
                     if (sample.sample.gc) {
@@ -1379,9 +1421,18 @@ class TimeCollector : public BaseCollector {
         thread = rb_thread_current();
 #endif
 
+        auto native_tid = get_native_thread_id();
         //cerr << "internal thread event" << event << " at " << TimeStamp::Now() << endl;
+        //fprintf(stderr, "(%i) th %p to %s\n", native_tid, (void *)thread, gvl_event_name(event));
+
 
         switch (event) {
+            case RUBY_INTERNAL_THREAD_EVENT_STARTED:
+                collector->threads.started(thread);
+                break;
+            case RUBY_INTERNAL_THREAD_EVENT_EXITED:
+                collector->threads.stopped(thread);
+                break;
             case RUBY_INTERNAL_THREAD_EVENT_READY:
                 collector->threads.ready(thread);
                 break;

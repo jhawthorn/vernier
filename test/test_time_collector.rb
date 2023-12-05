@@ -49,8 +49,8 @@ class TestTimeCollector < Minitest::Test
 
   def test_sleeping_threads
     collector = Vernier::Collector.new(:wall, interval: SAMPLE_SCALE_INTERVAL)
-    th1 = Thread.new { two_slow_methods; Thread.current.native_thread_id }
-    th2 = Thread.new { two_slow_methods; Thread.current.native_thread_id }
+    th1 = Thread.new { two_slow_methods; Thread.current.object_id }
+    th2 = Thread.new { two_slow_methods; Thread.current.object_id }
     collector.start
     th1id = th1.value
     th2id = th2.value
@@ -61,7 +61,7 @@ class TestTimeCollector < Minitest::Test
       thread[:weights].sum
     end.to_h
 
-    assert_in_epsilon 200, tally[Thread.current.native_thread_id], generous_epsilon
+    assert_in_epsilon 200, tally[Thread.current.object_id], generous_epsilon
     assert_in_epsilon 200, tally[th1id], generous_epsilon
     assert_in_epsilon 200, tally[th2id], generous_epsilon
 
