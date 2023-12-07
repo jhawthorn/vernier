@@ -1304,9 +1304,15 @@ class TimeCollector : public BaseCollector {
 
     VALUE get_markers() {
         VALUE list = rb_ary_new();
+        VALUE main_thread = rb_thread_main();
+        VALUE main_thread_id = rb_obj_id(main_thread);
+
 
         for (auto& marker: this->gc_markers.list) {
-            rb_ary_push(list, marker.to_array());
+            VALUE ary = marker.to_array();
+
+            RARRAY_ASET(ary, 0, main_thread_id);
+            rb_ary_push(list, ary);
         }
         for (auto &thread : threads.list) {
             for (auto& marker: thread.markers->list) {
