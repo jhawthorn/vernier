@@ -35,6 +35,4 @@ end
 vernier_path = File.expand_path('../lib', __dir__)
 env['RUBYOPT'] = "-I #{vernier_path} -r vernier/autorun #{ENV['RUBYOPT']}"
 
-ARGV.unshift("gdb", "--args")
-
 Kernel.exec(env, *ARGV)
