@@ -927,7 +927,7 @@ class ThreadTable {
             //cerr << "set state=" << new_state << " thread=" << gettid() << endl;
 
             pid_t native_tid = get_native_thread_id();
-            pid_t pthread_id = pthread_self();
+            pthread_t pthread_id = pthread_self();
 
             //fprintf(stderr, "th %p (tid: %i) from %s to %s\n", (void *)th, native_tid, gvl_event_name(state), gvl_event_name(new_state));
 
