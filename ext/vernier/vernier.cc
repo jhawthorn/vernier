@@ -1307,7 +1307,6 @@ class TimeCollector : public BaseCollector {
         VALUE main_thread = rb_thread_main();
         VALUE main_thread_id = rb_obj_id(main_thread);
 
-
         for (auto& marker: this->gc_markers.list) {
             VALUE ary = marker.to_array();
 
