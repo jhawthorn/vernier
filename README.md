@@ -43,6 +43,7 @@ Record a flamegraph of all **retained** allocations from loading `irb`.
 ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "irb" }'
 ```
 
+Retained-memory flamegraphs must be interpreted a little differently than a typical profiling flamegraph. In a retained-memory flamegraph, the x-axis represents a proportion of memory in bytes,  _not time or samples_ The topmost boxes on the y-axis represent the retained objects, with their stacktrace below; their width represents the percentage of overall retained memory each object occupies.
 
 ## Development
 
