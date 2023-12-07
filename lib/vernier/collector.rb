@@ -19,7 +19,7 @@ module Vernier
       Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
     end
 
-    def add_marker(name:, start:, finish:, thread: Thread.current.native_thread_id, phase: Marker::Phase::INTERVAL, data: nil)
+    def add_marker(name:, start:, finish:, thread: Thread.current.object_id, phase: Marker::Phase::INTERVAL, data: nil)
       @markers << [thread,
                    name,
                    start,
@@ -39,7 +39,7 @@ module Vernier
         start:,
         finish: current_time,
         phase: Marker::Phase::INTERVAL,
-        thread: Thread.current.native_thread_id,
+        thread: Thread.current.object_id,
         data: { :type => 'UserTiming', :entryType => 'measure', :name => name }
       )
     end
