@@ -601,12 +601,13 @@ class Marker {
     Phase phase;
     TimeStamp timestamp;
     TimeStamp finish;
-    native_thread_id_t thread_id;
+    // VALUE ruby_thread_id;
+    //native_thread_id_t thread_id;
     int stack_index = -1;
 
     VALUE to_array() {
         VALUE record[6] = {0};
-        record[0] = ULL2NUM(thread_id);
+        record[0] = Qnil; // FIXME
         record[1] = INT2NUM(type);
         record[2] = INT2NUM(phase);
         record[3] = ULL2NUM(timestamp.nanoseconds());
@@ -624,30 +625,33 @@ class Marker {
 };
 
 class MarkerTable {
-    TimeStamp last_gc_entry;
-
     public:
         std::vector<Marker> list;
         std::mutex mutex;
 
-        void record_gc_entered() {
-          last_gc_entry = TimeStamp::Now();
-        }
-
-        void record_gc_leave() {
-          list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), get_native_thread_id(), -1 });
-        }
-
         void record_interval(Marker::Type type, TimeStamp from, TimeStamp to, int stack_index = -1) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            list.push_back({ type, Marker::INTERVAL, from, to, get_native_thread_id(), stack_index });
+            list.push_back({ type, Marker::INTERVAL, from, to, stack_index });
         }
 
         void record(Marker::Type type, int stack_index = -1) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), get_native_thread_id(), stack_index });
+            list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), stack_index });
+        }
+};
+
+class GCMarkerTable: public MarkerTable {
+    TimeStamp last_gc_entry;
+
+    public:
+        void record_gc_entered() {
+          last_gc_entry = TimeStamp::Now();
+        }
+
+        void record_gc_leave() {
+          list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), -1 });
         }
 };
 
@@ -730,7 +734,8 @@ class Thread {
             STOPPED
         };
 
-	VALUE ruby_thread;
+        VALUE ruby_thread;
+        VALUE ruby_thread_id;
         pthread_t pthread_id;
         native_thread_id_t native_tid;
         State state;
@@ -742,17 +747,21 @@ class Thread {
         int stack_on_suspend_idx;
         SampleTranslator translator;
 
+        MarkerTable *markers;
+
 	std::string name;
 
 	// FIXME: don't use pthread at start
         Thread(State state, pthread_t pthread_id, VALUE ruby_thread) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(state), stack_on_suspend_idx(-1) {
             name = Qnil;
+	    ruby_thread_id = rb_obj_id(ruby_thread);
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
             name = "";
+            markers = new MarkerTable();
         }
 
-        void set_state(State new_state, MarkerTable *markers) {
+        void set_state(State new_state) {
             if (state == Thread::State::STOPPED) {
                 return;
             }
@@ -766,6 +775,7 @@ class Thread {
 
             switch (new_state) {
                 case State::STARTED:
+                    markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
                     new_state = State::RUNNING;
                     pthread_id = pthread_self();
                     break;
@@ -804,6 +814,8 @@ class Thread {
                     // We can go from RUNNING or STARTED to STOPPED
                     assert(state == State::RUNNING || state == State::STARTED);
                     markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
+                    markers->record(Marker::Type::MARKER_GVL_THREAD_EXITED);
+
                     stopped_at = now;
                     capture_name();
 
@@ -845,31 +857,29 @@ class ThreadTable {
             }
         }
 
-        void started(MarkerTable *markers, VALUE th) {
+        void started(VALUE th) {
             //list.push_back(Thread{pthread_self(), Thread::State::SUSPENDED});
-            markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
-            set_state(Thread::State::STARTED, markers, th);
+            set_state(Thread::State::STARTED, th);
         }
 
-        void ready(MarkerTable *markers, VALUE th) {
-            set_state(Thread::State::READY, markers, th);
+        void ready(VALUE th) {
+            set_state(Thread::State::READY, th);
         }
 
-        void resumed(MarkerTable *markers, VALUE th) {
-            set_state(Thread::State::RUNNING, markers, th);
+        void resumed(VALUE th) {
+            set_state(Thread::State::RUNNING, th);
         }
 
-        void suspended(MarkerTable *markers, VALUE th) {
-            set_state(Thread::State::SUSPENDED, markers, th);
+        void suspended(VALUE th) {
+            set_state(Thread::State::SUSPENDED, th);
         }
 
-        void stopped(MarkerTable *markers, VALUE th) {
-            markers->record(Marker::Type::MARKER_GVL_THREAD_EXITED);
-            set_state(Thread::State::STOPPED, markers, th);
+        void stopped(VALUE th) {
+            set_state(Thread::State::STOPPED, th);
         }
 
     private:
-        void set_state(Thread::State new_state, MarkerTable *markers, VALUE th) {
+        void set_state(Thread::State new_state, VALUE th) {
             const std::lock_guard<std::mutex> lock(mutex);
 
             //cerr << "set state=" << new_state << " thread=" << gettid() << endl;
@@ -893,7 +903,7 @@ class ThreadTable {
                         //cerr << gettid() << " suspended! Stack size:" << thread.stack_on_suspend.size() << endl;
                     }
 
-                    thread.set_state(new_state, markers);
+                    thread.set_state(new_state);
 
                     if (thread.state == Thread::State::RUNNING) {
                         thread.pthread_id = pthread_self();
@@ -1220,7 +1230,7 @@ class GlobalSignalHandler {
 LiveSample *GlobalSignalHandler::live_sample;
 
 class TimeCollector : public BaseCollector {
-    MarkerTable markers;
+    GCMarkerTable gc_markers;
     ThreadTable threads;
 
     pthread_t sample_thread;
@@ -1249,10 +1259,17 @@ class TimeCollector : public BaseCollector {
     }
 
     VALUE get_markers() {
-        VALUE list = rb_ary_new2(this->markers.list.size());
+        VALUE list = rb_ary_new();
 
-        for (auto& marker: this->markers.list) {
+        for (auto& marker: this->gc_markers.list) {
             rb_ary_push(list, marker.to_array());
+        }
+        for (auto &thread : threads.list) {
+            for (auto& marker: thread.markers->list) {
+                VALUE ary = marker.to_array();
+                RARRAY_ASET(ary, 0, thread.ruby_thread_id);
+                rb_ary_push(list, ary);
+            }
         }
 
         return list;
@@ -1316,10 +1333,10 @@ class TimeCollector : public BaseCollector {
 
         switch (event) {
             case RUBY_EVENT_THREAD_BEGIN:
-                collector->threads.started(&collector->markers, self);
+                collector->threads.started(self);
                 break;
             case RUBY_EVENT_THREAD_END:
-                collector->threads.stopped(&collector->markers, self);
+                collector->threads.stopped(self);
                 break;
         }
     }
@@ -1329,19 +1346,19 @@ class TimeCollector : public BaseCollector {
 
         switch (event) {
             case RUBY_INTERNAL_EVENT_GC_START:
-                collector->markers.record(Marker::Type::MARKER_GC_START);
+                collector->gc_markers.record(Marker::Type::MARKER_GC_START);
                 break;
             case RUBY_INTERNAL_EVENT_GC_END_MARK:
-                collector->markers.record(Marker::Type::MARKER_GC_END_MARK);
+                collector->gc_markers.record(Marker::Type::MARKER_GC_END_MARK);
                 break;
             case RUBY_INTERNAL_EVENT_GC_END_SWEEP:
-                collector->markers.record(Marker::Type::MARKER_GC_END_SWEEP);
+                collector->gc_markers.record(Marker::Type::MARKER_GC_END_SWEEP);
                 break;
             case RUBY_INTERNAL_EVENT_GC_ENTER:
-                collector->markers.record_gc_entered();
+                collector->gc_markers.record_gc_entered();
                 break;
             case RUBY_INTERNAL_EVENT_GC_EXIT:
-                collector->markers.record_gc_leave();
+                collector->gc_markers.record_gc_leave();
                 break;
         }
     }
@@ -1364,13 +1381,13 @@ class TimeCollector : public BaseCollector {
 
         switch (event) {
             case RUBY_INTERNAL_THREAD_EVENT_READY:
-                collector->threads.ready(&collector->markers, thread);
+                collector->threads.ready(thread);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_RESUMED:
-                collector->threads.resumed(&collector->markers, thread);
+                collector->threads.resumed(thread);
                 break;
             case RUBY_INTERNAL_THREAD_EVENT_SUSPENDED:
-                collector->threads.suspended(&collector->markers, thread);
+                collector->threads.suspended(thread);
                 break;
 
         }
@@ -1398,7 +1415,7 @@ class TimeCollector : public BaseCollector {
         // have at least one thread in our thread list because it's possible
         // that the profile might be such that we don't get any thread switch
         // events and we need at least one
-        this->threads.resumed(&this->markers, rb_thread_current());
+        this->threads.resumed(rb_thread_current());
 
         thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
         rb_add_event_hook(internal_gc_event_cb, RUBY_INTERNAL_EVENTS, PTR2NUM((void *)this));
@@ -1445,7 +1462,7 @@ class TimeCollector : public BaseCollector {
             VALUE hash = rb_hash_new();
             thread.samples.write_result(hash);
 
-            rb_hash_aset(threads, ULL2NUM(thread.ruby_thread), hash);
+            rb_hash_aset(threads, thread.ruby_thread_id, hash);
             rb_hash_aset(hash, sym("tid"), ULL2NUM(thread.native_tid));
             rb_hash_aset(hash, sym("started_at"), ULL2NUM(thread.started_at.nanoseconds()));
             if (!thread.stopped_at.zero()) {

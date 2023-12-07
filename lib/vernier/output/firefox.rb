@@ -99,9 +99,10 @@ module Vernier
       def data
         markers_by_thread = profile.markers.group_by { |marker| marker[0] }
 
-        thread_data = profile.threads.map do |tid, thread_info|
-          markers = markers_by_thread[tid] || []
+        thread_data = profile.threads.map do |ruby_thread_id, thread_info|
+          markers = markers_by_thread[ruby_thread_id] || []
           Thread.new(
+            ruby_thread_id,
             profile,
             @categorizer,
             markers: markers,
@@ -157,7 +158,8 @@ module Vernier
       class Thread
         attr_reader :profile
 
-        def initialize(profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil)
+        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil)
+          @ruby_thread_id = ruby_thread_id
           @profile = profile
           @categorizer = categorizer
           @tid = tid
@@ -212,7 +214,7 @@ module Vernier
         def data
           {
             name: @name,
-            isMainThread: (@tid == ::Thread.main.native_thread_id) || (profile.threads.size == 1),
+            isMainThread: @ruby_thread_id == ::Thread.main.object_id || (profile.threads.size == 1),
             processStartupTime: 0, # FIXME
             processShutdownTime: nil, # FIXME
             registerTime: (@started_at - 0) / 1_000_000.0,
