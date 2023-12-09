@@ -932,9 +932,6 @@ class ThreadTable {
             //fprintf(stderr, "th %p (tid: %i) from %s to %s\n", (void *)th, native_tid, gvl_event_name(state), gvl_event_name(new_state));
 
             for (auto &thread : list) {
-                if (thread.pthread_id == pthread_id) {
-                    thread.pthread_id = 0;
-                }
                 if (thread_equal(th, thread.ruby_thread)) {
                     if (new_state == Thread::State::SUSPENDED) {
 
@@ -1234,9 +1231,7 @@ class GlobalSignalHandler {
         void record_sample(LiveSample &sample, pthread_t pthread_id) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            if (!pthread_id) {
-                abort();
-            }
+            assert(pthread_id);
 
             live_sample = &sample;
             if (pthread_kill(pthread_id, SIGPROF)) {
