@@ -1367,6 +1367,13 @@ class TimeCollector : public BaseCollector {
     }
 
     static void *sample_thread_entry(void *arg) {
+#if HAVE_PTHREAD_SETNAME_NP
+#ifdef __APPLE__
+        pthread_setname_np("Vernier profiler");
+#else
+        pthread_setname_np(pthread_self(), "Vernier profiler");
+#endif
+#endif
         TimeCollector *collector = static_cast<TimeCollector *>(arg);
         collector->sample_thread_run();
         return NULL;
