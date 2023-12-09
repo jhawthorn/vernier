@@ -20,6 +20,12 @@ jobs:
         os:
           - ubuntu-latest
           - macos-latest
+        mn_threads: [0]
+
+        include:
+          - os: ubuntu-latest
+            ruby: 'head'
+            mn_threads: '1'
 
     steps:
     - uses: actions/checkout@v2
@@ -30,3 +36,5 @@ jobs:
         bundler-cache: true
     - name: Run the default task
       run: bundle exec rake
+      env:
+        RUBY_MN_THREADS: ${{ matrix.mn_threads }}
