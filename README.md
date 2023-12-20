@@ -18,6 +18,10 @@ Rails benchmark - lobste.rs (time)
 `require "irb"` (retained memory)
 : https://share.firefox.dev/3DhLsFa
 
+## Requirements
+
+Vernier requires Ruby version 3.2.1 or higher. Please ensure your Ruby environment meets this requirement before installation.
+
 ## Installation
 
 ```ruby
