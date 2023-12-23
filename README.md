@@ -1,6 +1,6 @@
 # Vernier
 
-Next-generation Ruby sampling profiler. Tracks multiple threads, GVL activity, GC pauses, idle time, and more.
+Next-generation Ruby 3.2.1+ sampling profiler. Tracks multiple threads, GVL activity, GC pauses, idle time, and more.
 
 ## Examples
 
@@ -18,11 +18,9 @@ Rails benchmark - lobste.rs (time)
 `require "irb"` (retained memory)
 : https://share.firefox.dev/3DhLsFa
 
-## Requirements
-
-Vernier requires Ruby version 3.2.1 or higher. Please ensure your Ruby environment meets this requirement before installation.
-
 ## Installation
+
+Vernier requires Ruby version 3.2.1 or greater
 
 ```ruby
 gem 'vernier'
