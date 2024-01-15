@@ -3,7 +3,14 @@
 require "test_helper"
 
 class TestTimeCollector < Minitest::Test
-  SLEEP_SCALE = ENV.fetch("TEST_SLEEP_SCALE", 0.1).to_f # seconds/100ms
+  SLOW_RUNNER = ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
+  DEFAULT_SLEEP_SCALE =
+      if SLOW_RUNNER
+        1
+      else
+        0.1
+      end
+  SLEEP_SCALE = ENV.fetch("TEST_SLEEP_SCALE", DEFAULT_SLEEP_SCALE).to_f # seconds/100ms
   SAMPLE_SCALE_INTERVAL = 10_000 * SLEEP_SCALE # Microseconds
 
   def slow_method
@@ -37,14 +44,14 @@ class TestTimeCollector < Minitest::Test
     result = collector.stop
 
     assert_valid_result result
-    assert_in_epsilon 200, result.weights.sum, generous_epsilon
+    assert_similar 200, result.weights.sum
 
     samples_by_stack = result.samples.zip(result.weights).group_by(&:first).transform_values do |samples|
       samples.map(&:last).sum
     end
     significant_stacks = samples_by_stack.select { |k,v| v > 10 }
     assert_equal 2, significant_stacks.size
-    assert_in_epsilon 200, significant_stacks.sum(&:last), generous_epsilon
+    assert_similar 200, significant_stacks.sum(&:last)
   end
 
   def test_sleeping_threads
@@ -61,9 +68,9 @@ class TestTimeCollector < Minitest::Test
       thread[:weights].sum
     end.to_h
 
-    assert_in_epsilon 200, tally[Thread.current.object_id], generous_epsilon
-    assert_in_epsilon 200, tally[th1id], generous_epsilon
-    assert_in_epsilon 200, tally[th2id], generous_epsilon
+    assert_similar 200, tally[Thread.current.object_id]
+    assert_similar 200, tally[th1id]
+    assert_similar 200, tally[th2id]
 
     assert_valid_result result
     # TODO: some assertions on behaviour
@@ -124,15 +131,14 @@ class TestTimeCollector < Minitest::Test
       slow_method
     end
 
-    assert_in_epsilon 100, inner_result.weights.sum, generous_epsilon
-    assert_in_epsilon 200, outer_result.weights.sum, generous_epsilon
+    assert_similar 100, inner_result.weights.sum
+    assert_similar 200, outer_result.weights.sum
   end
 
   ExpectedError = Class.new(StandardError)
   def test_raised_exceptions_will_output
     output_file = File.join(__dir__, "../tmp/exception_output.json")
 
-    result = nil
     assert_raises(ExpectedError) do
       Vernier.trace(out: output_file) do
         raise ExpectedError
@@ -142,7 +148,14 @@ class TestTimeCollector < Minitest::Test
     assert File.exist?(output_file)
   end
 
-  def generous_epsilon
-    0.75 # Everyone gets generous epsilons
+  def assert_similar expected, actual
+    delta_ratio =
+      if SLOW_RUNNER
+        0.25
+      else
+        0.1
+      end
+    delta = expected * delta_ratio
+    assert_in_delta expected, actual, delta
   end
 end
