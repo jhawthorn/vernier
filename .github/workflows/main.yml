@@ -16,6 +16,7 @@ jobs:
       matrix:
         ruby:
           - '3.2.2'
+          - '3.3.0'
           - 'head'
         os:
           - ubuntu-latest
