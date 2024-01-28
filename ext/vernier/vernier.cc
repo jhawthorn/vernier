@@ -853,8 +853,8 @@ class Thread {
                     markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
                     break;
                 case State::STOPPED:
-                    // We can go from RUNNING or STARTED to STOPPED
-                    assert(state == State::RUNNING || state == State::STARTED);
+                    // We can go from RUNNING or STARTED or SUSPENDED to STOPPED
+                    assert(state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
                     markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
                     markers->record(Marker::Type::MARKER_GVL_THREAD_EXITED);
 
