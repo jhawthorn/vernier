@@ -110,7 +110,7 @@ end
 # warm up
 make_request.call
 
-Vernier.trace(out: "rails.json") do |collector|
+Vernier.trace(out: "rails.json", mode: :jit_side_exit) do |collector|
   ActiveSupport::Notifications.monotonic_subscribe do |name, start, finish, id, payload|
     collector.add_marker(
       name:,

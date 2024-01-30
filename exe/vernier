@@ -22,6 +22,9 @@ parser = OptionParser.new(banner) do |o|
   o.on('--start-paused', "don't automatically start the profiler") do
     options[:start_paused] = true
   end
+  o.on('--mode [MODE]', String) do |s|
+    options[:mode] = s
+  end
 end
 
 parser.parse!
