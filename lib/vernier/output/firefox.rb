@@ -163,7 +163,7 @@ module Vernier
           @profile = profile
           @categorizer = categorizer
           @tid = tid
-          @name = name
+          @name = pretty_name(name)
 
           timestamps ||= [0] * samples.size
           @samples, @weights, @timestamps = samples, weights, timestamps
@@ -384,6 +384,20 @@ module Vernier
         end
 
         private
+
+        def pretty_name(name)
+          if name.empty?
+            tr = ObjectSpace._id2ref(@ruby_thread_id)
+            name = tr.inspect if tr
+          end
+          return name unless name.start_with?("#<Thread")
+          pretty = []
+          obj_address = name[/Thread:(0x\w+)/,1]
+          best_id = name[/\#<Thread:0x\w+@?\s?(.*)\s+\S+>/,1]
+          pretty << best_id unless best_id.empty?
+          pretty << "(#{obj_address})"
+          pretty.join(' ')
+        end
 
         def gc_category
           @categorizer.get_category("GC")
