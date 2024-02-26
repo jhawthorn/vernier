@@ -859,7 +859,6 @@ class Thread {
                     markers->record(Marker::Type::MARKER_GVL_THREAD_EXITED);
 
                     stopped_at = now;
-                    capture_name();
 
                     break;
             }
@@ -870,13 +869,6 @@ class Thread {
 
         bool running() {
             return state != State::STOPPED;
-        }
-
-        void capture_name() {
-            //char buf[128];
-            //int rc = pthread_getname_np(pthread_id, buf, sizeof(buf));
-            //if (rc == 0)
-            //    name = std::string(buf);
         }
 
         void mark() {
@@ -945,8 +937,12 @@ class ThreadTable {
                     thread.set_state(new_state);
 
                     if (thread.state == Thread::State::RUNNING) {
+                        // rb_inspect should be safe here, as RUNNING should correspond to RESUMED hook from internal_thread_event_cb
+                        // which is called with GVL per https://github.com/ruby/ruby/blob/v3_3_0/include/ruby/thread.h#L247-L248
+                        VALUE thread_str  = rb_inspect(th);
                         thread.pthread_id = pthread_self();
                         thread.native_tid = get_native_thread_id();
+                        thread.name = StringValueCStr(thread_str);
                     } else {
                         thread.pthread_id = 0;
                         thread.native_tid = 0;
@@ -1495,13 +1491,6 @@ class TimeCollector : public BaseCollector {
         rb_internal_thread_remove_event_hook(thread_hook);
         rb_remove_event_hook(internal_gc_event_cb);
         rb_remove_event_hook(internal_thread_event_cb);
-
-        // capture thread names
-        for (auto& thread: this->threads.list) {
-            if (thread.running()) {
-                thread.capture_name();
-            }
-        }
 
         frame_list.finalize();
 

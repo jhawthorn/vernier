@@ -151,4 +151,69 @@ class TestOutputFirefox < Minitest::Test
     markers = JSON.parse(output)["threads"].flat_map { _1["markers"]["data"] }
     assert_includes markers, {"type"=>"UserTiming", "entryType"=>"measure", "name"=>"custom"}
   end
+
+
+  def test_thread_names
+    orig_name = Thread.current.name
+    th1_loc, th2_loc = nil
+
+    # Case with just the named, main thread and no location
+    result = Vernier.trace do
+      Thread.current.name="main"
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    data = JSON.parse(output)
+    threads = data["threads"]
+    assert_equal 1, threads.size
+    assert_match /^main \(0x\w+\)/, threads.first["name"]
+
+    # Case with unnamed thread and location
+    result = Vernier.trace do
+      th1 = Thread.new { th1_loc = file_lineno; sleep 0.01 }
+      th1.join
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    data = JSON.parse(output)
+    threads = data["threads"]
+    assert_equal 2, threads.size
+
+    threads.each do |tr|
+      next if tr["isMainThread"]
+      assert_match /^#{th1_loc} \(0x\w+\)/, tr["name"]
+    end
+
+    # Case with named thread and location
+    result = Vernier.trace do
+      th2 = Thread.new { th2_loc = file_lineno; sleep 0.01 }
+      th2.name = "named thread"
+      th2.join
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    data = JSON.parse(output)
+    threads = data["threads"]
+    assert_equal 2, threads.size
+
+    threads.each do |tr|
+      next if tr["isMainThread"]
+      assert_match /^named thread #{th2_loc} \(0x\w+\)/, tr["name"]
+    end
+
+  ensure
+    Thread.current.name = orig_name
+  end
+
+  private
+
+  def file_lineno
+    caller_locations(1, 1).first.yield_self{|loc| "#{loc.path}:#{loc.lineno}"}
+  end
 end
