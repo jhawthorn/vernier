@@ -397,7 +397,8 @@ module Vernier
           return name unless name.start_with?("#<Thread")
           pretty = []
           obj_address = name[/Thread:(0x\w+)/,1]
-          best_id = name[/\#<Thread:0x\w+@?\s?(.*)\s+\S+>/,1]
+          best_id = name[/\#<Thread:0x\w+@?\s?(.*)\s+\S+>/,1] || ""
+          Gem.path.each { |gem_dir| best_id = best_id.gsub(gem_dir, "...") }
           pretty << best_id unless best_id.empty?
           pretty << "(#{obj_address})"
           pretty.join(' ')
