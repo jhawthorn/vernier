@@ -387,8 +387,12 @@ module Vernier
 
         def pretty_name(name)
           if name.empty?
-            tr = ObjectSpace._id2ref(@ruby_thread_id)
-            name = tr.inspect if tr
+            begin
+              tr = ObjectSpace._id2ref(@ruby_thread_id)
+              name = tr.inspect if tr
+            rescue RangeError
+              # Thread was already GC'd
+            end
           end
           return name unless name.start_with?("#<Thread")
           pretty = []
