@@ -148,6 +148,21 @@ class TestTimeCollector < Minitest::Test
     assert File.exist?(output_file)
   end
 
+  class ThreadWithInspect < ::Thread
+    def inspect
+      raise "boom!"
+    end
+  end
+
+  def test_thread_with_inspect
+    result = Vernier.trace do
+      th1 = ThreadWithInspect.new { sleep 0.01 }
+      th1.join
+    end
+
+    assert_valid_result result
+  end
+
   def assert_similar expected, actual
     delta_ratio =
       if SLOW_RUNNER

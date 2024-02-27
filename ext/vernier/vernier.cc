@@ -939,13 +939,6 @@ class ThreadTable {
                     if (thread.state == Thread::State::RUNNING) {
                         thread.pthread_id = pthread_self();
                         thread.native_tid = get_native_thread_id();
-                        if (thread.name == "") {
-                            // rb_inspect should be safe here, as RUNNING should correspond to RESUMED hook from internal_thread_event_cb
-                            // which is called with GVL per https://github.com/ruby/ruby/blob/v3_3_0/include/ruby/thread.h#L247-L248
-                            VALUE thread_str = rb_inspect(th);
-                            if (RTEST(thread_str))
-                                thread.name = StringValueCStr(thread_str);
-                        }
                     } else {
                         thread.pthread_id = 0;
                         thread.native_tid = 0;
