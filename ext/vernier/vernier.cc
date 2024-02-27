@@ -1074,6 +1074,12 @@ class RetainedCollector : public BaseCollector {
     void record(VALUE obj) {
         RawSample sample;
         sample.sample();
+        if (sample.empty()) {
+            // During thread allocation we allocate one object without a frame
+            // (as of Ruby 3.3)
+            // Ideally we'd allow empty samples to be represented
+            return;
+        }
         int stack_index = frame_list.stack_index(sample);
 
         object_list.push_back(obj);

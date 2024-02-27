@@ -73,6 +73,12 @@ class TestRetainedMemory < Minitest::Test
     assert_operator result1.samples.size, :>, result2.samples.size
   end
 
+  def test_thread_allocation
+    result = Vernier.trace_retained do
+      Thread.new { }.join
+    end
+  end
+
   def test_nothing_retained
     result = Vernier.trace_retained do
       100.times {
