@@ -331,7 +331,7 @@ struct RawSample {
 
     Frame frame(int i) const {
         int idx = len - i - 1;
-        if (idx < 0) throw std::out_of_range("out of range");
+        if (idx < 0) throw std::out_of_range("VERNIER BUG: index out of range");
         const Frame frame = {frames[idx], lines[idx]};
         return frame;
     }
@@ -446,7 +446,7 @@ struct FrameList {
 
     int stack_index(const RawSample &stack) {
         if (stack.empty()) {
-            throw std::runtime_error("empty stack");
+            throw std::runtime_error("VERNIER BUG: empty stack");
         }
 
         StackNode *node = &root_stack_node;
@@ -1475,7 +1475,7 @@ class TimeCollector : public BaseCollector {
         int ret = pthread_create(&sample_thread, NULL, &sample_thread_entry, this);
         if (ret != 0) {
             perror("pthread_create");
-            rb_bug("pthread_create");
+            rb_bug("VERNIER: pthread_create failed");
         }
 
         // Set the state of the current Ruby thread to RUNNING, which we know it
