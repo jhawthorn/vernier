@@ -1226,17 +1226,22 @@ class GlobalSignalHandler {
             if (count == 0) clear_signal_handler();
         }
 
-        void record_sample(LiveSample &sample, pthread_t pthread_id) {
+        bool record_sample(LiveSample &sample, pthread_t pthread_id) {
             const std::lock_guard<std::mutex> lock(mutex);
 
             assert(pthread_id);
 
             live_sample = &sample;
-            if (pthread_kill(pthread_id, SIGPROF)) {
-                rb_bug("pthread_kill failed");
+            int rc = pthread_kill(pthread_id, SIGPROF);
+            if (rc) {
+                fprintf(stderr, "VERNIER BUG: pthread_kill of %lu failed (%i)\n", (unsigned long)pthread_id, rc);
+                live_sample = NULL;
+                return false;
+            } else {
+                sample.wait();
+                live_sample = NULL;
+                return true;
             }
-            sample.wait();
-            live_sample = NULL;
         }
 
     private:
@@ -1330,9 +1335,14 @@ class TimeCollector : public BaseCollector {
                 //if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
                 if (thread.state == Thread::State::RUNNING) {
                     //fprintf(stderr, "sampling %p on tid:%i\n", thread.ruby_thread, thread.native_tid);
-                    GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
+                    bool signal_sent = GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
 
-                    if (sample.sample.gc) {
+                    if (!signal_sent) {
+                        // The thread has died. We probably should have caught
+                        // that by the GVL instrumentation, but let's try to get
+                        // it to a consistent state and stop profiling it.
+                        thread.set_state(Thread::State::STOPPED);
+                    } else if (sample.sample.gc) {
                         // fprintf(stderr, "skipping GC sample\n");
                     } else {
                         record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
