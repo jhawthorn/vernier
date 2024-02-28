@@ -3,29 +3,6 @@
 module Vernier
   module Hooks
     class ActiveSupport
-      def initialize(collector)
-        @collector = collector
-      end
-
-      def enable
-        require "active_support"
-        @subscription = ::ActiveSupport::Notifications.monotonic_subscribe do |name, start, finish, id, payload|
-          data = { type: name }
-          data.update(payload)
-          @collector.add_marker(
-            name: name,
-            start: (start * 1_000_000_000.0).to_i,
-            finish: (finish * 1_000_000_000.0).to_i,
-            data: data
-          )
-        end
-      end
-
-      def disable
-        ActiveSupport::Notifications.unsubscribe(@subscription)
-        @subscription = nil
-      end
-
       FIREFOX_MARKER_SCHEMA = Ractor.make_shareable([
         {
           name: "sql.active_record",
@@ -87,6 +64,40 @@ module Vernier
           ]
         }
       ])
+
+      SERIALIZED_KEYS = FIREFOX_MARKER_SCHEMA.map do |format|
+        [
+          format[:name],
+          format[:data].map { _1[:key].to_sym }.freeze
+        ]
+      end.to_h.freeze
+
+      def initialize(collector)
+        @collector = collector
+      end
+
+      def enable
+        require "active_support"
+        @subscription = ::ActiveSupport::Notifications.monotonic_subscribe do |name, start, finish, id, payload|
+          data = { type: name }
+          if keys = SERIALIZED_KEYS[name]
+            keys.each do |key|
+              data[key] = payload[key]
+            end
+          end
+          @collector.add_marker(
+            name: name,
+            start: (start * 1_000_000_000.0).to_i,
+            finish: (finish * 1_000_000_000.0).to_i,
+            data: data
+          )
+        end
+      end
+
+      def disable
+        ActiveSupport::Notifications.unsubscribe(@subscription)
+        @subscription = nil
+      end
 
       def firefox_marker_schema
         FIREFOX_MARKER_SCHEMA
