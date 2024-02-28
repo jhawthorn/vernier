@@ -786,7 +786,6 @@ class Thread {
 
 	// FIXME: don't use pthread at start
         Thread(State state, pthread_t pthread_id, VALUE ruby_thread) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(state), stack_on_suspend_idx(-1) {
-            name = Qnil;
             ruby_thread_id = rb_obj_id(ruby_thread);
 	    //ruby_thread_id = ULL2NUM(ruby_thread);
             native_tid = get_native_thread_id();
