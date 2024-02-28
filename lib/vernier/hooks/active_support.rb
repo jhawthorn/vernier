@@ -78,7 +78,7 @@ module Vernier
 
       def enable
         require "active_support"
-        @subscription = ::ActiveSupport::Notifications.monotonic_subscribe do |name, start, finish, id, payload|
+        @subscription = ::ActiveSupport::Notifications.monotonic_subscribe(/\A[^!]/) do |name, start, finish, id, payload|
           data = { type: name }
           if keys = SERIALIZED_KEYS[name]
             keys.each do |key|
