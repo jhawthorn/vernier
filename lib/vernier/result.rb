@@ -3,6 +3,8 @@ module Vernier
     attr_reader :stack_table, :frame_table, :func_table
     attr_reader :markers
 
+    attr_accessor :hooks
+
     attr_accessor :pid, :end_time
     attr_accessor :threads
     attr_accessor :meta

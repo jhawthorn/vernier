@@ -141,6 +141,12 @@ module Vernier
       end
 
       def marker_schema
+        hook_additions = profile.hooks.flat_map do |hook|
+          if hook.respond_to?(:firefox_marker_schema)
+            hook.firefox_marker_schema
+          end
+        end.compact
+
         [
           {
             name: "GVL_THREAD_RESUMED",
@@ -151,7 +157,8 @@ module Vernier
                 value: "The thread has acquired the GVL and is executing"
               }
             ]
-          }
+          },
+          *hook_additions
         ]
       end
 

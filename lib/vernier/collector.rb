@@ -4,9 +4,28 @@ require_relative "marker"
 
 module Vernier
   class Collector
-    def initialize(mode)
+    def initialize(mode, options={})
       @mode = mode
       @markers = []
+      @hooks = []
+
+      if options[:hooks]
+        Array(options[:hooks]).each do |hook|
+          add_hook(hook)
+        end
+      end
+      @hooks.each do |hook|
+        hook.enable
+      end
+    end
+
+    private def add_hook(hook)
+      case hook
+      when :rails, :activesupport
+        @hooks << Vernier::Hooks::ActiveSupport.new(self)
+      else
+        warn "Unknown hook: #{hook}"
+      end
     end
 
     ##
@@ -46,6 +65,8 @@ module Vernier
 
     def stop
       result = finish
+
+      result.hooks = @hooks
 
       end_time = Process.clock_gettime(Process::CLOCK_REALTIME, :nanosecond)
       result.pid = Process.pid

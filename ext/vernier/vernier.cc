@@ -1620,7 +1620,7 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         rb_raise(rb_eArgError, "invalid mode");
     }
     VALUE obj = TypedData_Wrap_Struct(self, &rb_collector_type, collector);
-    rb_funcall(obj, rb_intern("initialize"), 1, mode);
+    rb_funcall(obj, rb_intern("initialize"), 2, mode, options);
     return obj;
 }
 
