@@ -3,6 +3,7 @@
 require_relative "vernier/version"
 require_relative "vernier/collector"
 require_relative "vernier/result"
+require_relative "vernier/hooks"
 require_relative "vernier/vernier"
 require_relative "vernier/output/firefox"
 require_relative "vernier/output/top"
@@ -10,8 +11,8 @@ require_relative "vernier/output/top"
 module Vernier
   class Error < StandardError; end
 
-  def self.trace(mode: :wall, out: nil, interval: nil)
-    collector = Vernier::Collector.new(mode, { interval: })
+  def self.trace(mode: :wall, out: nil, interval: nil, hooks: nil)
+    collector = Vernier::Collector.new(mode, { interval:, hooks: })
     collector.start
 
     result = nil

@@ -110,15 +110,7 @@ end
 # warm up
 make_request.call
 
-Vernier.trace(out: "rails.json") do |collector|
-  ActiveSupport::Notifications.monotonic_subscribe do |name, start, finish, id, payload|
-    collector.add_marker(
-      name:,
-      start: (start * 1_000_000_000).to_i,
-      finish: (finish * 1_000_000_000).to_i,
-    )
-  end
-
+Vernier.trace(out: "rails.json", hooks: [:rails]) do |collector|
   1000.times do
     make_request.call
   end
