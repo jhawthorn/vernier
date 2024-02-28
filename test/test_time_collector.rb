@@ -110,6 +110,18 @@ class TestTimeCollector < Minitest::Test
     # TODO: some assertions on behaviour
   end
 
+  def test_many_empty_threads
+    50.times do
+      collector = Vernier::Collector.new(:wall)
+      collector.start
+      50.times.map do
+        Thread.new { }
+      end.map(&:join)
+      result = collector.stop
+      assert_valid_result result
+    end
+  end
+
   def test_sequential_threads
     collector = Vernier::Collector.new(:wall)
     collector.start
@@ -118,6 +130,23 @@ class TestTimeCollector < Minitest::Test
         Thread.new { sleep 0.1 }
       end.map(&:join)
     end
+    result = collector.stop
+    assert_valid_result result
+  end
+
+  def test_killed_threads
+    collector = Vernier::Collector.new(:wall)
+    collector.start
+    threads = 10.times.map do
+      Thread.new { sleep 100 }
+    end
+    threads.shuffle!
+    Thread.new do
+      until threads.empty?
+        sleep 0.01
+        threads.shift.kill
+      end
+    end.join
     result = collector.stop
     assert_valid_result result
   end
