@@ -659,8 +659,8 @@ class Marker {
 
 class MarkerTable {
     public:
-        std::vector<Marker> list;
         std::mutex mutex;
+        std::vector<Marker> list;
 
         void record_interval(Marker::Type type, TimeStamp from, TimeStamp to, int stack_index = -1) {
             const std::lock_guard<std::mutex> lock(mutex);
@@ -780,18 +780,18 @@ class Thread {
         int stack_on_suspend_idx;
         SampleTranslator translator;
 
-        MarkerTable *markers;
+        unique_ptr<MarkerTable> markers;
 
-	std::string name;
+        std::string name;
 
-	// FIXME: don't use pthread at start
+        // FIXME: don't use pthread at start
         Thread(State state, pthread_t pthread_id, VALUE ruby_thread) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(state), stack_on_suspend_idx(-1) {
             ruby_thread_id = rb_obj_id(ruby_thread);
-	    //ruby_thread_id = ULL2NUM(ruby_thread);
+            //ruby_thread_id = ULL2NUM(ruby_thread);
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
             name = "";
-            markers = new MarkerTable();
+            markers = std::make_unique<MarkerTable>();
 
             if (state == State::STARTED) {
                 markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
@@ -878,15 +878,15 @@ class ThreadTable {
     public:
         FrameList &frame_list;
 
-        std::vector<Thread> list;
+        std::vector<std::unique_ptr<Thread> > list;
         std::mutex mutex;
 
         ThreadTable(FrameList &frame_list) : frame_list(frame_list) {
         }
 
         void mark() {
-            for (auto &thread : list) {
-                thread.mark();
+            for (const auto &thread : list) {
+                thread->mark();
             }
         }
 
@@ -922,7 +922,8 @@ class ThreadTable {
 
             //fprintf(stderr, "th %p (tid: %i) from %s to %s\n", (void *)th, native_tid, gvl_event_name(state), gvl_event_name(new_state));
 
-            for (auto &thread : list) {
+            for (auto &threadptr : list) {
+                auto &thread = *threadptr;
                 if (thread_equal(th, thread.ruby_thread)) {
                     if (new_state == Thread::State::SUSPENDED) {
 
@@ -949,7 +950,7 @@ class ThreadTable {
             }
 
             //fprintf(stderr, "NEW THREAD: th: %p, state: %i\n", th, new_state);
-            list.emplace_back(new_state, pthread_self(), th);
+            list.push_back(std::make_unique<Thread>(new_state, pthread_self(), th));
         }
 
         bool thread_equal(VALUE a, VALUE b) {
@@ -1311,9 +1312,9 @@ class TimeCollector : public BaseCollector {
             rb_ary_push(list, ary);
         }
         for (auto &thread : threads.list) {
-            for (auto& marker: thread.markers->list) {
+            for (auto& marker: thread->markers->list) {
                 VALUE ary = marker.to_array();
-                RARRAY_ASET(ary, 0, thread.ruby_thread_id);
+                RARRAY_ASET(ary, 0, thread->ruby_thread_id);
                 rb_ary_push(list, ary);
             }
         }
@@ -1329,7 +1330,9 @@ class TimeCollector : public BaseCollector {
             TimeStamp sample_start = TimeStamp::Now();
 
             threads.mutex.lock();
-            for (auto &thread : threads.list) {
+            for (auto &threadptr : threads.list) {
+                auto &thread = *threadptr;
+
                 //if (thread.state == Thread::State::RUNNING) {
                 //if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
                 if (thread.state == Thread::State::RUNNING) {
@@ -1520,15 +1523,15 @@ class TimeCollector : public BaseCollector {
 
         for (const auto& thread: this->threads.list) {
             VALUE hash = rb_hash_new();
-            thread.samples.write_result(hash);
+            thread->samples.write_result(hash);
 
-            rb_hash_aset(threads, thread.ruby_thread_id, hash);
-            rb_hash_aset(hash, sym("tid"), ULL2NUM(thread.native_tid));
-            rb_hash_aset(hash, sym("started_at"), ULL2NUM(thread.started_at.nanoseconds()));
-            if (!thread.stopped_at.zero()) {
-                rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread.stopped_at.nanoseconds()));
+            rb_hash_aset(threads, thread->ruby_thread_id, hash);
+            rb_hash_aset(hash, sym("tid"), ULL2NUM(thread->native_tid));
+            rb_hash_aset(hash, sym("started_at"), ULL2NUM(thread->started_at.nanoseconds()));
+            if (!thread->stopped_at.zero()) {
+                rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread->stopped_at.nanoseconds()));
             }
-            rb_hash_aset(hash, sym("name"), rb_str_new(thread.name.data(), thread.name.length()));
+            rb_hash_aset(hash, sym("name"), rb_str_new(thread->name.data(), thread->name.length()));
 
         }
 
