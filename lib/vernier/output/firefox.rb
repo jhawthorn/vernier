@@ -133,7 +133,8 @@ module Vernier
                 color: category.color,
                 subcategories: []
               }
-            end
+            end,
+            sourceCodeIsNotOnSearchfox: true
           },
           libs: [],
           threads: thread_data
