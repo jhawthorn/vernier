@@ -381,7 +381,7 @@ module Vernier
             resource: [-1] * size, # set to unidentified for now
             fileName: @filenames,
             lineNumber: profile.func_table.fetch(:first_line),
-            columnNumber: [0] * size,
+            columnNumber: [nil] * size,
             #columnNumber: functions.map { _1.column },
             length: size
           }
