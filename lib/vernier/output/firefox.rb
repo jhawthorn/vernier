@@ -192,7 +192,8 @@ module Vernier
           @func_names = names.map do |name|
             @strings[name]
           end
-          @filenames = filenames.map do |filename|
+
+          @filenames = filter_filenames(filenames).map do |filename|
             @strings[filename]
           end
 
@@ -216,6 +217,22 @@ module Vernier
 
           @frame_categories = filenames.map do |filename|
             @categorizer.categorize(filename)
+          end
+        end
+
+        def filter_filenames(filenames)
+          pwd = "#{Dir.pwd}/"
+          gem_regex = %r{\A#{Regexp.union(Gem.path)}/gems/}
+          gem_match_regex = %r{\A#{Regexp.union(Gem.path)}/gems/([a-zA-Z](?:[a-zA-Z0-9\.\_]|-[a-zA-Z])*)-([0-9][0-9A-Za-z\-_\.]*)/(.*)\z}
+          filenames.map do |filename|
+            if filename.match?(gem_regex)
+              gem_match_regex =~ filename
+              "gem:#$1-#$2:#$3"
+            elsif filename.start_with?(pwd)
+              filename.delete_prefix(pwd)
+            else
+              filename
+            end
           end
         end
 
