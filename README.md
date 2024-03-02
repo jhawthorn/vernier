@@ -37,7 +37,7 @@ gem 'vernier'
 Vernier.trace(out: "time_profile.json") { some_slow_method }
 ```
 
-The output can then be viewed in the Firefox Profiler (demo) or the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (a Ruby-customized version of the firefox profiler.
+The output can be viewed in the web app at https://vernier.prof or locally using the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (both are lightly customized versions of the firefox profiler frontend, which profiles are also compatible with).
 
 - **Flame Graph**: Shows proportionally how much time is spent within particular stack frames. Frames are grouped together, which means that x-axis / left-to-right order is not meaningful.
 - **Stack Chart**: Shows the stack at each sample with the x-axis representing time and can be read left-to-right.
