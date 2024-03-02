@@ -374,13 +374,20 @@ module Vernier
 
           cfunc_idx = @strings["<cfunc>"]
           is_js = @filenames.map { |fn| fn != cfunc_idx }
+          line_numbers = profile.func_table.fetch(:first_line).map.with_index do |line, i|
+            if is_js[i] || line != 0
+              line
+            else
+              nil
+            end
+          end
           {
             name: @func_names,
             isJS: is_js,
             relevantForJS: is_js,
             resource: [-1] * size, # set to unidentified for now
             fileName: @filenames,
-            lineNumber: profile.func_table.fetch(:first_line),
+            lineNumber: line_numbers,
             columnNumber: [nil] * size,
             #columnNumber: functions.map { _1.column },
             length: size
