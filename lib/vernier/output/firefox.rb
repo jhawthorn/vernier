@@ -167,11 +167,12 @@ module Vernier
       class Thread
         attr_reader :profile
 
-        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil)
+        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil, allocations:)
           @ruby_thread_id = ruby_thread_id
           @profile = profile
           @categorizer = categorizer
           @tid = tid
+          @allocations = allocations
           @name = pretty_name(name)
 
           timestamps ||= [0] * samples.size
@@ -257,6 +258,7 @@ module Vernier
             funcTable: func_table,
             nativeSymbols: {},
             samples: samples_table,
+            jsAllocations: allocations_table,
             stackTable: stack_table,
             resourceTable: {
               length: 0,
@@ -306,6 +308,21 @@ module Vernier
             category: categories,
             length: start_times.size
           }
+        end
+
+        def allocations_table
+          size = @allocations[:samples].size
+          ret = {
+            "time": @allocations[:timestamps],
+            "className": ["Object"]*size,
+            "typeName": ["JSObject"]*size,
+            "coarseType": ["Object"]*size,
+            "weight": @allocations[:weights],
+            "inNursery": [false] * size,
+            "stack": @allocations[:samples],
+            "length": size
+          }
+          ret
         end
 
         def samples_table
