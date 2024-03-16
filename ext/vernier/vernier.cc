@@ -1339,6 +1339,8 @@ class TimeCollector : public BaseCollector {
     SamplerSemaphore thread_stopped;
 
     TimeStamp interval;
+    unsigned int allocation_sample_rate;
+    unsigned int allocation_sample_tick = 0;
 
     VALUE tp_newobj = Qnil;
 
@@ -1351,13 +1353,14 @@ class TimeCollector : public BaseCollector {
     }
 
     public:
-    TimeCollector(TimeStamp interval) : interval(interval), threads(frame_list) {
+    TimeCollector(TimeStamp interval, unsigned int allocation_sample_rate) : interval(interval), allocation_sample_rate(allocation_sample_rate), threads(frame_list) {
     }
 
     void record_newobj(VALUE obj) {
-        // get the class?
-        // get the stack?
-        // get the thread?
+        if (++allocation_sample_tick < allocation_sample_rate) {
+            return;
+        }
+        allocation_sample_tick = 0;
 
         VALUE current_thread = rb_thread_current();
         threads.mutex.lock();
@@ -1556,8 +1559,10 @@ class TimeCollector : public BaseCollector {
             return false;
         }
 
-        tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
-        rb_tracepoint_enable(tp_newobj);
+        if (allocation_sample_rate > 0) {
+            tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
+            rb_tracepoint_enable(tp_newobj);
+        }
 
         GlobalSignalHandler::get_instance()->install();
 
@@ -1591,8 +1596,11 @@ class TimeCollector : public BaseCollector {
 
         GlobalSignalHandler::get_instance()->uninstall();
 
-        rb_tracepoint_disable(tp_newobj);
-        tp_newobj = Qnil;
+        if (RTEST(tp_newobj)) {
+            rb_tracepoint_disable(tp_newobj);
+            tp_newobj = Qnil;
+        }
+
         rb_internal_thread_remove_event_hook(thread_hook);
         rb_remove_event_hook(internal_gc_event_cb);
         rb_remove_event_hook(internal_thread_event_cb);
@@ -1720,7 +1728,15 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         } else {
             interval = TimeStamp::from_microseconds(NUM2UINT(intervalv));
         }
-        collector = new TimeCollector(interval);
+
+        VALUE allocation_sample_ratev = rb_hash_aref(options, sym("allocation_sample_rate"));
+        unsigned int allocation_sample_rate;
+        if (NIL_P(allocation_sample_ratev)) {
+            allocation_sample_rate = 0;
+        } else {
+            allocation_sample_rate = NUM2UINT(allocation_sample_ratev);
+        }
+        collector = new TimeCollector(interval, allocation_sample_rate);
     } else {
         rb_raise(rb_eArgError, "invalid mode");
     }
