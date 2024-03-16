@@ -317,15 +317,17 @@ module Vernier
 
         def allocations_table
           return nil if !@allocations
-          size = @allocations[:samples].size
+          @allocations => { samples:, weights:, timestamps: }
+          size = samples.size
+          timestamps = timestamps.map { _1 / 1_000_000.0 }
           ret = {
-            "time": @allocations[:timestamps],
+            "time": timestamps,
             "className": ["Object"]*size,
             "typeName": ["JSObject"]*size,
             "coarseType": ["Object"]*size,
-            "weight": @allocations[:weights],
+            "weight": weights,
             "inNursery": [false] * size,
-            "stack": @allocations[:samples],
+            "stack": samples,
             "length": size
           }
           ret
