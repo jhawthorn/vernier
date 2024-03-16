@@ -920,6 +920,10 @@ class Thread {
             state_changed_at = now;
         }
 
+        bool is_main() {
+            return rb_thread_main() == ruby_thread;
+        }
+
         bool running() {
             return state != State::STOPPED;
         }
@@ -1620,6 +1624,7 @@ class TimeCollector : public BaseCollector {
                 rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread->stopped_at.nanoseconds()));
             }
             rb_hash_aset(hash, sym("name"), rb_str_new(thread->name.data(), thread->name.length()));
+            rb_hash_aset(hash, sym("is_main"), thread->is_main() ? Qtrue : Qfalse);
 
         }
 

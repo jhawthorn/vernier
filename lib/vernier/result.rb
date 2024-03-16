@@ -9,6 +9,10 @@ module Vernier
     attr_accessor :threads
     attr_accessor :meta
 
+    def main_thread
+      threads.values.detect {|x| x[:is_main] }
+    end
+
     # TODO: remove these
     def weights; threads.values.flat_map { _1[:weights] }; end
     def samples; threads.values.flat_map { _1[:samples] }; end
