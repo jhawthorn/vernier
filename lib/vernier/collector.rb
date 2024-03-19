@@ -76,7 +76,7 @@ module Vernier
       end
 
       result.threads.each do |obj_id, thread|
-        thread[:name] = @thread_names[obj_id]
+        thread[:name] ||= @thread_names[obj_id]
       end
 
       result.hooks = @hooks

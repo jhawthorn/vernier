@@ -102,6 +102,10 @@ class TestOutputFirefox < Minitest::Test
     output = Vernier::Output::Firefox.new(result).output
 
     assert_valid_firefox_profile(output)
+
+    data = JSON.parse(output)
+    assert_equal 1, data["threads"].size
+    assert_equal "retained memory", data["threads"][0]["name"]
   end
 
   def test_empty_block

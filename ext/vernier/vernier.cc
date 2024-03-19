@@ -828,15 +828,12 @@ class Thread {
 
         unique_ptr<MarkerTable> markers;
 
-        std::string name;
-
         // FIXME: don't use pthread at start
         Thread(State state, pthread_t pthread_id, VALUE ruby_thread) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(state), stack_on_suspend_idx(-1) {
             ruby_thread_id = rb_obj_id(ruby_thread);
             //ruby_thread_id = ULL2NUM(ruby_thread);
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
-            name = "";
             markers = std::make_unique<MarkerTable>();
 
             if (state == State::STARTED) {
@@ -1631,7 +1628,6 @@ class TimeCollector : public BaseCollector {
             if (!thread->stopped_at.zero()) {
                 rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread->stopped_at.nanoseconds()));
             }
-            rb_hash_aset(hash, sym("name"), rb_str_new(thread->name.data(), thread->name.length()));
             rb_hash_aset(hash, sym("is_main"), thread->is_main() ? Qtrue : Qfalse);
 
         }
