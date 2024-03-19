@@ -1,6 +1,6 @@
 require "vernier"
 
-Vernier.trace(out: "http_requests.json") do
+Vernier.trace(out: "http_requests.json", allocation_sample_rate: 100) do
 
 require "net/http"
 require "uri"
