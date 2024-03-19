@@ -151,12 +151,43 @@ module Vernier
 
         [
           {
-            name: "GVL_THREAD_RESUMED",
+            name: "THREAD_RUNNING",
             display: [ "marker-chart", "marker-table" ],
             data: [
               {
                 label: "Description",
                 value: "The thread has acquired the GVL and is executing"
+              }
+            ]
+          },
+          {
+            name: "THREAD_STALLED",
+            display: [ "marker-chart", "marker-table" ],
+            data: [
+              {
+                label: "Description",
+                value: "The thread is ready, but stalled waiting for the GVL to be available"
+              }
+            ]
+          },
+          {
+            name: "THREAD_SUSPENDED",
+            display: [ "marker-chart", "marker-table" ],
+            data: [
+              {
+                label: "Description",
+                value: "The thread has voluntarily released the GVL (ex. to sleep, for I/O, waiting on a lock)"
+              }
+            ]
+          },
+          {
+            name: "GC_PAUSE",
+            display: [ "marker-chart", "marker-table", "timeline-overview" ],
+            tooltipLabel: "{marker.name} - {marker.data.state}",
+            data: [
+              {
+                label: "Description",
+                value: "All threads are paused as GC is performed"
               }
             ]
           },
