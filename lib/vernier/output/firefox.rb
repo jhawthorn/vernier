@@ -167,12 +167,18 @@ module Vernier
       class Thread
         attr_reader :profile
 
-        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil)
+        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil, allocations: nil, is_main: nil)
           @ruby_thread_id = ruby_thread_id
           @profile = profile
           @categorizer = categorizer
           @tid = tid
+          @allocations = allocations
           @name = pretty_name(name)
+          @is_main = is_main
+          if is_main.nil?
+            @is_main = @ruby_thread_id == ::Thread.main.object_id
+          end
+          @is_main = true if profile.threads.size == 1
 
           timestamps ||= [0] * samples.size
           @samples, @weights, @timestamps = samples, weights, timestamps
@@ -245,7 +251,7 @@ module Vernier
         def data
           {
             name: @name,
-            isMainThread: @ruby_thread_id == ::Thread.main.object_id || (profile.threads.size == 1),
+            isMainThread: @is_main,
             processStartupTime: 0, # FIXME
             processShutdownTime: nil, # FIXME
             registerTime: (@started_at - 0) / 1_000_000.0,
@@ -257,6 +263,7 @@ module Vernier
             funcTable: func_table,
             nativeSymbols: {},
             samples: samples_table,
+            jsAllocations: allocations_table,
             stackTable: stack_table,
             resourceTable: {
               length: 0,
@@ -267,7 +274,7 @@ module Vernier
             },
             markers: markers_table,
             stringArray: string_table
-          }
+          }.compact
         end
 
         def markers_table
@@ -306,6 +313,25 @@ module Vernier
             category: categories,
             length: start_times.size
           }
+        end
+
+        def allocations_table
+          return nil if !@allocations
+          @allocations => { samples:, weights:, timestamps: }
+          return nil if samples.size == 0
+          size = samples.size
+          timestamps = timestamps.map { _1 / 1_000_000.0 }
+          ret = {
+            "time": timestamps,
+            "className": ["Object"]*size,
+            "typeName": ["JSObject"]*size,
+            "coarseType": ["Object"]*size,
+            "weight": weights,
+            "inNursery": [false] * size,
+            "stack": samples,
+            "length": size
+          }
+          ret
         end
 
         def samples_table

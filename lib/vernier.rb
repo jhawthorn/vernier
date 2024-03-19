@@ -11,8 +11,8 @@ require_relative "vernier/output/top"
 module Vernier
   class Error < StandardError; end
 
-  def self.trace(mode: :wall, out: nil, interval: nil, hooks: nil)
-    collector = Vernier::Collector.new(mode, { interval:, hooks: })
+  def self.trace(mode: :wall, out: nil, **collector_options)
+    collector = Vernier::Collector.new(mode, collector_options)
     collector.start
 
     result = nil

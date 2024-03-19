@@ -110,7 +110,7 @@ end
 # warm up
 make_request.call
 
-Vernier.trace(out: "rails.json", hooks: [:rails]) do |collector|
+Vernier.trace(out: "rails.json", hooks: [:rails], allocation_sample_rate: 100) do |collector|
   1000.times do
     make_request.call
   end

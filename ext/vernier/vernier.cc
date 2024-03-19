@@ -693,6 +693,51 @@ enum Category{
 	CATEGORY_IDLE
 };
 
+class ObjectSampleList {
+    public:
+
+        std::vector<int> stacks;
+        std::vector<TimeStamp> timestamps;
+        std::vector<int> weights;
+
+        size_t size() {
+            return stacks.size();
+        }
+
+        bool empty() {
+            return size() == 0;
+        }
+
+        void record_sample(int stack_index, TimeStamp time, int weight) {
+            stacks.push_back(stack_index);
+            timestamps.push_back(time);
+            weights.push_back(1);
+        }
+
+        void write_result(VALUE result) const {
+            VALUE allocations = rb_hash_new();
+            rb_hash_aset(result, sym("allocations"), allocations);
+
+            VALUE samples = rb_ary_new();
+            rb_hash_aset(allocations, sym("samples"), samples);
+            for (auto& stack_index: this->stacks) {
+                rb_ary_push(samples, INT2NUM(stack_index));
+            }
+
+            VALUE weights = rb_ary_new();
+            rb_hash_aset(allocations, sym("weights"), weights);
+            for (auto& weight: this->weights) {
+                rb_ary_push(weights, INT2NUM(weight));
+            }
+
+            VALUE timestamps = rb_ary_new();
+            rb_hash_aset(allocations, sym("timestamps"), timestamps);
+            for (auto& timestamp: this->timestamps) {
+                rb_ary_push(timestamps, ULL2NUM(timestamp.nanoseconds()));
+            }
+        }
+};
+
 class SampleList {
     public:
 
@@ -758,6 +803,7 @@ class SampleList {
 class Thread {
     public:
         SampleList samples;
+        ObjectSampleList allocation_samples;
 
         enum State {
             STARTED,
@@ -796,6 +842,14 @@ class Thread {
             if (state == State::STARTED) {
                 markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
             }
+        }
+
+        void record_newobj(VALUE obj, FrameList &frame_list) {
+            RawSample sample;
+            sample.sample();
+
+            int stack_idx = translator.translate(frame_list, sample);
+            allocation_samples.record_sample(stack_idx, TimeStamp::Now(), 1);
         }
 
         void set_state(State new_state) {
@@ -864,6 +918,10 @@ class Thread {
 
             state = new_state;
             state_changed_at = now;
+        }
+
+        bool is_main() {
+            return rb_thread_main() == ruby_thread;
         }
 
         bool running() {
@@ -1281,9 +1339,40 @@ class TimeCollector : public BaseCollector {
     SamplerSemaphore thread_stopped;
 
     TimeStamp interval;
+    unsigned int allocation_sample_rate;
+    unsigned int allocation_sample_tick = 0;
+
+    VALUE tp_newobj = Qnil;
+
+    static void newobj_i(VALUE tpval, void *data) {
+        TimeCollector *collector = static_cast<TimeCollector *>(data);
+        rb_trace_arg_t *tparg = rb_tracearg_from_tracepoint(tpval);
+        VALUE obj = rb_tracearg_object(tparg);
+
+        collector->record_newobj(obj);
+    }
 
     public:
-    TimeCollector(TimeStamp interval) : interval(interval), threads(frame_list) {
+    TimeCollector(TimeStamp interval, unsigned int allocation_sample_rate) : interval(interval), allocation_sample_rate(allocation_sample_rate), threads(frame_list) {
+    }
+
+    void record_newobj(VALUE obj) {
+        if (++allocation_sample_tick < allocation_sample_rate) {
+            return;
+        }
+        allocation_sample_tick = 0;
+
+        VALUE current_thread = rb_thread_current();
+        threads.mutex.lock();
+        for (auto &threadptr : threads.list) {
+            auto &thread = *threadptr;
+            if (current_thread == thread.ruby_thread) {
+                thread.record_newobj(obj, threads.frame_list);
+                break;
+            }
+        }
+        threads.mutex.unlock();
+
     }
 
     private:
@@ -1470,6 +1559,11 @@ class TimeCollector : public BaseCollector {
             return false;
         }
 
+        if (allocation_sample_rate > 0) {
+            tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
+            rb_tracepoint_enable(tp_newobj);
+        }
+
         GlobalSignalHandler::get_instance()->install();
 
         running = true;
@@ -1502,6 +1596,11 @@ class TimeCollector : public BaseCollector {
 
         GlobalSignalHandler::get_instance()->uninstall();
 
+        if (RTEST(tp_newobj)) {
+            rb_tracepoint_disable(tp_newobj);
+            tp_newobj = Qnil;
+        }
+
         rb_internal_thread_remove_event_hook(thread_hook);
         rb_remove_event_hook(internal_gc_event_cb);
         rb_remove_event_hook(internal_thread_event_cb);
@@ -1524,6 +1623,7 @@ class TimeCollector : public BaseCollector {
         for (const auto& thread: this->threads.list) {
             VALUE hash = rb_hash_new();
             thread->samples.write_result(hash);
+            thread->allocation_samples.write_result(hash);
 
             rb_hash_aset(threads, thread->ruby_thread_id, hash);
             rb_hash_aset(hash, sym("tid"), ULL2NUM(thread->native_tid));
@@ -1532,6 +1632,7 @@ class TimeCollector : public BaseCollector {
                 rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread->stopped_at.nanoseconds()));
             }
             rb_hash_aset(hash, sym("name"), rb_str_new(thread->name.data(), thread->name.length()));
+            rb_hash_aset(hash, sym("is_main"), thread->is_main() ? Qtrue : Qfalse);
 
         }
 
@@ -1627,7 +1728,15 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         } else {
             interval = TimeStamp::from_microseconds(NUM2UINT(intervalv));
         }
-        collector = new TimeCollector(interval);
+
+        VALUE allocation_sample_ratev = rb_hash_aref(options, sym("allocation_sample_rate"));
+        unsigned int allocation_sample_rate;
+        if (NIL_P(allocation_sample_ratev)) {
+            allocation_sample_rate = 0;
+        } else {
+            allocation_sample_rate = NUM2UINT(allocation_sample_ratev);
+        }
+        collector = new TimeCollector(interval, allocation_sample_rate);
     } else {
         rb_raise(rb_eArgError, "invalid mode");
     }

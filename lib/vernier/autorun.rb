@@ -17,10 +17,11 @@ module Vernier
 
     def self.start
       interval = options.fetch(:interval, 500).to_i
+      allocation_sample_rate = options.fetch(:allocation_sample_rate, 0).to_i
 
       STDERR.puts("starting profiler with interval #{interval}")
 
-      @collector = Vernier::Collector.new(:wall, interval:)
+      @collector = Vernier::Collector.new(:wall, interval:, allocation_sample_rate:)
       @collector.start
     end
 

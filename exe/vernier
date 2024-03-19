@@ -16,6 +16,9 @@ parser = OptionParser.new(banner) do |o|
   o.on('--interval [MICROSECONDS]', Integer, "sampling interval (default 500)") do |i|
     options[:interval] = i
   end
+  o.on('--allocation_sample_rate [ALLOCATIONS]', Integer, "allocation sampling interval (default 0 disabled)") do |i|
+    options[:allocation_sample_rate] = i
+  end
   o.on('--signal [NAME]', String, "specify a signal to start and stop the profiler") do |s|
     options[:signal] = s
   end
