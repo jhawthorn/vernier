@@ -34,6 +34,10 @@ module Vernier
       name = thread.name
       return name if name && !name.empty?
 
+      if thread == Thread.main
+        return "main"
+      end
+
       name = Thread.instance_method(:inspect).bind_call(thread)
       pretty = []
       best_id = name[/\#<Thread:0x\w+@?\s?(.*)\s+\S+>/, 1]
