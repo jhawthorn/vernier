@@ -66,6 +66,10 @@ module Vernier
     def stop
       result = finish
 
+      @hooks.each do |hook|
+        hook.disable
+      end
+
       result.hooks = @hooks
 
       end_time = Process.clock_gettime(Process::CLOCK_REALTIME, :nanosecond)
