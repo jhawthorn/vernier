@@ -95,7 +95,7 @@ module Vernier
       end
 
       def disable
-        ActiveSupport::Notifications.unsubscribe(@subscription)
+        ::ActiveSupport::Notifications.unsubscribe(@subscription)
         @subscription = nil
       end
 
