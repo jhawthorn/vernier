@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "marker"
+require_relative "thread_names"
 
 module Vernier
   class Collector
@@ -8,6 +9,8 @@ module Vernier
       @mode = mode
       @markers = []
       @hooks = []
+
+      @thread_names = ThreadNames.new
 
       if options[:hooks]
         Array(options[:hooks]).each do |hook|
@@ -66,8 +69,14 @@ module Vernier
     def stop
       result = finish
 
+      @thread_names.finish
+
       @hooks.each do |hook|
         hook.disable
+      end
+
+      result.threads.each do |obj_id, thread|
+        thread[:name] = @thread_names[obj_id]
       end
 
       result.hooks = @hooks

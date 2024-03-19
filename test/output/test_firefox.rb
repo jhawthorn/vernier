@@ -168,7 +168,7 @@ class TestOutputFirefox < Minitest::Test
     data = JSON.parse(output)
     threads = data["threads"]
     assert_equal 1, threads.size
-    assert_match(/^main \(0x\w+\)$/, threads.first["name"])
+    assert_equal("main", threads.first["name"])
 
     # Case with unnamed thread and location
     result = Vernier.trace do
@@ -185,7 +185,7 @@ class TestOutputFirefox < Minitest::Test
 
     threads.each do |tr|
       next if tr["isMainThread"]
-      assert_match(/^#{th1_loc} \(0x\w+\)$/, tr["name"])
+      assert_match(/^#{th1_loc} \(\d+\)$/, tr["name"])
     end
 
     # Case with named thread and location
@@ -204,7 +204,7 @@ class TestOutputFirefox < Minitest::Test
 
     threads.each do |tr|
       next if tr["isMainThread"]
-      assert_match(/^named thread #{th2_loc} \(0x\w+\)$/, tr["name"])
+      assert_equal "named thread", tr["name"]
     end
 
   ensure

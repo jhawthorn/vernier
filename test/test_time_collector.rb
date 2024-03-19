@@ -192,6 +192,26 @@ class TestTimeCollector < Minitest::Test
     assert_valid_result result
   end
 
+  def test_collected_thread_names
+    thread_obj_ids = []
+    result = Vernier.trace do
+      5.times do |i|
+        th = Thread.new {
+          Thread.current.name = "named thread #{i}"
+        }.join
+        thread_obj_ids << th.object_id
+      end
+      GC.start
+    end
+
+    assert_valid_result result
+
+    thread_names = thread_obj_ids.map { result.threads[_1][:name] }
+
+    expected = 5.times.map { "named thread #{_1}" }
+    assert_equal expected, thread_names
+  end
+
   def assert_similar expected, actual
     delta_ratio =
       if SLOW_RUNNER

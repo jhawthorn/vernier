@@ -173,7 +173,7 @@ module Vernier
           @categorizer = categorizer
           @tid = tid
           @allocations = allocations
-          @name = pretty_name(name)
+          @name = name
           @is_main = is_main
           if is_main.nil?
             @is_main = @ruby_thread_id == ::Thread.main.object_id
@@ -448,25 +448,6 @@ module Vernier
         end
 
         private
-
-        def pretty_name(name)
-          if name.empty?
-            begin
-              tr = ObjectSpace._id2ref(@ruby_thread_id)
-              name = tr.inspect if tr
-            rescue RangeError
-              # Thread was already GC'd
-            end
-          end
-          return name unless name.start_with?("#<Thread")
-          pretty = []
-          obj_address = name[/Thread:(0x\w+)/,1]
-          best_id = name[/\#<Thread:0x\w+@?\s?(.*)\s+\S+>/,1] || ""
-          Gem.path.each { |gem_dir| best_id = best_id.gsub(gem_dir, "...") }
-          pretty << best_id unless best_id.empty?
-          pretty << "(#{obj_address})"
-          pretty.join(' ')
-        end
 
         def gc_category
           @categorizer.get_category("GC")
