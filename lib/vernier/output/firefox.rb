@@ -348,7 +348,7 @@ module Vernier
 
         def allocations_table
           return nil if !@allocations
-          @allocations => { samples:, weights:, timestamps: }
+          samples, weights, timestamps = @allocations.values_at(:samples, :weights, :timestamps)
           return nil if samples.size == 0
           size = samples.size
           timestamps = timestamps.map { _1 / 1_000_000.0 }
