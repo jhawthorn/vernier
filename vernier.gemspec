@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["John Hawthorn"]
   spec.email = ["john@hawthorn.email"]
 
-  spec.summary = "An experimental profiler"
-  spec.description = spec.summary
+  spec.summary = "A next generation CRuby profiler"
+  spec.description = "Next-generation Ruby 3.2.1+ sampling profiler. Tracks multiple threads, GVL activity, GC pauses, idle time, and more."
   spec.homepage = "https://github.com/jhawthorn/vernier"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.1"
@@ -29,4 +29,6 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
   spec.extensions = ["ext/vernier/extconf.rb"]
+
+  spec.add_development_dependency "activesupport"
 end

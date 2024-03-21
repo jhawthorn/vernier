@@ -79,6 +79,11 @@ module Vernier
       def enable
         require "active_support"
         @subscription = ::ActiveSupport::Notifications.monotonic_subscribe(/\A[^!]/) do |name, start, finish, id, payload|
+          # Notifications.publish API may reach here without proper timing information included
+          unless Float === start && Float === finish
+            next
+          end
+
           data = { type: name }
           if keys = SERIALIZED_KEYS[name]
             keys.each do |key|
