@@ -222,4 +222,26 @@ class TestTimeCollector < Minitest::Test
     delta = expected * delta_ratio
     assert_in_delta expected, actual, delta
   end
+
+  def test_start_stop
+    Vernier.start_trace(interval: SAMPLE_SCALE_INTERVAL)
+    two_slow_methods
+    result = Vernier.stop_trace
+
+    assert_valid_result result
+    assert_similar 200, result.weights.sum
+  end
+
+  def test_multiple_starts
+    assert_raises("Trace already started") do
+      Vernier.start_trace(interval: SAMPLE_SCALE_INTERVAL)
+      Vernier.start_trace(interval: SAMPLE_SCALE_INTERVAL)
+    end
+  end
+
+  def test_stop_without_start
+    assert_raises("No trace started") do
+      Vernier.stop_trace
+    end
+  end
 end
