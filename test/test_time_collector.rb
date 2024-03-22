@@ -222,4 +222,27 @@ class TestTimeCollector < Minitest::Test
     delta = expected * delta_ratio
     assert_in_delta expected, actual, delta
   end
+
+  def test_start_stop
+    Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
+    two_slow_methods
+    result = Vernier.stop_profile
+    assert_valid_result result
+    assert_similar 200, result.weights.sum
+  end
+
+  def test_multiple_starts
+    error = assert_raises(RuntimeError) do
+      Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
+      Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
+    end
+    assert_equal "Profile already started, stopping...", error.message
+  end
+
+  def test_stop_without_start
+    error = assert_raises("No trace started") do
+      Vernier.stop_profile
+    end
+    assert_equal "No profile started", error.message
+  end
 end
