@@ -8,18 +8,9 @@ module Vernier
           name: "sql.active_record",
           display: [ "marker-chart", "marker-table" ],
           data: [
-            {
-              key: "sql",
-              format: "string"
-            },
-            {
-              key: "name",
-              format: "string"
-            },
-            {
-              key: "type_casted_binds",
-              label: "binds",
-              format: "string"
+            { key: "sql", format: "string" },
+            { key: "name", format: "string" },
+            { key: "type_casted_binds", label: "binds", format: "string"
             }
           ]
         },
@@ -27,40 +18,47 @@ module Vernier
           name: "instantiation.active_record",
           display: [ "marker-chart", "marker-table" ],
           data: [
-            {
-              key: "record_count",
-              format: "integer"
-            },
-            {
-              key: "class_name",
-              format: "string"
-            }
+            { key: "record_count", format: "integer" },
+            { key: "class_name", format: "string" }
           ]
         },
         {
           name: "process_action.action_controller",
           display: [ "marker-chart", "marker-table" ],
           data: [
-            {
-              key: "controller",
-              format: "string"
-            },
-            {
-              key: "action",
-              format: "string"
-            },
-            {
-              key: "status",
-              format: "integer"
-            },
-            {
-              key: "path",
-              format: "string"
-            },
-            {
-              key: "method",
-              format: "string"
-            }
+            { key: "controller", format: "string" },
+            { key: "action", format: "string" },
+            { key: "status", format: "integer" },
+            { key: "path", format: "string" },
+            { key: "method", format: "string" }
+          ]
+        },
+        {
+          name: "cache_read.active_support",
+          display: [ "marker-chart", "marker-table" ],
+          data: [
+            { key: "key", format: "string" },
+            { key: "store", format: "string" },
+            { key: "hit", format: "string" },
+            { key: "super_operation", format: "string" }
+          ]
+        },
+        {
+          name: "cache_read_multi.active_support",
+          display: [ "marker-chart", "marker-table" ],
+          data: [
+            { key: "key", format: "string" },
+            { key: "store", format: "string" },
+            { key: "hit", format: "string" },
+            { key: "super_operation", format: "string" }
+          ]
+        },
+        {
+          name: "cache_fetch_hit.active_support",
+          display: [ "marker-chart", "marker-table" ],
+          data: [
+            { key: "key", format: "string" },
+            { key: "store", format: "string" }
           ]
         }
       ])
