@@ -59,12 +59,17 @@ end
 
 silence do
   ActiveRecord::Schema.define do
+    create_table :users, force: true do |t|
+      t.string :login
+    end
     create_table :posts, force: true do |t|
+      t.belongs_to :user
       t.string :title
       t.text :body
       t.integer :likes
     end
     create_table :comments, force: true do |t|
+      t.belongs_to :user
       t.belongs_to :post
       t.string :title
       t.text :body
@@ -73,25 +78,33 @@ silence do
   end
 end
 
+class User < ActiveRecord::Base
+end
+
 class Post < ActiveRecord::Base
   has_many :comments
+  belongs_to :user
 end
 
 class Comment < ActiveRecord::Base
   belongs_to :post
+  belongs_to :user
 end
 
+users = 0.upto(100).map do |i|
+  User.create!(login: "user#{i}")
+end
 0.upto(100) do |i|
-  post = Post.create!(title: "Post number #{i}", body: "blog " * 50, likes: ((i * 1337) % 30))
+  post = Post.create!(title: "Post number #{i}", body: "blog " * 50, likes: ((i * 1337) % 30), user: users.sample)
   5.times do
-    post.comments.create!(post: post, title: "nice post!", body: "keep it up!", posted_at: Time.now)
+    post.comments.create!(post: post, title: "nice post!", body: "keep it up!", posted_at: Time.now, user: users.sample)
   end
 end
 
 class HomeController < ActionController::Base
   def show
-    posts = Post.order(likes: :desc).includes(:comments).first(10)
-    render json: posts
+    posts = Post.order(likes: :desc).includes(:user, comments: :user).first(10)
+    render json: posts, include: [:user, comments: { include: :user } ]
   end
 end
 
