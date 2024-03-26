@@ -188,7 +188,9 @@ module Vernier
               {
                 label: "Description",
                 value: "All threads are paused as GC is performed"
-              }
+              },
+              { key: "state", format: "string" },
+              { key: "gc_by", format: "string" },
             ]
           },
           *hook_additions
