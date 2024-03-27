@@ -28,6 +28,37 @@ module Vernier
     result
   end
 
+  @collector = nil
+  @collector_out = nil
+
+  def self.start_trace(mode: :wall, out: nil, **collector_options)
+    if @collector
+      @collector.stop
+      @collector = @collector_out = nil
+
+      raise "Trace already started"
+    end
+
+    @collector = Vernier::Collector.new(mode, collector_options)
+    @collector.start
+
+    @collector_out = out
+  end
+
+  def self.stop_trace
+    raise "No trace started" unless @collector
+
+    result = @collector.stop
+    @collector = nil
+
+    if @collector_out
+      File.write(@collector_out, Output::Firefox.new(result).output)
+    end
+    @collector_out = nil
+
+    result
+  end
+
   def self.trace_retained(out: nil, gc: true)
     3.times { GC.start } if gc
 
