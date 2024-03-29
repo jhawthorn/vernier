@@ -11,7 +11,10 @@ require_relative "vernier/output/top"
 module Vernier
   class Error < StandardError; end
 
-  def self.trace(mode: :wall, out: nil, **collector_options)
+  def self.profile(mode: :wall, out: nil, gc: true, **collector_options)
+    gc &&= (mode == :retained)
+    3.times { GC.start } if gc
+
     collector = Vernier::Collector.new(mode, collector_options)
     collector.start
 
@@ -21,30 +24,20 @@ module Vernier
     ensure
       result = collector.stop
       if out
-        File.write(out, Output::Firefox.new(result).output)
+        result.write(out:)
       end
     end
 
     result
   end
 
-  def self.trace_retained(out: nil, gc: true)
-    3.times { GC.start } if gc
+  class << self
+    alias_method :trace, :profile
+    alias_method :run, :profile
+  end
 
-    collector = Vernier::Collector.new(:retained)
-    collector.start
-
-    result = nil
-    begin
-      yield collector
-    ensure
-      result = collector.stop
-    end
-
-    if out
-      result.write(out:)
-    end
-    result
+  def self.trace_retained(out: nil, gc: true, &block)
+    profile(mode: :retained, out:, gc:, &block)
   end
 
   class Collector
