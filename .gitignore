@@ -14,3 +14,6 @@ mkmf.log
 Gemfile.lock
 /*.json
 /.cache
+/examples/my_sleep.c
+/examples/my_sleep.dylib
+.DS_Store
