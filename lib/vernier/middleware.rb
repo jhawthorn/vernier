@@ -6,13 +6,16 @@ module Vernier
     end
 
     def call(env)
+      request = Rack::Request.new(env)
       return @app.call(env) unless request.GET.has_key?("vernier")
 
-      request = Rack::Request.new(env)
       permitted = @permit.call(request)
       return @app.call(env) unless permitted
 
-      result = Vernier.trace(interval: 200, allocation_sample_rate: 100, hooks: [:rails]) do
+      interval = request.GET.fetch(:vernier_interval, 200).to_i
+      allocation_sample_rate = request.GET.fetch(:vernier_allocation_sample_rate, 200).to_i
+
+      result = Vernier.trace(interval:, allocation_sample_rate:, hooks: [:rails]) do
         @app.call(env)
       end
       body = result.to_gecko

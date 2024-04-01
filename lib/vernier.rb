@@ -11,6 +11,8 @@ require_relative "vernier/output/top"
 module Vernier
   class Error < StandardError; end
 
+  autoload :Middleware, "vernier/middleware"
+
   def self.profile(mode: :wall, out: nil, gc: true, **collector_options)
     gc &&= (mode == :retained)
     3.times { GC.start } if gc

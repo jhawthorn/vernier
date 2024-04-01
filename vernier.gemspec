@@ -31,4 +31,5 @@ Gem::Specification.new do |spec|
   spec.extensions = ["ext/vernier/extconf.rb"]
 
   spec.add_development_dependency "activesupport"
+  spec.add_development_dependency "rack"
 end
