@@ -709,8 +709,8 @@ class GCMarkerTable: public MarkerTable {
             VALUE gc_by = rb_gc_latest_gc_info(sym_gc_by);
             union MarkerInfo info = {
                 .gc_data = {
-                    .gc_state = gc_state,
-                    .gc_by = gc_by
+                    .gc_by = gc_by,
+                    .gc_state = gc_state
                 }
             };
             list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), -1, info });
