@@ -33,6 +33,37 @@ module Vernier
     result
   end
 
+  @collector = nil
+  @collector_out = nil
+
+  def self.start_profile(mode: :wall, out: nil, gc: true, **collector_options)
+    if @collector
+      @collector.stop
+      @collector = @collector_out = nil
+
+      raise "Profile already started, stopping..."
+    end
+
+    gc &&= (mode == :retained)
+    3.times { GC.start } if gc
+
+    @collector_out = out
+    @collector = Vernier::Collector.new(mode, collector_options)
+    @collector.start
+  end
+
+  def self.stop_profile
+    raise "No profile started" unless @collector
+
+    result = @collector.stop
+    if @collector_out
+      result.write(out: @collector_out)
+    end
+    @collector = @collector_out = nil
+
+    result
+  end
+
   class << self
     alias_method :trace, :profile
     alias_method :run, :profile
