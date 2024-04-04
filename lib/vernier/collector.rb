@@ -5,8 +5,14 @@ require_relative "thread_names"
 
 module Vernier
   class Collector
-    def initialize(mode, options={})
+    def initialize(mode, options = {})
+      if options.fetch(:gc, true) && (mode == :retained)
+        GC.start
+      end
+
       @mode = mode
+      @out = options[:out]
+
       @markers = []
       @hooks = []
 
@@ -98,6 +104,10 @@ module Vernier
       markers.concat @markers
 
       result.instance_variable_set(:@markers, markers)
+
+      if @out
+        result.write(out: @out)
+      end
 
       result
     end

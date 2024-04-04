@@ -13,10 +13,7 @@ module Vernier
 
   autoload :Middleware, "vernier/middleware"
 
-  def self.profile(mode: :wall, out: nil, gc: true, **collector_options)
-    gc &&= (mode == :retained)
-    3.times { GC.start } if gc
-
+  def self.profile(mode: :wall, **collector_options)
     collector = Vernier::Collector.new(mode, collector_options)
     collector.start
 
@@ -25,29 +22,26 @@ module Vernier
       yield collector
     ensure
       result = collector.stop
-      if out
-        result.write(out:)
-      end
     end
 
     result
   end
 
-  @collector = nil
-  @collector_out = nil
+  class << self
+    alias_method :trace, :profile
+    alias_method :run, :profile
+  end
 
-  def self.start_profile(mode: :wall, out: nil, gc: true, **collector_options)
+  @collector = nil
+
+  def self.start_profile(mode: :wall, **collector_options)
     if @collector
       @collector.stop
-      @collector = @collector_out = nil
+      @collector = nil
 
       raise "Profile already started, stopping..."
     end
 
-    gc &&= (mode == :retained)
-    3.times { GC.start } if gc
-
-    @collector_out = out
     @collector = Vernier::Collector.new(mode, collector_options)
     @collector.start
   end
@@ -56,17 +50,9 @@ module Vernier
     raise "No profile started" unless @collector
 
     result = @collector.stop
-    if @collector_out
-      result.write(out: @collector_out)
-    end
-    @collector = @collector_out = nil
+    @collector = nil
 
     result
-  end
-
-  class << self
-    alias_method :trace, :profile
-    alias_method :run, :profile
   end
 
   def self.trace_retained(out: nil, gc: true, &block)
