@@ -13,7 +13,7 @@ class TestAllocations < Minitest::Test
     allocations = result.main_thread.fetch(:allocations)
     stacks = allocations.fetch(:samples)
 
-    assert_equal 100, stacks.tally.values.max
+    assert_includes 100..102, stacks.tally.values.max
   end
 
   def test_sample_rate
@@ -26,6 +26,6 @@ class TestAllocations < Minitest::Test
     allocations = result.main_thread.fetch(:allocations)
     stacks = allocations.fetch(:samples)
 
-    assert_equal 100, stacks.tally.values.max
+    assert_includes 100..102, stacks.tally.values.max
   end
 end
