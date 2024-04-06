@@ -505,10 +505,11 @@ struct StackTable {
     }
 
     void write_result(VALUE result) {
+        Check_Type(result, T_HASH);
         StackTable &frame_list = *this;
 
         VALUE stack_table = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@stack_table"), stack_table);
+        rb_hash_aset(result, sym("stack_table"), stack_table);
         VALUE stack_table_parent = rb_ary_new();
         VALUE stack_table_frame = rb_ary_new();
         rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
@@ -520,7 +521,7 @@ struct StackTable {
         }
 
         VALUE frame_table = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@frame_table"), frame_table);
+        rb_hash_aset(result, sym("frame_table"), frame_table);
         VALUE frame_table_func = rb_ary_new();
         VALUE frame_table_line = rb_ary_new();
         rb_hash_aset(frame_table, sym("func"), frame_table_func);
@@ -534,7 +535,7 @@ struct StackTable {
 
         // TODO: dedup funcs before this step
         VALUE func_table = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@func_table"), func_table);
+        rb_hash_aset(result, sym("func_table"), func_table);
         VALUE func_table_name = rb_ary_new();
         VALUE func_table_filename = rb_ary_new();
         VALUE func_table_first_line = rb_ary_new();
@@ -1155,7 +1156,10 @@ class CustomCollector : public BaseCollector {
 	rb_hash_aset(threads, ULL2NUM(0), thread_hash);
 	rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
 
-        frame_list.write_result(result);
+        VALUE stack_table_hash = rb_hash_new();
+        frame_list.write_result(stack_table_hash);
+        rb_ivar_set(result, rb_intern("@stack_table"), stack_table_hash);
+
 
         return result;
     }
@@ -1284,7 +1288,9 @@ class RetainedCollector : public BaseCollector {
             }
         }
 
-        frame_list.write_result(result);
+        VALUE stack_table_hash = rb_hash_new();
+        frame_list.write_result(stack_table_hash);
+        rb_ivar_set(result, rb_intern("@stack_table"), stack_table_hash);
 
         return result;
     }
@@ -1675,7 +1681,9 @@ class TimeCollector : public BaseCollector {
 
         }
 
-        frame_list.write_result(result);
+        VALUE stack_table_hash = rb_hash_new();
+        frame_list.write_result(stack_table_hash);
+        rb_ivar_set(result, rb_intern("@stack_table"), stack_table_hash);
 
         return result;
     }
