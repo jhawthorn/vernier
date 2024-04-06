@@ -553,6 +553,48 @@ struct StackTable {
     }
 };
 
+static void
+stack_table_mark(void *data) {
+    StackTable *stack_table = static_cast<StackTable *>(data);
+    stack_table->mark_frames();
+}
+
+static void
+stack_table_free(void *data) {
+    StackTable *stack_table = static_cast<StackTable *>(data);
+    delete stack_table;
+}
+
+static const rb_data_type_t rb_stack_table_type = {
+    .wrap_struct_name = "vernier/stack_table",
+    .function = {
+        //.dmemsize = rb_collector_memsize,
+        .dmark = stack_table_mark,
+        .dfree = stack_table_free,
+    },
+};
+
+static VALUE
+stack_table_new(VALUE self) {
+    StackTable *stack_table = new StackTable();
+    VALUE obj = TypedData_Wrap_Struct(self, &rb_stack_table_type, stack_table);
+    return obj;
+}
+
+static StackTable *get_stack_table(VALUE obj) {
+    StackTable *stack_table;
+    TypedData_Get_Struct(obj, StackTable, &rb_stack_table_type, stack_table);
+    return stack_table;
+}
+
+static VALUE
+stack_table_to_h(VALUE self) {
+    StackTable *stack_table = get_stack_table(self);
+    VALUE result = rb_hash_new();
+    stack_table->write_result(result);
+    return result;
+}
+
 class SampleTranslator {
     public:
         int last_stack_index;
@@ -1789,6 +1831,11 @@ Init_vernier(void)
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
   rb_define_private_method(rb_cVernierCollector, "markers",  markers, 0);
+
+  rb_cStackTable = rb_define_class_under(rb_mVernier, "StackTable", rb_cObject);
+  rb_undef_alloc_func(rb_cStackTable);
+  rb_define_singleton_method(rb_cStackTable, "new", stack_table_new, 0);
+  rb_define_method(rb_cStackTable, "to_h", stack_table_to_h, 0);
 
   Init_consts(rb_mVernierMarkerPhase);
 
