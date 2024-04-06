@@ -57,6 +57,7 @@ static VALUE rb_mVernier;
 static VALUE rb_cVernierResult;
 static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
+static VALUE rb_cStackTable;
 
 static const char *gvl_event_name(rb_event_flag_t event) {
     switch (event) {
@@ -393,7 +394,7 @@ struct LiveSample {
     }
 };
 
-struct FrameList {
+struct StackTable {
     std::unordered_map<std::string, int> string_to_idx;
     std::vector<std::string> string_list;
 
@@ -504,7 +505,7 @@ struct FrameList {
     }
 
     void write_result(VALUE result) {
-        FrameList &frame_list = *this;
+        StackTable &frame_list = *this;
 
         VALUE stack_table = rb_hash_new();
         rb_ivar_set(result, rb_intern("@stack_table"), stack_table);
@@ -563,7 +564,7 @@ class SampleTranslator {
         SampleTranslator() : len(0), last_stack_index(-1) {
         }
 
-        int translate(FrameList &frame_list, const RawSample &sample) {
+        int translate(StackTable &frame_list, const RawSample &sample) {
             int i = 0;
             for (; i < len && i < sample.size(); i++) {
                 if (frames[i] != sample.frame(i)) {
@@ -571,7 +572,7 @@ class SampleTranslator {
                 }
             }
 
-            FrameList::StackNode *node = i == 0 ? &frame_list.root_stack_node : &frame_list.stack_node_list[frame_indexes[i - 1]];
+            StackTable::StackNode *node = i == 0 ? &frame_list.root_stack_node : &frame_list.stack_node_list[frame_indexes[i - 1]];
 
             for (; i < sample.size(); i++) {
                 Frame frame = sample.frame(i);
@@ -841,7 +842,7 @@ class Thread {
             }
         }
 
-        void record_newobj(VALUE obj, FrameList &frame_list) {
+        void record_newobj(VALUE obj, StackTable &frame_list) {
             RawSample sample;
             sample.sample();
 
@@ -931,12 +932,12 @@ class Thread {
 
 class ThreadTable {
     public:
-        FrameList &frame_list;
+        StackTable &frame_list;
 
         std::vector<std::unique_ptr<Thread> > list;
         std::mutex mutex;
 
-        ThreadTable(FrameList &frame_list) : frame_list(frame_list) {
+        ThreadTable(StackTable &frame_list) : frame_list(frame_list) {
         }
 
         void mark() {
@@ -1022,7 +1023,7 @@ class BaseCollector {
 
     public:
     bool running = false;
-    FrameList frame_list;
+    StackTable frame_list;
 
     TimeStamp started_at;
 
@@ -1213,7 +1214,7 @@ class RetainedCollector : public BaseCollector {
 
     VALUE build_collector_result() {
         RetainedCollector *collector = this;
-        FrameList &frame_list = collector->frame_list;
+        StackTable &frame_list = collector->frame_list;
 
         VALUE result = BaseCollector::build_collector_result();
 
