@@ -266,7 +266,7 @@ namespace std {
 
 // A basic semaphore built on sem_wait/sem_post
 // post() is guaranteed to be async-signal-safe
-class SamplerSemaphore {
+class SignalSafeSemaphore {
 #ifdef __APPLE__
     dispatch_semaphore_t sem;
 #else
@@ -275,7 +275,7 @@ class SamplerSemaphore {
 
     public:
 
-    SamplerSemaphore(unsigned int value = 0) {
+    SignalSafeSemaphore(unsigned int value = 0) {
 #ifdef __APPLE__
         sem = dispatch_semaphore_create(value);
 #else
@@ -283,7 +283,7 @@ class SamplerSemaphore {
 #endif
     };
 
-    ~SamplerSemaphore() {
+    ~SignalSafeSemaphore() {
 #ifdef __APPLE__
         dispatch_release(sem);
 #else
@@ -366,7 +366,7 @@ struct RawSample {
 struct LiveSample {
     RawSample sample;
 
-    SamplerSemaphore sem_complete;
+    SignalSafeSemaphore sem_complete;
 
     // Wait for a sample to be collected by the signal handler on another thread
     void wait() {
@@ -1333,7 +1333,7 @@ class TimeCollector : public BaseCollector {
     pthread_t sample_thread;
 
     atomic_bool running;
-    SamplerSemaphore thread_stopped;
+    SignalSafeSemaphore thread_stopped;
 
     TimeStamp interval;
     unsigned int allocation_sample_rate;
