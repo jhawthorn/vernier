@@ -1792,6 +1792,13 @@ collector_sample(VALUE self) {
     return Qtrue;
 }
 
+static VALUE
+collector_stack_table(VALUE self) {
+    auto *collector = get_collector(self);
+
+    return collector->stack_table_value;
+}
+
 static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
     BaseCollector *collector;
 
@@ -1870,6 +1877,7 @@ Init_vernier(void)
   rb_define_singleton_method(rb_cVernierCollector, "_new", collector_new, 2);
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
+  rb_define_method(rb_cVernierCollector, "stack_table", collector_stack_table, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
   rb_define_private_method(rb_cVernierCollector, "markers",  markers, 0);
 

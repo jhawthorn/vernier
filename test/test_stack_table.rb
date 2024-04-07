@@ -31,7 +31,6 @@ class TestStackTable < Minitest::Test
 
     # We must have recorded at least one stack for each level of depth of our
     # current stack
-    stack_size = caller_locations.size
     assert_operator hash[:stack_table][:parent].size, :>, caller_locations.size+1
 
     frame1 = hash[:stack_table][:frame][stack1]
@@ -54,5 +53,16 @@ class TestStackTable < Minitest::Test
     refute_equal frame1, frame3
 
     #assert_equal func1, func3
+  end
+
+  def test_collector_stack_table
+    collector = Vernier::Collector.new(:custom)
+    collector.start
+    collector.sample
+    collector.stop
+
+    assert_kind_of Vernier::StackTable, collector.stack_table
+
+    assert_operator collector.stack_table.to_h[:stack_table][:parent].size, :>, caller_locations.size+1
   end
 end
