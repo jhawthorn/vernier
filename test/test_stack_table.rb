@@ -57,7 +57,6 @@ class TestStackTable < Minitest::Test
   end
 
   def test_calling_to_h_multiple_times
-    return skip("TODO")
     stack_table = Vernier::StackTable.new
     stack_table.current_stack
 
@@ -118,6 +117,7 @@ class TestStackTable < Minitest::Test
     collector.start
 
     stack_table = collector.stack_table
+    stack_table.current_stack
     100_000.times do |i|
       eval("stack_table.current_stack", binding, "(eval)", i)
     end
