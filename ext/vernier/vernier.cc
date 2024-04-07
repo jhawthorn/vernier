@@ -469,6 +469,7 @@ struct StackTable {
 
     StackNode root_stack_node;
     vector<StackNode> stack_node_list;
+    int stack_node_list_finalized_idx = 0;
 
     StackNode *next_stack_node(StackNode *node, Frame frame) {
         auto search = node->children.find(frame);
@@ -510,9 +511,11 @@ struct StackTable {
     void finalize() {
         {
             const std::lock_guard<std::mutex> lock(stack_mutex);
-            for (const auto &stack_node : stack_node_list) {
+            for (int i = stack_node_list_finalized_idx; i < stack_node_list.size(); i++) {
+                const auto &stack_node = stack_node_list[i];
                 frame_map.index(stack_node.frame);
                 func_map.index(stack_node.frame.frame);
+                stack_node_list_finalized_idx = i;
             }
         }
 
