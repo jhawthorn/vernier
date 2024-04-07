@@ -409,21 +409,6 @@ struct StackTable {
     private:
 
     std::mutex mutex;
-    std::unordered_map<std::string, int> string_to_idx;
-    std::vector<std::string> string_list;
-
-    int string_index(const std::string str) {
-        auto it = string_to_idx.find(str);
-        if (it == string_to_idx.end()) {
-            int idx = string_list.size();
-            string_list.push_back(str);
-
-            auto result = string_to_idx.insert({str, idx});
-            it = result.first;
-        }
-
-        return it->second;
-    }
 
     struct FrameWithInfo {
         Frame frame;
@@ -535,13 +520,11 @@ struct StackTable {
     void clear() {
         const std::lock_guard<std::mutex> lock(mutex);
 
-        string_list.clear();
         frame_list.clear();
         stack_node_list.clear();
         func_list.clear();
         func_info_list.clear();
 
-        string_to_idx.clear();
         frame_to_idx.clear();
         func_to_idx.clear();
         root_stack_node.children.clear();
