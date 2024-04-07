@@ -101,4 +101,16 @@ class TestStackTable < Minitest::Test
 
     assert_operator collector.stack_table.to_h[:stack_table][:parent].size, :>, caller_locations.size+1
   end
+
+  def test_timer_and_manual_samples
+    collector = Vernier::Collector.new(:wall, sample_rate: 10)
+    collector.start
+
+    stack_table = collector.stack_table
+    100_000.times do |i|
+      eval("stack_table.current_stack", binding, "(eval)", i)
+    end
+
+    collector.stop
+  end
 end

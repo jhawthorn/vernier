@@ -407,6 +407,7 @@ struct LiveSample {
 struct StackTable {
     private:
 
+    std::mutex mutex;
     std::unordered_map<std::string, int> string_to_idx;
     std::vector<std::string> string_list;
 
@@ -482,6 +483,8 @@ struct StackTable {
             throw std::runtime_error("VERNIER BUG: empty stack");
         }
 
+        const std::lock_guard<std::mutex> lock(mutex);
+
         StackNode *node = &root_stack_node;
         for (int i = 0; i < stack.size(); i++) {
             Frame frame = stack.frame(i);
@@ -493,6 +496,8 @@ struct StackTable {
     // Converts Frames from stacks other tables. "Symbolicates" the frames
     // which allocates.
     void finalize() {
+        // FIXME: This should lock the mutex, but we have a chance of hitting GC on frame.info
+
         for (const auto &stack_node : stack_node_list) {
             frame_index(stack_node.frame);
         }
@@ -502,12 +507,17 @@ struct StackTable {
     }
 
     void mark_frames() {
+        const std::lock_guard<std::mutex> lock(mutex);
+
         for (auto stack_node: stack_node_list) {
             rb_gc_mark(stack_node.frame.frame);
         }
     }
 
+    // FIXME: probably should remove
     void clear() {
+        const std::lock_guard<std::mutex> lock(mutex);
+
         string_list.clear();
         frame_list.clear();
         stack_node_list.clear();
@@ -519,6 +529,9 @@ struct StackTable {
     }
 
     void write_result(VALUE result) {
+        // FIXME: we should be locking the mutex here, but I believe that will
+        // cause deadlocks as we are allocating here.
+
         Check_Type(result, T_HASH);
         StackTable &frame_list = *this;
 
@@ -651,6 +664,7 @@ class SampleTranslator {
                 }
             }
 
+            const std::lock_guard<std::mutex> lock(frame_list.mutex);
             StackTable::StackNode *node = i == 0 ? &frame_list.root_stack_node : &frame_list.stack_node_list[frame_indexes[i - 1]];
 
             for (; i < sample.size(); i++) {
