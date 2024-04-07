@@ -317,17 +317,25 @@ class SignalSafeSemaphore {
     }
 };
 
-struct RawSample {
+class RawSample {
+    public:
+
     constexpr static int MAX_LEN = 2048;
+
+    private:
+
     VALUE frames[MAX_LEN];
     int lines[MAX_LEN];
     int len;
+    int offset;
     bool gc;
 
-    RawSample() : len(0), gc(false) { }
+    public:
+
+    RawSample() : len(0), gc(false), offset(0) { }
 
     int size() const {
-        return len;
+        return len - offset;
     }
 
     Frame frame(int i) const {
@@ -337,7 +345,7 @@ struct RawSample {
         return frame;
     }
 
-    void sample() {
+    void sample(int offset = 0) {
         clear();
 
         if (!ruby_native_thread_p()) {
@@ -348,16 +356,18 @@ struct RawSample {
           gc = true;
         } else {
           len = rb_profile_frames(0, MAX_LEN, frames, lines);
+          this->offset = std::min(offset, len);
         }
     }
 
     void clear() {
         len = 0;
+        offset = 0;
         gc = false;
     }
 
     bool empty() const {
-        return len == 0;
+        return len <= offset;
     }
 };
 
@@ -601,7 +611,7 @@ static VALUE
 stack_table_current_stack(VALUE self) {
     StackTable *stack_table = get_stack_table(self);
     RawSample stack;
-    stack.sample();
+    stack.sample(1);
     int stack_index = stack_table->stack_index(stack);
     return INT2NUM(stack_index);
 }
@@ -1499,7 +1509,7 @@ class TimeCollector : public BaseCollector {
                         // that by the GVL instrumentation, but let's try to get
                         // it to a consistent state and stop profiling it.
                         thread.set_state(Thread::State::STOPPED);
-                    } else if (sample.sample.gc) {
+                    } else if (sample.sample.empty()) {
                         // fprintf(stderr, "skipping GC sample\n");
                     } else {
                         record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
