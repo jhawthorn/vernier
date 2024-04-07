@@ -52,7 +52,8 @@ class TestStackTable < Minitest::Test
     # Frames should not be the same, different lines
     refute_equal frame1, frame3
 
-    #assert_equal func1, func3
+    assert_equal func1, func3
+    assert_equal hash[:func_table][:name].uniq, hash[:func_table][:name]
   end
 
   def test_calling_to_h_multiple_times

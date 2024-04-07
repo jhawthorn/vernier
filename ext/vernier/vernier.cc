@@ -198,6 +198,7 @@ std::ostream& operator<<(std::ostream& os, const TimeStamp& info) {
     return os;
 }
 
+// TODO: Rename FuncInfo
 struct FrameInfo {
     static const char *label_cstr(VALUE frame) {
         VALUE label = rb_profile_frame_full_label(frame);
@@ -431,13 +432,28 @@ struct StackTable {
 
     std::unordered_map<Frame, int> frame_to_idx;
     std::vector<Frame> frame_list;
-    std::vector<FrameWithInfo> frame_with_info_list;
+
     int frame_index(const Frame frame) {
         auto it = frame_to_idx.find(frame);
         if (it == frame_to_idx.end()) {
             int idx = frame_list.size();
             frame_list.push_back(frame);
             auto result = frame_to_idx.insert({frame, idx});
+            it = result.first;
+        }
+        return it->second;
+    }
+
+    std::unordered_map<VALUE, int> func_to_idx;
+    std::vector<VALUE> func_list;
+    std::vector<FrameInfo> func_info_list;
+
+    int func_index(const VALUE func) {
+        auto it = func_to_idx.find(func);
+        if (it == func_to_idx.end()) {
+            int idx = func_list.size();
+            func_list.push_back(func);
+            auto result = func_to_idx.insert({func, idx});
             it = result.first;
         }
         return it->second;
@@ -500,9 +516,10 @@ struct StackTable {
 
         for (const auto &stack_node : stack_node_list) {
             frame_index(stack_node.frame);
+            func_index(stack_node.frame.frame);
         }
-        for (const auto &frame : frame_list) {
-            frame_with_info_list.push_back(FrameWithInfo{frame, frame.info()});
+        for (const auto &func : func_list) {
+            func_info_list.push_back(FrameInfo(func));
         }
     }
 
@@ -521,10 +538,12 @@ struct StackTable {
         string_list.clear();
         frame_list.clear();
         stack_node_list.clear();
-        frame_with_info_list.clear();
+        func_list.clear();
+        func_info_list.clear();
 
         string_to_idx.clear();
         frame_to_idx.clear();
+        func_to_idx.clear();
         root_stack_node.children.clear();
     }
 
@@ -554,10 +573,11 @@ struct StackTable {
         rb_hash_aset(frame_table, sym("func"), frame_table_func);
         rb_hash_aset(frame_table, sym("line"), frame_table_line);
         //for (const auto &frame : frame_list.frame_list) {
-        for (int i = 0; i < frame_list.frame_with_info_list.size(); i++) {
-            const auto &frame = frame_list.frame_with_info_list[i];
-            rb_ary_push(frame_table_func, INT2NUM(i));
-            rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
+        for (int i = 0; i < frame_list.frame_list.size(); i++) {
+            const auto &frame = frame_list.frame_list[i];
+            int func_idx = func_index(frame.frame);
+            rb_ary_push(frame_table_func, INT2NUM(func_idx));
+            rb_ary_push(frame_table_line, INT2NUM(frame.line));
         }
 
         // TODO: dedup funcs before this step
@@ -569,10 +589,10 @@ struct StackTable {
         rb_hash_aset(func_table, sym("name"), func_table_name);
         rb_hash_aset(func_table, sym("filename"), func_table_filename);
         rb_hash_aset(func_table, sym("first_line"), func_table_first_line);
-        for (const auto &frame : frame_list.frame_with_info_list) {
-            const std::string label = frame.info.label;
-            const std::string filename = frame.info.file;
-            const int first_line = frame.info.first_lineno;
+        for (const auto &info : frame_list.func_info_list) {
+            const std::string label = info.label;
+            const std::string filename = info.file;
+            const int first_line = info.first_lineno;
 
             rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
             rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
