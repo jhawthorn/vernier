@@ -405,6 +405,8 @@ struct LiveSample {
 };
 
 struct StackTable {
+    private:
+
     std::unordered_map<std::string, int> string_to_idx;
     std::vector<std::string> string_list;
 
@@ -455,19 +457,6 @@ struct StackTable {
     StackNode root_stack_node;
     vector<StackNode> stack_node_list;
 
-    int stack_index(const RawSample &stack) {
-        if (stack.empty()) {
-            throw std::runtime_error("VERNIER BUG: empty stack");
-        }
-
-        StackNode *node = &root_stack_node;
-        for (int i = 0; i < stack.size(); i++) {
-            Frame frame = stack.frame(i);
-            node = next_stack_node(node, frame);
-        }
-        return node->index;
-    }
-
     StackNode *next_stack_node(StackNode *node, Frame frame) {
         auto search = node->children.find(frame);
         if (search == node->children.end()) {
@@ -484,6 +473,21 @@ struct StackTable {
             int node_idx = search->second;
             return &stack_node_list[node_idx];
         }
+    }
+
+    public:
+
+    int stack_index(const RawSample &stack) {
+        if (stack.empty()) {
+            throw std::runtime_error("VERNIER BUG: empty stack");
+        }
+
+        StackNode *node = &root_stack_node;
+        for (int i = 0; i < stack.size(); i++) {
+            Frame frame = stack.frame(i);
+            node = next_stack_node(node, frame);
+        }
+        return node->index;
     }
 
     // Converts Frames from stacks other tables. "Symbolicates" the frames
@@ -562,6 +566,8 @@ struct StackTable {
             rb_ary_push(func_table_first_line, INT2NUM(first_line));
         }
     }
+
+    friend class SampleTranslator;
 };
 
 static void
