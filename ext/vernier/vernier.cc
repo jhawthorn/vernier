@@ -857,7 +857,6 @@ class SampleList {
 
         std::vector<int> stacks;
         std::vector<TimeStamp> timestamps;
-        std::vector<native_thread_id_t> threads;
         std::vector<Category> categories;
         std::vector<int> weights;
 
@@ -869,11 +868,10 @@ class SampleList {
             return size() == 0;
         }
 
-        void record_sample(int stack_index, TimeStamp time, native_thread_id_t thread_id, Category category) {
+        void record_sample(int stack_index, TimeStamp time, Category category) {
             if (
                     !empty() &&
                     stacks.back() == stack_index &&
-                    threads.back() == thread_id &&
                     categories.back() == category)
             {
                 // We don't compare timestamps for de-duplication
@@ -881,7 +879,6 @@ class SampleList {
             } else {
                 stacks.push_back(stack_index);
                 timestamps.push_back(time);
-                threads.push_back(thread_id);
                 categories.push_back(category);
                 weights.push_back(1);
             }
@@ -1201,8 +1198,7 @@ class CustomCollector : public BaseCollector {
         sample.sample();
         int stack_index = stack_table->stack_index(sample);
 
-	native_thread_id_t thread_id = 0;
-        samples.record_sample(stack_index, TimeStamp::Now(), thread_id, CATEGORY_NORMAL);
+        samples.record_sample(stack_index, TimeStamp::Now(), CATEGORY_NORMAL);
     }
 
     VALUE stop() {
@@ -1500,7 +1496,6 @@ class TimeCollector : public BaseCollector {
             thread.samples.record_sample(
                     stack_index,
                     time,
-                    thread.native_tid,
                     category
                     );
         }
@@ -1559,7 +1554,6 @@ class TimeCollector : public BaseCollector {
                     thread.samples.record_sample(
                             thread.stack_on_suspend_idx,
                             sample_start,
-                            thread.native_tid,
                             CATEGORY_IDLE);
                 } else {
                 }
