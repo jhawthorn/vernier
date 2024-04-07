@@ -608,10 +608,20 @@ stack_table_to_h(VALUE self) {
 }
 
 static VALUE
-stack_table_current_stack(VALUE self) {
+stack_table_current_stack(int argc, VALUE *argv, VALUE self) {
+    int offset;
+    VALUE offset_v;
+
+    rb_scan_args(argc, argv, "01", &offset_v);
+    if (argc > 0) {
+        offset = NUM2INT(offset_v) + 1;
+    } else {
+        offset = 1;
+    }
+
     StackTable *stack_table = get_stack_table(self);
     RawSample stack;
-    stack.sample(1);
+    stack.sample(offset);
     int stack_index = stack_table->stack_index(stack);
     return INT2NUM(stack_index);
 }
@@ -1871,7 +1881,7 @@ Init_vernier(void)
   rb_cStackTable = rb_define_class_under(rb_mVernier, "StackTable", rb_cObject);
   rb_undef_alloc_func(rb_cStackTable);
   rb_define_singleton_method(rb_cStackTable, "new", stack_table_new, 0);
-  rb_define_method(rb_cStackTable, "current_stack", stack_table_current_stack, 0);
+  rb_define_method(rb_cStackTable, "current_stack", stack_table_current_stack, -1);
   rb_define_method(rb_cStackTable, "to_h", stack_table_to_h, 0);
 
   Init_consts(rb_mVernierMarkerPhase);

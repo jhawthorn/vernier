@@ -55,6 +55,30 @@ class TestStackTable < Minitest::Test
     #assert_equal func1, func3
   end
 
+  def test_current_sample_with_offset
+    stack_table = Vernier::StackTable.new
+
+    # No offset specified
+    stack1 = stack_table.current_stack
+    stack2 = stack_table.current_stack
+    refute_equal stack1, stack2
+
+    # Offset 0 - this method, different lines
+    stack1 = stack_table.current_stack(0)
+    stack2 = stack_table.current_stack(0)
+    refute_equal stack1, stack2
+
+    # Offset 1 - parent method
+    stack1 = stack_table.current_stack(1)
+    stack2 = stack_table.current_stack(1)
+    assert_equal stack1, stack2
+
+    # Too many arguments
+    assert_raises ArgumentError do
+      stack_table.current_stack(1, 2)
+    end
+  end
+
   def test_collector_stack_table
     collector = Vernier::Collector.new(:custom)
     collector.start
