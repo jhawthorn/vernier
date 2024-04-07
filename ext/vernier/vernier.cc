@@ -591,9 +591,19 @@ static StackTable *get_stack_table(VALUE obj) {
 static VALUE
 stack_table_to_h(VALUE self) {
     StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
     VALUE result = rb_hash_new();
     stack_table->write_result(result);
     return result;
+}
+
+static VALUE
+stack_table_current_stack(VALUE self) {
+    StackTable *stack_table = get_stack_table(self);
+    RawSample stack;
+    stack.sample();
+    int stack_index = stack_table->stack_index(stack);
+    return INT2NUM(stack_index);
 }
 
 class SampleTranslator {
@@ -1061,15 +1071,17 @@ class BaseCollector {
     protected:
 
     virtual void reset() {
-        frame_list.clear();
     }
 
     public:
     bool running = false;
-    StackTable frame_list;
+    StackTable *stack_table;
+    VALUE stack_table_value;
 
     TimeStamp started_at;
 
+    BaseCollector(VALUE stack_table_value) : stack_table_value(stack_table_value), stack_table(get_stack_table(stack_table_value)) {
+    }
     virtual ~BaseCollector() {}
 
     virtual bool start() {
@@ -1112,7 +1124,8 @@ class BaseCollector {
     };
 
     virtual void mark() {
-        frame_list.mark_frames();
+        //frame_list.mark_frames();
+        rb_gc_mark(stack_table_value);
     };
 
     virtual VALUE get_markers() {
@@ -1126,7 +1139,7 @@ class CustomCollector : public BaseCollector {
     void sample() {
         RawSample sample;
         sample.sample();
-        int stack_index = frame_list.stack_index(sample);
+        int stack_index = stack_table->stack_index(sample);
 
 	native_thread_id_t thread_id = 0;
         samples.record_sample(stack_index, TimeStamp::Now(), thread_id, CATEGORY_NORMAL);
@@ -1135,7 +1148,7 @@ class CustomCollector : public BaseCollector {
     VALUE stop() {
         BaseCollector::stop();
 
-        frame_list.finalize();
+        stack_table->finalize();
 
         VALUE result = build_collector_result();
 
@@ -1157,12 +1170,16 @@ class CustomCollector : public BaseCollector {
 	rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
 
         VALUE stack_table_hash = rb_hash_new();
-        frame_list.write_result(stack_table_hash);
+        stack_table->write_result(stack_table_hash);
         rb_ivar_set(result, rb_intern("@stack_table"), stack_table_hash);
 
 
         return result;
     }
+
+    public:
+
+    CustomCollector(VALUE stack_table) : BaseCollector(stack_table) { }
 };
 
 class RetainedCollector : public BaseCollector {
@@ -1182,7 +1199,7 @@ class RetainedCollector : public BaseCollector {
             // Ideally we'd allow empty samples to be represented
             return;
         }
-        int stack_index = frame_list.stack_index(sample);
+        int stack_index = stack_table->stack_index(sample);
 
         object_list.push_back(obj);
         object_frames.emplace(obj, stack_index);
@@ -1212,6 +1229,8 @@ class RetainedCollector : public BaseCollector {
 
     public:
 
+    RetainedCollector(VALUE stack_table) : BaseCollector(stack_table) { }
+
     bool start() {
         if (!BaseCollector::start()) {
             return false;
@@ -1238,7 +1257,7 @@ class RetainedCollector : public BaseCollector {
         rb_tracepoint_disable(tp_newobj);
         tp_newobj = Qnil;
 
-        frame_list.finalize();
+        stack_table->finalize();
 
         // We should have collected info for all our frames, so no need to continue
         // marking them
@@ -1260,7 +1279,7 @@ class RetainedCollector : public BaseCollector {
 
     VALUE build_collector_result() {
         RetainedCollector *collector = this;
-        StackTable &frame_list = collector->frame_list;
+        StackTable &frame_list = *collector->stack_table;
 
         VALUE result = BaseCollector::build_collector_result();
 
@@ -1300,7 +1319,8 @@ class RetainedCollector : public BaseCollector {
         // can be garbage collected.
         // When we stop collection we will stringify the remaining frames, and then
         // clear them from the set, allowing them to be removed from out output.
-        frame_list.mark_frames();
+        stack_table->mark_frames();
+        rb_gc_mark(stack_table_value);
 
         rb_gc_mark(tp_newobj);
         rb_gc_mark(tp_freeobj);
@@ -1399,7 +1419,7 @@ class TimeCollector : public BaseCollector {
     }
 
     public:
-    TimeCollector(TimeStamp interval, unsigned int allocation_sample_rate) : interval(interval), allocation_sample_rate(allocation_sample_rate), threads(frame_list) {
+    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_sample_rate) : BaseCollector(stack_table), interval(interval), allocation_sample_rate(allocation_sample_rate), threads(*get_stack_table(stack_table)) {
     }
 
     void record_newobj(VALUE obj) {
@@ -1425,7 +1445,7 @@ class TimeCollector : public BaseCollector {
 
     void record_sample(const RawSample &sample, TimeStamp time, Thread &thread, Category category) {
         if (!sample.empty()) {
-            int stack_index = thread.translator.translate(frame_list, sample);
+            int stack_index = thread.translator.translate(*stack_table, sample);
             thread.samples.record_sample(
                     stack_index,
                     time,
@@ -1651,7 +1671,7 @@ class TimeCollector : public BaseCollector {
         rb_remove_event_hook(internal_gc_event_cb);
         rb_remove_event_hook(internal_thread_event_cb);
 
-        frame_list.finalize();
+        stack_table->finalize();
 
         VALUE result = build_collector_result();
 
@@ -1682,14 +1702,15 @@ class TimeCollector : public BaseCollector {
         }
 
         VALUE stack_table_hash = rb_hash_new();
-        frame_list.write_result(stack_table_hash);
+        stack_table->write_result(stack_table_hash);
         rb_ivar_set(result, rb_intern("@stack_table"), stack_table_hash);
 
         return result;
     }
 
     void mark() {
-        frame_list.mark_frames();
+        stack_table->mark_frames();
+        rb_gc_mark(stack_table_value);
         threads.mark();
 
         //for (int i = 0; i < queued_length; i++) {
@@ -1763,10 +1784,12 @@ collector_sample(VALUE self) {
 
 static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
     BaseCollector *collector;
+
+    VALUE stack_table = stack_table_new(rb_cStackTable);
     if (mode == sym("retained")) {
-        collector = new RetainedCollector();
+        collector = new RetainedCollector(stack_table);
     } else if (mode == sym("custom")) {
-        collector = new CustomCollector();
+        collector = new CustomCollector(stack_table);
     } else if (mode == sym("wall")) {
         VALUE intervalv = rb_hash_aref(options, sym("interval"));
         TimeStamp interval;
@@ -1783,7 +1806,7 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         } else {
             allocation_sample_rate = NUM2UINT(allocation_sample_ratev);
         }
-        collector = new TimeCollector(interval, allocation_sample_rate);
+        collector = new TimeCollector(stack_table, interval, allocation_sample_rate);
     } else {
         rb_raise(rb_eArgError, "invalid mode");
     }
@@ -1843,6 +1866,7 @@ Init_vernier(void)
   rb_cStackTable = rb_define_class_under(rb_mVernier, "StackTable", rb_cObject);
   rb_undef_alloc_func(rb_cStackTable);
   rb_define_singleton_method(rb_cStackTable, "new", stack_table_new, 0);
+  rb_define_method(rb_cStackTable, "current_stack", stack_table_current_stack, 0);
   rb_define_method(rb_cStackTable, "to_h", stack_table_to_h, 0);
 
   Init_consts(rb_mVernierMarkerPhase);
