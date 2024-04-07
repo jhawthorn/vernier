@@ -79,6 +79,18 @@ class TestStackTable < Minitest::Test
     end
   end
 
+  def test_does_not_allocate
+    stack_table = Vernier::StackTable.new
+
+    before = GC.stat(:total_allocated_objects)
+    10000.times do
+      stack_table.current_stack
+    end
+    after = GC.stat(:total_allocated_objects)
+
+    assert after < before + 10
+  end
+
   def test_collector_stack_table
     collector = Vernier::Collector.new(:custom)
     collector.start
