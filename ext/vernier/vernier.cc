@@ -405,6 +405,39 @@ struct LiveSample {
     }
 };
 
+template <typename K>
+class IndexMap {
+    public:
+        std::unordered_map<K, int> to_idx;
+        std::vector<K> list;
+
+        const K& operator[](int i) const noexcept {
+            return list[i];
+        }
+
+        size_t size() const noexcept {
+            return list.size();
+        }
+
+        int index(const K key) {
+            auto it = to_idx.find(key);
+            if (it == to_idx.end()) {
+                int idx = list.size();
+                list.push_back(key);
+
+                auto result = to_idx.insert({key, idx});
+                it = result.first;
+            }
+
+            return it->second;
+        }
+
+        void clear() {
+            list.clear();
+            to_idx.clear();
+        }
+};
+
 struct StackTable {
     private:
 
@@ -415,19 +448,7 @@ struct StackTable {
         FrameInfo info;
     };
 
-    std::unordered_map<Frame, int> frame_to_idx;
-    std::vector<Frame> frame_list;
-
-    int frame_index(const Frame frame) {
-        auto it = frame_to_idx.find(frame);
-        if (it == frame_to_idx.end()) {
-            int idx = frame_list.size();
-            frame_list.push_back(frame);
-            auto result = frame_to_idx.insert({frame, idx});
-            it = result.first;
-        }
-        return it->second;
-    }
+    IndexMap<Frame> frame_map;
 
     std::unordered_map<VALUE, int> func_to_idx;
     std::vector<VALUE> func_list;
@@ -500,7 +521,7 @@ struct StackTable {
         // FIXME: This should lock the mutex, but we have a chance of hitting GC on frame.info
 
         for (const auto &stack_node : stack_node_list) {
-            frame_index(stack_node.frame);
+            frame_map.index(stack_node.frame);
             func_index(stack_node.frame.frame);
         }
         for (const auto &func : func_list) {
@@ -520,12 +541,12 @@ struct StackTable {
     void clear() {
         const std::lock_guard<std::mutex> lock(mutex);
 
-        frame_list.clear();
+        frame_map.clear();
+
         stack_node_list.clear();
         func_list.clear();
         func_info_list.clear();
 
-        frame_to_idx.clear();
         func_to_idx.clear();
         root_stack_node.children.clear();
     }
@@ -546,7 +567,7 @@ struct StackTable {
         for (const auto &stack : frame_list.stack_node_list) {
             VALUE parent_val = stack.parent == -1 ? Qnil : INT2NUM(stack.parent);
             rb_ary_push(stack_table_parent, parent_val);
-            rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
+            rb_ary_push(stack_table_frame, INT2NUM(frame_map.index(stack.frame)));
         }
 
         VALUE frame_table = rb_hash_new();
@@ -556,8 +577,8 @@ struct StackTable {
         rb_hash_aset(frame_table, sym("func"), frame_table_func);
         rb_hash_aset(frame_table, sym("line"), frame_table_line);
         //for (const auto &frame : frame_list.frame_list) {
-        for (int i = 0; i < frame_list.frame_list.size(); i++) {
-            const auto &frame = frame_list.frame_list[i];
+        for (int i = 0; i < frame_map.size(); i++) {
+            const auto &frame = frame_map[i];
             int func_idx = func_index(frame.frame);
             rb_ary_push(frame_table_func, INT2NUM(func_idx));
             rb_ary_push(frame_table_line, INT2NUM(frame.line));
