@@ -450,20 +450,8 @@ struct StackTable {
 
     IndexMap<Frame> frame_map;
 
-    std::unordered_map<VALUE, int> func_to_idx;
-    std::vector<VALUE> func_list;
+    IndexMap<VALUE> func_map;
     std::vector<FrameInfo> func_info_list;
-
-    int func_index(const VALUE func) {
-        auto it = func_to_idx.find(func);
-        if (it == func_to_idx.end()) {
-            int idx = func_list.size();
-            func_list.push_back(func);
-            auto result = func_to_idx.insert({func, idx});
-            it = result.first;
-        }
-        return it->second;
-    }
 
     struct StackNode {
         std::unordered_map<Frame, int> children;
@@ -522,9 +510,9 @@ struct StackTable {
 
         for (const auto &stack_node : stack_node_list) {
             frame_map.index(stack_node.frame);
-            func_index(stack_node.frame.frame);
+            func_map.index(stack_node.frame.frame);
         }
-        for (const auto &func : func_list) {
+        for (const auto &func : func_map.list) {
             func_info_list.push_back(FrameInfo(func));
         }
     }
@@ -542,12 +530,11 @@ struct StackTable {
         const std::lock_guard<std::mutex> lock(mutex);
 
         frame_map.clear();
+        func_map.clear();
 
         stack_node_list.clear();
-        func_list.clear();
         func_info_list.clear();
 
-        func_to_idx.clear();
         root_stack_node.children.clear();
     }
 
@@ -579,7 +566,7 @@ struct StackTable {
         //for (const auto &frame : frame_list.frame_list) {
         for (int i = 0; i < frame_map.size(); i++) {
             const auto &frame = frame_map[i];
-            int func_idx = func_index(frame.frame);
+            int func_idx = func_map.index(frame.frame);
             rb_ary_push(frame_table_func, INT2NUM(func_idx));
             rb_ary_push(frame_table_line, INT2NUM(frame.line));
         }
