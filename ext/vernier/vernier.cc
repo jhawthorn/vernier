@@ -1179,11 +1179,6 @@ class CustomCollector : public BaseCollector {
 	rb_hash_aset(threads, ULL2NUM(0), thread_hash);
 	rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
 
-        VALUE stack_table_hash = rb_hash_new();
-        stack_table->write_result(stack_table_hash);
-        rb_ivar_set(result, rb_intern("@stack_table"), stack_table_hash);
-
-
         return result;
     }
 
@@ -1316,10 +1311,6 @@ class RetainedCollector : public BaseCollector {
                 rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
             }
         }
-
-        VALUE stack_table_hash = rb_hash_new();
-        frame_list.write_result(stack_table_hash);
-        rb_ivar_set(result, rb_intern("@stack_table"), stack_table_hash);
 
         return result;
     }
@@ -1710,10 +1701,6 @@ class TimeCollector : public BaseCollector {
             rb_hash_aset(hash, sym("is_main"), thread->is_main() ? Qtrue : Qfalse);
 
         }
-
-        VALUE stack_table_hash = rb_hash_new();
-        stack_table->write_result(stack_table_hash);
-        rb_ivar_set(result, rb_intern("@stack_table"), stack_table_hash);
 
         return result;
     }
