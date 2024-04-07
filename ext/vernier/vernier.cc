@@ -441,8 +441,6 @@ class IndexMap {
 struct StackTable {
     private:
 
-    std::mutex mutex;
-
     struct FrameWithInfo {
         Frame frame;
         FrameInfo info;
@@ -464,6 +462,10 @@ struct StackTable {
         // root
         StackNode() : frame(Frame{0, 0}), index(-1), parent(-1) {}
     };
+
+    // This mutex guards the StackNodes only. The rest of the maps and vectors
+    // should be guarded by the GVL
+    std::mutex stack_mutex;
 
     StackNode root_stack_node;
     vector<StackNode> stack_node_list;
@@ -493,7 +495,7 @@ struct StackTable {
             throw std::runtime_error("VERNIER BUG: empty stack");
         }
 
-        const std::lock_guard<std::mutex> lock(mutex);
+        const std::lock_guard<std::mutex> lock(stack_mutex);
 
         StackNode *node = &root_stack_node;
         for (int i = 0; i < stack.size(); i++) {
@@ -506,19 +508,23 @@ struct StackTable {
     // Converts Frames from stacks other tables. "Symbolicates" the frames
     // which allocates.
     void finalize() {
-        // FIXME: This should lock the mutex, but we have a chance of hitting GC on frame.info
-
-        for (const auto &stack_node : stack_node_list) {
-            frame_map.index(stack_node.frame);
-            func_map.index(stack_node.frame.frame);
+        {
+            const std::lock_guard<std::mutex> lock(stack_mutex);
+            for (const auto &stack_node : stack_node_list) {
+                frame_map.index(stack_node.frame);
+                func_map.index(stack_node.frame.frame);
+            }
         }
-        for (const auto &func : func_map.list) {
+
+        for (int i = func_info_list.size(); i < func_map.size(); i++) {
+            const auto &func = func_map[i];
+            // must not hold a mutex here
             func_info_list.push_back(FrameInfo(func));
         }
     }
 
     void mark_frames() {
-        const std::lock_guard<std::mutex> lock(mutex);
+        const std::lock_guard<std::mutex> lock(stack_mutex);
 
         for (auto stack_node: stack_node_list) {
             rb_gc_mark(stack_node.frame.frame);
@@ -527,15 +533,15 @@ struct StackTable {
 
     // FIXME: probably should remove
     void clear() {
-        const std::lock_guard<std::mutex> lock(mutex);
-
         frame_map.clear();
         func_map.clear();
-
-        stack_node_list.clear();
         func_info_list.clear();
 
-        root_stack_node.children.clear();
+        {
+            const std::lock_guard<std::mutex> lock(stack_mutex);
+            stack_node_list.clear();
+            root_stack_node.children.clear();
+        }
     }
 
     void write_result(VALUE result) {
@@ -675,7 +681,7 @@ class SampleTranslator {
                 }
             }
 
-            const std::lock_guard<std::mutex> lock(frame_list.mutex);
+            const std::lock_guard<std::mutex> lock(frame_list.stack_mutex);
             StackTable::StackNode *node = i == 0 ? &frame_list.root_stack_node : &frame_list.stack_node_list[frame_indexes[i - 1]];
 
             for (; i < sample.size(); i++) {

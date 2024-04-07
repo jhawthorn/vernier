@@ -253,8 +253,11 @@ module Vernier
             end
           end
 
-          @frame_categories = filenames.map do |filename|
+          func_categories = filenames.map do |filename|
             @categorizer.categorize(filename)
+          end
+          @frame_categories = profile.frame_table.fetch(:func).map do |func_idx|
+            func_categories[func_idx]
           end
         end
 
