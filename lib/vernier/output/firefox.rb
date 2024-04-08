@@ -90,7 +90,7 @@ module Vernier
       end
 
       def output
-        ::JSON.generate(data)
+        ::JSON.fast_generate(data)
       end
 
       private
