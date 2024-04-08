@@ -241,10 +241,6 @@ bool operator==(const FrameInfo& lhs, const FrameInfo& rhs) noexcept {
 struct Frame {
     VALUE frame;
     int line;
-
-    FrameInfo info() const {
-        return FrameInfo(frame);
-    }
 };
 
 bool operator==(const Frame& lhs, const Frame& rhs) noexcept {
