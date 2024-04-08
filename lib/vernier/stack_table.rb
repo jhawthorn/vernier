@@ -1,5 +1,23 @@
 module Vernier
   class StackTable
+    def to_h
+      {
+        stack_table: {
+          parent: stack_count.times.map { stack_parent_idx(_1) },
+          frame:  stack_count.times.map { stack_frame_idx(_1) }
+        },
+        frame_table: {
+          func: frame_count.times.map { frame_func_idx(_1) },
+          line:  frame_count.times.map { frame_line_no(_1) }
+        },
+        func_table: {
+          name: func_count.times.map { func_name(_1) },
+          filename: func_count.times.map { func_filename(_1) },
+          first_line: func_count.times.map { func_first_lineno(_1) }
+        }
+      }
+    end
+
     def backtrace(stack_idx)
       full_stack(stack_idx).map do |stack_idx|
         frame_idx = stack_frame_idx(stack_idx)

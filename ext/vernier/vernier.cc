@@ -561,59 +561,6 @@ struct StackTable {
         }
     }
 
-    void write_result(VALUE result) {
-        // FIXME: we should be locking the mutex here, but I believe that will
-        // cause deadlocks as we are allocating here.
-
-        Check_Type(result, T_HASH);
-        StackTable &frame_list = *this;
-
-        VALUE stack_table = rb_hash_new();
-        rb_hash_aset(result, sym("stack_table"), stack_table);
-        VALUE stack_table_parent = rb_ary_new();
-        VALUE stack_table_frame = rb_ary_new();
-        rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
-        rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
-        for (const auto &stack : frame_list.stack_node_list) {
-            VALUE parent_val = stack.parent == -1 ? Qnil : INT2NUM(stack.parent);
-            rb_ary_push(stack_table_parent, parent_val);
-            rb_ary_push(stack_table_frame, INT2NUM(frame_map.index(stack.frame)));
-        }
-
-        VALUE frame_table = rb_hash_new();
-        rb_hash_aset(result, sym("frame_table"), frame_table);
-        VALUE frame_table_func = rb_ary_new();
-        VALUE frame_table_line = rb_ary_new();
-        rb_hash_aset(frame_table, sym("func"), frame_table_func);
-        rb_hash_aset(frame_table, sym("line"), frame_table_line);
-        //for (const auto &frame : frame_list.frame_list) {
-        for (int i = 0; i < frame_map.size(); i++) {
-            const auto &frame = frame_map[i];
-            int func_idx = func_map.index(frame.frame);
-            rb_ary_push(frame_table_func, INT2NUM(func_idx));
-            rb_ary_push(frame_table_line, INT2NUM(frame.line));
-        }
-
-        // TODO: dedup funcs before this step
-        VALUE func_table = rb_hash_new();
-        rb_hash_aset(result, sym("func_table"), func_table);
-        VALUE func_table_name = rb_ary_new();
-        VALUE func_table_filename = rb_ary_new();
-        VALUE func_table_first_line = rb_ary_new();
-        rb_hash_aset(func_table, sym("name"), func_table_name);
-        rb_hash_aset(func_table, sym("filename"), func_table_filename);
-        rb_hash_aset(func_table, sym("first_line"), func_table_first_line);
-        for (const auto &info : frame_list.func_info_list) {
-            const std::string label = info.label;
-            const std::string filename = info.file;
-            const int first_line = info.first_lineno;
-
-            rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
-            rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
-            rb_ary_push(func_table_first_line, INT2NUM(first_line));
-        }
-    }
-
     static VALUE stack_table_stack_count(VALUE self);
     static VALUE stack_table_frame_count(VALUE self);
     static VALUE stack_table_func_count(VALUE self);
@@ -659,15 +606,6 @@ static StackTable *get_stack_table(VALUE obj) {
     StackTable *stack_table;
     TypedData_Get_Struct(obj, StackTable, &rb_stack_table_type, stack_table);
     return stack_table;
-}
-
-static VALUE
-stack_table_to_h(VALUE self) {
-    StackTable *stack_table = get_stack_table(self);
-    stack_table->finalize();
-    VALUE result = rb_hash_new();
-    stack_table->write_result(result);
-    return result;
 }
 
 static VALUE
@@ -2059,7 +1997,6 @@ Init_vernier(void)
   rb_undef_alloc_func(rb_cStackTable);
   rb_define_singleton_method(rb_cStackTable, "new", stack_table_new, 0);
   rb_define_method(rb_cStackTable, "current_stack", stack_table_current_stack, -1);
-  rb_define_method(rb_cStackTable, "to_h", stack_table_to_h, 0);
   rb_define_method(rb_cStackTable, "stack_parent_idx", stack_table_stack_parent_idx, 1);
   rb_define_method(rb_cStackTable, "stack_frame_idx", stack_table_stack_frame_idx, 1);
   rb_define_method(rb_cStackTable, "frame_line_no", StackTable::stack_table_frame_line_no, 1);
