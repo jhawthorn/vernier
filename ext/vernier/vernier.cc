@@ -502,6 +502,24 @@ struct StackTable {
         return node->index;
     }
 
+    int stack_parent(int stack_idx) {
+        const std::lock_guard<std::mutex> lock(stack_mutex);
+        if (stack_idx < 0 || stack_idx >= stack_node_list.size()) {
+            return -1;
+        } else {
+            return stack_node_list[stack_idx].parent;
+        }
+    }
+
+    int stack_frame(int stack_idx) {
+        const std::lock_guard<std::mutex> lock(stack_mutex);
+        if (stack_idx < 0 || stack_idx >= stack_node_list.size()) {
+            return -1;
+        } else {
+            return frame_map.index(stack_node_list[stack_idx].frame);
+        }
+    }
+
     // Converts Frames from stacks other tables. "Symbolicates" the frames
     // which allocates.
     void finalize() {
@@ -596,6 +614,16 @@ struct StackTable {
         }
     }
 
+    static VALUE stack_table_stack_count(VALUE self);
+    static VALUE stack_table_frame_count(VALUE self);
+    static VALUE stack_table_func_count(VALUE self);
+
+    static VALUE stack_table_frame_line_no(VALUE self, VALUE idxval);
+    static VALUE stack_table_frame_func_idx(VALUE self, VALUE idxval);
+    static VALUE stack_table_func_name(VALUE self, VALUE idxval);
+    static VALUE stack_table_func_filename(VALUE self, VALUE idxval);
+    static VALUE stack_table_func_first_lineno(VALUE self, VALUE idxval);
+
     friend class SampleTranslator;
 };
 
@@ -659,6 +687,125 @@ stack_table_current_stack(int argc, VALUE *argv, VALUE self) {
     stack.sample(offset);
     int stack_index = stack_table->stack_index(stack);
     return INT2NUM(stack_index);
+}
+
+static VALUE
+stack_table_stack_parent_idx(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    int idx = NUM2INT(idxval);
+    int parent_idx = stack_table->stack_parent(idx);
+    if (parent_idx < 0) {
+        return Qnil;
+    } else {
+        return INT2NUM(parent_idx);
+    }
+}
+
+static VALUE
+stack_table_stack_frame_idx(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    //stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    int frame_idx = stack_table->stack_frame(idx);
+    return frame_idx < 0 ? Qnil : INT2NUM(frame_idx);
+}
+
+VALUE
+StackTable::stack_table_stack_count(VALUE self) {
+    StackTable *stack_table = get_stack_table(self);
+    int count;
+    {
+        const std::lock_guard<std::mutex> lock(stack_table->stack_mutex);
+        count = stack_table->stack_node_list.size();
+    }
+    return INT2NUM(count);
+}
+
+VALUE
+StackTable::stack_table_frame_count(VALUE self) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int count = stack_table->frame_map.size();
+    return INT2NUM(count);
+}
+
+VALUE
+StackTable::stack_table_func_count(VALUE self) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int count = stack_table->func_map.size();
+    return INT2NUM(count);
+}
+
+VALUE
+StackTable::stack_table_frame_line_no(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    if (idx < 0 || idx >= stack_table->frame_map.size()) {
+        return Qnil;
+    } else {
+        const auto &frame = stack_table->frame_map[idx];
+        return INT2NUM(frame.line);
+    }
+}
+
+VALUE
+StackTable::stack_table_frame_func_idx(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    if (idx < 0 || idx >= stack_table->frame_map.size()) {
+        return Qnil;
+    } else {
+        const auto &frame = stack_table->frame_map[idx];
+        int func_idx = stack_table->func_map.index(frame.frame);
+        return INT2NUM(func_idx);
+    }
+}
+
+VALUE
+StackTable::stack_table_func_name(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    auto &table = stack_table->func_info_list;
+    if (idx < 0 || idx >= table.size()) {
+        return Qnil;
+    } else {
+        const auto &func_info = table[idx];
+        const std::string &label = func_info.label;
+        return rb_interned_str(label.c_str(), label.length());
+    }
+}
+
+VALUE
+StackTable::stack_table_func_filename(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    auto &table = stack_table->func_info_list;
+    if (idx < 0 || idx >= table.size()) {
+        return Qnil;
+    } else {
+        const auto &func_info = table[idx];
+        const std::string &filename = func_info.file;
+        return rb_interned_str(filename.c_str(), filename.length());
+    }
+}
+
+VALUE
+StackTable::stack_table_func_first_lineno(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    auto &table = stack_table->func_info_list;
+    if (idx < 0 || idx >= table.size()) {
+        return Qnil;
+    } else {
+        const auto &func_info = table[idx];
+        return INT2NUM(func_info.first_lineno);
+    }
 }
 
 class SampleTranslator {
@@ -1913,6 +2060,16 @@ Init_vernier(void)
   rb_define_singleton_method(rb_cStackTable, "new", stack_table_new, 0);
   rb_define_method(rb_cStackTable, "current_stack", stack_table_current_stack, -1);
   rb_define_method(rb_cStackTable, "to_h", stack_table_to_h, 0);
+  rb_define_method(rb_cStackTable, "stack_parent_idx", stack_table_stack_parent_idx, 1);
+  rb_define_method(rb_cStackTable, "stack_frame_idx", stack_table_stack_frame_idx, 1);
+  rb_define_method(rb_cStackTable, "frame_line_no", StackTable::stack_table_frame_line_no, 1);
+  rb_define_method(rb_cStackTable, "frame_func_idx", StackTable::stack_table_frame_func_idx, 1);
+  rb_define_method(rb_cStackTable, "func_name", StackTable::stack_table_func_name, 1);
+  rb_define_method(rb_cStackTable, "func_filename", StackTable::stack_table_func_filename, 1);
+  rb_define_method(rb_cStackTable, "func_first_lineno", StackTable::stack_table_func_first_lineno, 1);
+  rb_define_method(rb_cStackTable, "stack_count", StackTable::stack_table_stack_count, 0);
+  rb_define_method(rb_cStackTable, "frame_count", StackTable::stack_table_frame_count, 0);
+  rb_define_method(rb_cStackTable, "func_count", StackTable::stack_table_func_count, 0);
 
   Init_consts(rb_mVernierMarkerPhase);
 
