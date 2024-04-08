@@ -324,12 +324,14 @@ module Vernier
             end_times << (finish&./(1_000_000.0))
             phases << phase
 
-            category = case name
-            when /\AGC/ then gc_category.idx
-            when /\AThread/ then thread_category.idx
-            else
-              0
-            end
+            category =
+              if name.start_with?("GC")
+                gc_category.idx
+              elsif name.start_with?("Thread")
+                thread_category.idx
+              else
+                0
+              end
 
             categories << category
             data << datum
