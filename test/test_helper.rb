@@ -7,6 +7,8 @@ ENV["MT_CPU"] = "0"
 require "minitest/autorun"
 
 class Minitest::Test
+  make_my_diffs_pretty!
+
   def assert_valid_result(result)
     assert_equal result.samples.length, result.weights.length
 

@@ -124,4 +124,33 @@ class TestStackTable < Minitest::Test
 
     collector.stop
   end
+
+  def test_backtrace
+    stack_table = Vernier::StackTable.new
+    expected = caller_locations(0); index = stack_table.current_stack
+
+    expected.map! do |location|
+      "#{location.absolute_path}:#{location.lineno}:in '#{location.base_label}'"
+    end
+
+    actual = stack_table.backtrace(index)
+
+    # We can't actually make these equivalent with the current formats of both,
+    # so we can remove the class names here to have a useful assertion.
+    actual.map! do |line|
+      line.gsub(/in '.*[#.]/, "in '")
+    end
+
+    # Replace cfunc with previous frame as caller_locations does
+    prev = "<cfunc>:0"
+    actual.reverse_each do |line|
+      if line.start_with?("<cfunc>:0")
+        line.gsub!(/\A<cfunc>:0/, prev)
+      else
+        prev = line[/\A(.*):in '/, 1]
+      end
+    end
+
+    assert_equal expected, actual
+  end
 end
