@@ -280,13 +280,16 @@ module Vernier
         end
 
         def data
+          started_at = (@started_at - 0) / 1_000_000.0
+          stopped_at = (@stopped_at - 0) / 1_000_000.0 if @stopped_at
+
           {
             name: @name,
             isMainThread: @is_main,
-            processStartupTime: 0, # FIXME
-            processShutdownTime: nil, # FIXME
-            registerTime: (@started_at - 0) / 1_000_000.0,
-            unregisterTime: ((@stopped_at - 0) / 1_000_000.0 if @stopped_at),
+            processStartupTime: started_at,
+            processShutdownTime: stopped_at,
+            registerTime: started_at,
+            unregisterTime: stopped_at,
             pausedRanges: [],
             pid: profile.pid || Process.pid,
             tid: @tid,
