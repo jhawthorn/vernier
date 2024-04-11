@@ -1,6 +1,17 @@
 module Vernier
   class Result
-    attr_reader :stack_table, :frame_table, :func_table
+    def stack_table
+      @stack_table[:stack_table]
+    end
+
+    def frame_table
+      @stack_table[:frame_table]
+    end
+
+    def func_table
+      @stack_table[:func_table]
+    end
+
     attr_reader :markers
 
     attr_accessor :hooks

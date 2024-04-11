@@ -25,6 +25,22 @@ module FirefoxTestHelpers
       assert thread["stackTable"]
       assert thread["stringArray"]
 
+      string_array = thread["stringArray"]
+      thread["funcTable"]["name"].each do |idx|
+        assert_kind_of Integer, idx
+        assert idx < string_array.size
+      end
+      thread["funcTable"]["fileName"].each do |idx|
+        assert_kind_of Integer, idx
+        assert idx < string_array.size
+      end
+
+      thread["frameTable"]["implementation"].each do |idx|
+        next if idx.nil?
+        assert_kind_of Integer, idx
+        assert idx < string_array.size
+      end
+
       assert thread["markers"]
 
       markers = thread["markers"]

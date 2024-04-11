@@ -237,24 +237,25 @@ module Vernier
 
           lines = profile.frame_table.fetch(:line)
 
-          @frame_implementations = filenames.zip(lines).map do |filename, line|
+          func_implementations = filenames.map do |filename|
             # Must match strings in `src/profile-logic/profile-data.js`
             # inside the firefox profiler. See `getFriendlyStackTypeName`
             if filename == "<cfunc>"
               @strings["native"]
             else
-              # FIXME: We need to get upstream support for JIT frames
-              if line == -1
-                @strings["yjit"]
-              else
-                # nil means interpreter
-                nil
-              end
+              # nil means interpreter
+              nil
             end
           end
+          @frame_implementations = profile.frame_table.fetch(:func).map do |func_idx|
+            func_implementations[func_idx]
+          end
 
-          @frame_categories = filenames.map do |filename|
+          func_categories = filenames.map do |filename|
             @categorizer.categorize(filename)
+          end
+          @frame_categories = profile.frame_table.fetch(:func).map do |func_idx|
+            func_categories[func_idx]
           end
         end
 

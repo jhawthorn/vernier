@@ -57,6 +57,7 @@ static VALUE rb_mVernier;
 static VALUE rb_cVernierResult;
 static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
+static VALUE rb_cStackTable;
 
 static const char *gvl_event_name(rb_event_flag_t event) {
     switch (event) {
@@ -197,6 +198,7 @@ std::ostream& operator<<(std::ostream& os, const TimeStamp& info) {
     return os;
 }
 
+// TODO: Rename FuncInfo
 struct FrameInfo {
     static const char *label_cstr(VALUE frame) {
         VALUE label = rb_profile_frame_full_label(frame);
@@ -239,10 +241,6 @@ bool operator==(const FrameInfo& lhs, const FrameInfo& rhs) noexcept {
 struct Frame {
     VALUE frame;
     int line;
-
-    FrameInfo info() const {
-        return FrameInfo(frame);
-    }
 };
 
 bool operator==(const Frame& lhs, const Frame& rhs) noexcept {
@@ -266,7 +264,7 @@ namespace std {
 
 // A basic semaphore built on sem_wait/sem_post
 // post() is guaranteed to be async-signal-safe
-class SamplerSemaphore {
+class SignalSafeSemaphore {
 #ifdef __APPLE__
     dispatch_semaphore_t sem;
 #else
@@ -275,7 +273,7 @@ class SamplerSemaphore {
 
     public:
 
-    SamplerSemaphore(unsigned int value = 0) {
+    SignalSafeSemaphore(unsigned int value = 0) {
 #ifdef __APPLE__
         sem = dispatch_semaphore_create(value);
 #else
@@ -283,7 +281,7 @@ class SamplerSemaphore {
 #endif
     };
 
-    ~SamplerSemaphore() {
+    ~SignalSafeSemaphore() {
 #ifdef __APPLE__
         dispatch_release(sem);
 #else
@@ -316,17 +314,25 @@ class SamplerSemaphore {
     }
 };
 
-struct RawSample {
+class RawSample {
+    public:
+
     constexpr static int MAX_LEN = 2048;
+
+    private:
+
     VALUE frames[MAX_LEN];
     int lines[MAX_LEN];
     int len;
+    int offset;
     bool gc;
 
-    RawSample() : len(0), gc(false) { }
+    public:
+
+    RawSample() : len(0), gc(false), offset(0) { }
 
     int size() const {
-        return len;
+        return len - offset;
     }
 
     Frame frame(int i) const {
@@ -336,7 +342,7 @@ struct RawSample {
         return frame;
     }
 
-    void sample() {
+    void sample(int offset = 0) {
         clear();
 
         if (!ruby_native_thread_p()) {
@@ -347,16 +353,18 @@ struct RawSample {
           gc = true;
         } else {
           len = rb_profile_frames(0, MAX_LEN, frames, lines);
+          this->offset = std::min(offset, len);
         }
     }
 
     void clear() {
         len = 0;
+        offset = 0;
         gc = false;
     }
 
     bool empty() const {
-        return len == 0;
+        return len <= offset;
     }
 };
 
@@ -366,7 +374,7 @@ struct RawSample {
 struct LiveSample {
     RawSample sample;
 
-    SamplerSemaphore sem_complete;
+    SignalSafeSemaphore sem_complete;
 
     // Wait for a sample to be collected by the signal handler on another thread
     void wait() {
@@ -393,41 +401,51 @@ struct LiveSample {
     }
 };
 
-struct FrameList {
-    std::unordered_map<std::string, int> string_to_idx;
-    std::vector<std::string> string_list;
+template <typename K>
+class IndexMap {
+    public:
+        std::unordered_map<K, int> to_idx;
+        std::vector<K> list;
 
-    int string_index(const std::string str) {
-        auto it = string_to_idx.find(str);
-        if (it == string_to_idx.end()) {
-            int idx = string_list.size();
-            string_list.push_back(str);
-
-            auto result = string_to_idx.insert({str, idx});
-            it = result.first;
+        const K& operator[](int i) const noexcept {
+            return list[i];
         }
 
-        return it->second;
-    }
+        size_t size() const noexcept {
+            return list.size();
+        }
+
+        int index(const K key) {
+            auto it = to_idx.find(key);
+            if (it == to_idx.end()) {
+                int idx = list.size();
+                list.push_back(key);
+
+                auto result = to_idx.insert({key, idx});
+                it = result.first;
+            }
+
+            return it->second;
+        }
+
+        void clear() {
+            list.clear();
+            to_idx.clear();
+        }
+};
+
+struct StackTable {
+    private:
 
     struct FrameWithInfo {
         Frame frame;
         FrameInfo info;
     };
 
-    std::unordered_map<Frame, int> frame_to_idx;
-    std::vector<Frame> frame_list;
-    std::vector<FrameWithInfo> frame_with_info_list;
-    int frame_index(const Frame frame) {
-        auto it = frame_to_idx.find(frame);
-        if (it == frame_to_idx.end()) {
-            int idx = frame_list.size();
-            frame_list.push_back(frame);
-            auto result = frame_to_idx.insert({frame, idx});
-            it = result.first;
-        }
-        return it->second;
-    }
+    IndexMap<Frame> frame_map;
+
+    IndexMap<VALUE> func_map;
+    std::vector<FrameInfo> func_info_list;
 
     struct StackNode {
         std::unordered_map<Frame, int> children;
@@ -441,21 +459,13 @@ struct FrameList {
         StackNode() : frame(Frame{0, 0}), index(-1), parent(-1) {}
     };
 
+    // This mutex guards the StackNodes only. The rest of the maps and vectors
+    // should be guarded by the GVL
+    std::mutex stack_mutex;
+
     StackNode root_stack_node;
     vector<StackNode> stack_node_list;
-
-    int stack_index(const RawSample &stack) {
-        if (stack.empty()) {
-            throw std::runtime_error("VERNIER BUG: empty stack");
-        }
-
-        StackNode *node = &root_stack_node;
-        for (int i = 0; i < stack.size(); i++) {
-            Frame frame = stack.frame(i);
-            node = next_stack_node(node, frame);
-        }
-        return node->index;
-    }
+    int stack_node_list_finalized_idx = 0;
 
     StackNode *next_stack_node(StackNode *node, Frame frame) {
         auto search = node->children.find(frame);
@@ -475,82 +485,266 @@ struct FrameList {
         }
     }
 
+    public:
+
+    int stack_index(const RawSample &stack) {
+        if (stack.empty()) {
+            throw std::runtime_error("VERNIER BUG: empty stack");
+        }
+
+        const std::lock_guard<std::mutex> lock(stack_mutex);
+
+        StackNode *node = &root_stack_node;
+        for (int i = 0; i < stack.size(); i++) {
+            Frame frame = stack.frame(i);
+            node = next_stack_node(node, frame);
+        }
+        return node->index;
+    }
+
+    int stack_parent(int stack_idx) {
+        const std::lock_guard<std::mutex> lock(stack_mutex);
+        if (stack_idx < 0 || stack_idx >= stack_node_list.size()) {
+            return -1;
+        } else {
+            return stack_node_list[stack_idx].parent;
+        }
+    }
+
+    int stack_frame(int stack_idx) {
+        const std::lock_guard<std::mutex> lock(stack_mutex);
+        if (stack_idx < 0 || stack_idx >= stack_node_list.size()) {
+            return -1;
+        } else {
+            return frame_map.index(stack_node_list[stack_idx].frame);
+        }
+    }
+
     // Converts Frames from stacks other tables. "Symbolicates" the frames
     // which allocates.
     void finalize() {
-        for (const auto &stack_node : stack_node_list) {
-            frame_index(stack_node.frame);
+        {
+            const std::lock_guard<std::mutex> lock(stack_mutex);
+            for (int i = stack_node_list_finalized_idx; i < stack_node_list.size(); i++) {
+                const auto &stack_node = stack_node_list[i];
+                frame_map.index(stack_node.frame);
+                func_map.index(stack_node.frame.frame);
+                stack_node_list_finalized_idx = i;
+            }
         }
-        for (const auto &frame : frame_list) {
-            frame_with_info_list.push_back(FrameWithInfo{frame, frame.info()});
+
+        for (int i = func_info_list.size(); i < func_map.size(); i++) {
+            const auto &func = func_map[i];
+            // must not hold a mutex here
+            func_info_list.push_back(FrameInfo(func));
         }
     }
 
     void mark_frames() {
+        const std::lock_guard<std::mutex> lock(stack_mutex);
+
         for (auto stack_node: stack_node_list) {
             rb_gc_mark(stack_node.frame.frame);
         }
     }
 
+    // FIXME: probably should remove
     void clear() {
-        string_list.clear();
-        frame_list.clear();
-        stack_node_list.clear();
-        frame_with_info_list.clear();
+        frame_map.clear();
+        func_map.clear();
+        func_info_list.clear();
 
-        string_to_idx.clear();
-        frame_to_idx.clear();
-        root_stack_node.children.clear();
-    }
-
-    void write_result(VALUE result) {
-        FrameList &frame_list = *this;
-
-        VALUE stack_table = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@stack_table"), stack_table);
-        VALUE stack_table_parent = rb_ary_new();
-        VALUE stack_table_frame = rb_ary_new();
-        rb_hash_aset(stack_table, sym("parent"), stack_table_parent);
-        rb_hash_aset(stack_table, sym("frame"), stack_table_frame);
-        for (const auto &stack : frame_list.stack_node_list) {
-            VALUE parent_val = stack.parent == -1 ? Qnil : INT2NUM(stack.parent);
-            rb_ary_push(stack_table_parent, parent_val);
-            rb_ary_push(stack_table_frame, INT2NUM(frame_list.frame_index(stack.frame)));
-        }
-
-        VALUE frame_table = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@frame_table"), frame_table);
-        VALUE frame_table_func = rb_ary_new();
-        VALUE frame_table_line = rb_ary_new();
-        rb_hash_aset(frame_table, sym("func"), frame_table_func);
-        rb_hash_aset(frame_table, sym("line"), frame_table_line);
-        //for (const auto &frame : frame_list.frame_list) {
-        for (int i = 0; i < frame_list.frame_with_info_list.size(); i++) {
-            const auto &frame = frame_list.frame_with_info_list[i];
-            rb_ary_push(frame_table_func, INT2NUM(i));
-            rb_ary_push(frame_table_line, INT2NUM(frame.frame.line));
-        }
-
-        // TODO: dedup funcs before this step
-        VALUE func_table = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@func_table"), func_table);
-        VALUE func_table_name = rb_ary_new();
-        VALUE func_table_filename = rb_ary_new();
-        VALUE func_table_first_line = rb_ary_new();
-        rb_hash_aset(func_table, sym("name"), func_table_name);
-        rb_hash_aset(func_table, sym("filename"), func_table_filename);
-        rb_hash_aset(func_table, sym("first_line"), func_table_first_line);
-        for (const auto &frame : frame_list.frame_with_info_list) {
-            const std::string label = frame.info.label;
-            const std::string filename = frame.info.file;
-            const int first_line = frame.info.first_lineno;
-
-            rb_ary_push(func_table_name, rb_str_new(label.c_str(), label.length()));
-            rb_ary_push(func_table_filename, rb_str_new(filename.c_str(), filename.length()));
-            rb_ary_push(func_table_first_line, INT2NUM(first_line));
+        {
+            const std::lock_guard<std::mutex> lock(stack_mutex);
+            stack_node_list.clear();
+            root_stack_node.children.clear();
         }
     }
+
+    static VALUE stack_table_stack_count(VALUE self);
+    static VALUE stack_table_frame_count(VALUE self);
+    static VALUE stack_table_func_count(VALUE self);
+
+    static VALUE stack_table_frame_line_no(VALUE self, VALUE idxval);
+    static VALUE stack_table_frame_func_idx(VALUE self, VALUE idxval);
+    static VALUE stack_table_func_name(VALUE self, VALUE idxval);
+    static VALUE stack_table_func_filename(VALUE self, VALUE idxval);
+    static VALUE stack_table_func_first_lineno(VALUE self, VALUE idxval);
+
+    friend class SampleTranslator;
 };
+
+static void
+stack_table_mark(void *data) {
+    StackTable *stack_table = static_cast<StackTable *>(data);
+    stack_table->mark_frames();
+}
+
+static void
+stack_table_free(void *data) {
+    StackTable *stack_table = static_cast<StackTable *>(data);
+    delete stack_table;
+}
+
+static const rb_data_type_t rb_stack_table_type = {
+    .wrap_struct_name = "vernier/stack_table",
+    .function = {
+        //.dmemsize = rb_collector_memsize,
+        .dmark = stack_table_mark,
+        .dfree = stack_table_free,
+    },
+};
+
+static VALUE
+stack_table_new(VALUE self) {
+    StackTable *stack_table = new StackTable();
+    VALUE obj = TypedData_Wrap_Struct(self, &rb_stack_table_type, stack_table);
+    return obj;
+}
+
+static StackTable *get_stack_table(VALUE obj) {
+    StackTable *stack_table;
+    TypedData_Get_Struct(obj, StackTable, &rb_stack_table_type, stack_table);
+    return stack_table;
+}
+
+static VALUE
+stack_table_current_stack(int argc, VALUE *argv, VALUE self) {
+    int offset;
+    VALUE offset_v;
+
+    rb_scan_args(argc, argv, "01", &offset_v);
+    if (argc > 0) {
+        offset = NUM2INT(offset_v) + 1;
+    } else {
+        offset = 1;
+    }
+
+    StackTable *stack_table = get_stack_table(self);
+    RawSample stack;
+    stack.sample(offset);
+    int stack_index = stack_table->stack_index(stack);
+    return INT2NUM(stack_index);
+}
+
+static VALUE
+stack_table_stack_parent_idx(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    int idx = NUM2INT(idxval);
+    int parent_idx = stack_table->stack_parent(idx);
+    if (parent_idx < 0) {
+        return Qnil;
+    } else {
+        return INT2NUM(parent_idx);
+    }
+}
+
+static VALUE
+stack_table_stack_frame_idx(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    //stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    int frame_idx = stack_table->stack_frame(idx);
+    return frame_idx < 0 ? Qnil : INT2NUM(frame_idx);
+}
+
+VALUE
+StackTable::stack_table_stack_count(VALUE self) {
+    StackTable *stack_table = get_stack_table(self);
+    int count;
+    {
+        const std::lock_guard<std::mutex> lock(stack_table->stack_mutex);
+        count = stack_table->stack_node_list.size();
+    }
+    return INT2NUM(count);
+}
+
+VALUE
+StackTable::stack_table_frame_count(VALUE self) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int count = stack_table->frame_map.size();
+    return INT2NUM(count);
+}
+
+VALUE
+StackTable::stack_table_func_count(VALUE self) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int count = stack_table->func_map.size();
+    return INT2NUM(count);
+}
+
+VALUE
+StackTable::stack_table_frame_line_no(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    if (idx < 0 || idx >= stack_table->frame_map.size()) {
+        return Qnil;
+    } else {
+        const auto &frame = stack_table->frame_map[idx];
+        return INT2NUM(frame.line);
+    }
+}
+
+VALUE
+StackTable::stack_table_frame_func_idx(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    if (idx < 0 || idx >= stack_table->frame_map.size()) {
+        return Qnil;
+    } else {
+        const auto &frame = stack_table->frame_map[idx];
+        int func_idx = stack_table->func_map.index(frame.frame);
+        return INT2NUM(func_idx);
+    }
+}
+
+VALUE
+StackTable::stack_table_func_name(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    auto &table = stack_table->func_info_list;
+    if (idx < 0 || idx >= table.size()) {
+        return Qnil;
+    } else {
+        const auto &func_info = table[idx];
+        const std::string &label = func_info.label;
+        return rb_interned_str(label.c_str(), label.length());
+    }
+}
+
+VALUE
+StackTable::stack_table_func_filename(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    auto &table = stack_table->func_info_list;
+    if (idx < 0 || idx >= table.size()) {
+        return Qnil;
+    } else {
+        const auto &func_info = table[idx];
+        const std::string &filename = func_info.file;
+        return rb_interned_str(filename.c_str(), filename.length());
+    }
+}
+
+VALUE
+StackTable::stack_table_func_first_lineno(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    auto &table = stack_table->func_info_list;
+    if (idx < 0 || idx >= table.size()) {
+        return Qnil;
+    } else {
+        const auto &func_info = table[idx];
+        return INT2NUM(func_info.first_lineno);
+    }
+}
 
 class SampleTranslator {
     public:
@@ -563,7 +757,7 @@ class SampleTranslator {
         SampleTranslator() : len(0), last_stack_index(-1) {
         }
 
-        int translate(FrameList &frame_list, const RawSample &sample) {
+        int translate(StackTable &frame_list, const RawSample &sample) {
             int i = 0;
             for (; i < len && i < sample.size(); i++) {
                 if (frames[i] != sample.frame(i)) {
@@ -571,7 +765,8 @@ class SampleTranslator {
                 }
             }
 
-            FrameList::StackNode *node = i == 0 ? &frame_list.root_stack_node : &frame_list.stack_node_list[frame_indexes[i - 1]];
+            const std::lock_guard<std::mutex> lock(frame_list.stack_mutex);
+            StackTable::StackNode *node = i == 0 ? &frame_list.root_stack_node : &frame_list.stack_node_list[frame_indexes[i - 1]];
 
             for (; i < sample.size(); i++) {
                 Frame frame = sample.frame(i);
@@ -743,7 +938,6 @@ class SampleList {
 
         std::vector<int> stacks;
         std::vector<TimeStamp> timestamps;
-        std::vector<native_thread_id_t> threads;
         std::vector<Category> categories;
         std::vector<int> weights;
 
@@ -755,11 +949,10 @@ class SampleList {
             return size() == 0;
         }
 
-        void record_sample(int stack_index, TimeStamp time, native_thread_id_t thread_id, Category category) {
+        void record_sample(int stack_index, TimeStamp time, Category category) {
             if (
                     !empty() &&
                     stacks.back() == stack_index &&
-                    threads.back() == thread_id &&
                     categories.back() == category)
             {
                 // We don't compare timestamps for de-duplication
@@ -767,7 +960,6 @@ class SampleList {
             } else {
                 stacks.push_back(stack_index);
                 timestamps.push_back(time);
-                threads.push_back(thread_id);
                 categories.push_back(category);
                 weights.push_back(1);
             }
@@ -841,7 +1033,7 @@ class Thread {
             }
         }
 
-        void record_newobj(VALUE obj, FrameList &frame_list) {
+        void record_newobj(VALUE obj, StackTable &frame_list) {
             RawSample sample;
             sample.sample();
 
@@ -931,12 +1123,12 @@ class Thread {
 
 class ThreadTable {
     public:
-        FrameList &frame_list;
+        StackTable &frame_list;
 
         std::vector<std::unique_ptr<Thread> > list;
         std::mutex mutex;
 
-        ThreadTable(FrameList &frame_list) : frame_list(frame_list) {
+        ThreadTable(StackTable &frame_list) : frame_list(frame_list) {
         }
 
         void mark() {
@@ -1017,15 +1209,17 @@ class BaseCollector {
     protected:
 
     virtual void reset() {
-        frame_list.clear();
     }
 
     public:
     bool running = false;
-    FrameList frame_list;
+    StackTable *stack_table;
+    VALUE stack_table_value;
 
     TimeStamp started_at;
 
+    BaseCollector(VALUE stack_table_value) : stack_table_value(stack_table_value), stack_table(get_stack_table(stack_table_value)) {
+    }
     virtual ~BaseCollector() {}
 
     virtual bool start() {
@@ -1068,7 +1262,8 @@ class BaseCollector {
     };
 
     virtual void mark() {
-        frame_list.mark_frames();
+        //frame_list.mark_frames();
+        rb_gc_mark(stack_table_value);
     };
 
     virtual VALUE get_markers() {
@@ -1082,16 +1277,15 @@ class CustomCollector : public BaseCollector {
     void sample() {
         RawSample sample;
         sample.sample();
-        int stack_index = frame_list.stack_index(sample);
+        int stack_index = stack_table->stack_index(sample);
 
-	native_thread_id_t thread_id = 0;
-        samples.record_sample(stack_index, TimeStamp::Now(), thread_id, CATEGORY_NORMAL);
+        samples.record_sample(stack_index, TimeStamp::Now(), CATEGORY_NORMAL);
     }
 
     VALUE stop() {
         BaseCollector::stop();
 
-        frame_list.finalize();
+        stack_table->finalize();
 
         VALUE result = build_collector_result();
 
@@ -1112,10 +1306,12 @@ class CustomCollector : public BaseCollector {
 	rb_hash_aset(threads, ULL2NUM(0), thread_hash);
 	rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
 
-        frame_list.write_result(result);
-
         return result;
     }
+
+    public:
+
+    CustomCollector(VALUE stack_table) : BaseCollector(stack_table) { }
 };
 
 class RetainedCollector : public BaseCollector {
@@ -1135,7 +1331,7 @@ class RetainedCollector : public BaseCollector {
             // Ideally we'd allow empty samples to be represented
             return;
         }
-        int stack_index = frame_list.stack_index(sample);
+        int stack_index = stack_table->stack_index(sample);
 
         object_list.push_back(obj);
         object_frames.emplace(obj, stack_index);
@@ -1165,6 +1361,8 @@ class RetainedCollector : public BaseCollector {
 
     public:
 
+    RetainedCollector(VALUE stack_table) : BaseCollector(stack_table) { }
+
     bool start() {
         if (!BaseCollector::start()) {
             return false;
@@ -1191,7 +1389,7 @@ class RetainedCollector : public BaseCollector {
         rb_tracepoint_disable(tp_newobj);
         tp_newobj = Qnil;
 
-        frame_list.finalize();
+        stack_table->finalize();
 
         // We should have collected info for all our frames, so no need to continue
         // marking them
@@ -1213,7 +1411,7 @@ class RetainedCollector : public BaseCollector {
 
     VALUE build_collector_result() {
         RetainedCollector *collector = this;
-        FrameList &frame_list = collector->frame_list;
+        StackTable &frame_list = *collector->stack_table;
 
         VALUE result = BaseCollector::build_collector_result();
 
@@ -1241,8 +1439,6 @@ class RetainedCollector : public BaseCollector {
             }
         }
 
-        frame_list.write_result(result);
-
         return result;
     }
 
@@ -1251,7 +1447,8 @@ class RetainedCollector : public BaseCollector {
         // can be garbage collected.
         // When we stop collection we will stringify the remaining frames, and then
         // clear them from the set, allowing them to be removed from out output.
-        frame_list.mark_frames();
+        stack_table->mark_frames();
+        rb_gc_mark(stack_table_value);
 
         rb_gc_mark(tp_newobj);
         rb_gc_mark(tp_freeobj);
@@ -1333,7 +1530,7 @@ class TimeCollector : public BaseCollector {
     pthread_t sample_thread;
 
     atomic_bool running;
-    SamplerSemaphore thread_stopped;
+    SignalSafeSemaphore thread_stopped;
 
     TimeStamp interval;
     unsigned int allocation_sample_rate;
@@ -1350,7 +1547,7 @@ class TimeCollector : public BaseCollector {
     }
 
     public:
-    TimeCollector(TimeStamp interval, unsigned int allocation_sample_rate) : interval(interval), allocation_sample_rate(allocation_sample_rate), threads(frame_list) {
+    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_sample_rate) : BaseCollector(stack_table), interval(interval), allocation_sample_rate(allocation_sample_rate), threads(*get_stack_table(stack_table)) {
     }
 
     void record_newobj(VALUE obj) {
@@ -1376,11 +1573,10 @@ class TimeCollector : public BaseCollector {
 
     void record_sample(const RawSample &sample, TimeStamp time, Thread &thread, Category category) {
         if (!sample.empty()) {
-            int stack_index = thread.translator.translate(frame_list, sample);
+            int stack_index = thread.translator.translate(*stack_table, sample);
             thread.samples.record_sample(
                     stack_index,
                     time,
-                    thread.native_tid,
                     category
                     );
         }
@@ -1430,7 +1626,7 @@ class TimeCollector : public BaseCollector {
                         // that by the GVL instrumentation, but let's try to get
                         // it to a consistent state and stop profiling it.
                         thread.set_state(Thread::State::STOPPED);
-                    } else if (sample.sample.gc) {
+                    } else if (sample.sample.empty()) {
                         // fprintf(stderr, "skipping GC sample\n");
                     } else {
                         record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
@@ -1439,7 +1635,6 @@ class TimeCollector : public BaseCollector {
                     thread.samples.record_sample(
                             thread.stack_on_suspend_idx,
                             sample_start,
-                            thread.native_tid,
                             CATEGORY_IDLE);
                 } else {
                 }
@@ -1602,7 +1797,7 @@ class TimeCollector : public BaseCollector {
         rb_remove_event_hook(internal_gc_event_cb);
         rb_remove_event_hook(internal_thread_event_cb);
 
-        frame_list.finalize();
+        stack_table->finalize();
 
         VALUE result = build_collector_result();
 
@@ -1632,13 +1827,12 @@ class TimeCollector : public BaseCollector {
 
         }
 
-        frame_list.write_result(result);
-
         return result;
     }
 
     void mark() {
-        frame_list.mark_frames();
+        stack_table->mark_frames();
+        rb_gc_mark(stack_table_value);
         threads.mark();
 
         //for (int i = 0; i < queued_length; i++) {
@@ -1710,12 +1904,21 @@ collector_sample(VALUE self) {
     return Qtrue;
 }
 
+static VALUE
+collector_stack_table(VALUE self) {
+    auto *collector = get_collector(self);
+
+    return collector->stack_table_value;
+}
+
 static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
     BaseCollector *collector;
+
+    VALUE stack_table = stack_table_new(rb_cStackTable);
     if (mode == sym("retained")) {
-        collector = new RetainedCollector();
+        collector = new RetainedCollector(stack_table);
     } else if (mode == sym("custom")) {
-        collector = new CustomCollector();
+        collector = new CustomCollector(stack_table);
     } else if (mode == sym("wall")) {
         VALUE intervalv = rb_hash_aref(options, sym("interval"));
         TimeStamp interval;
@@ -1732,7 +1935,7 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         } else {
             allocation_sample_rate = NUM2UINT(allocation_sample_ratev);
         }
-        collector = new TimeCollector(interval, allocation_sample_rate);
+        collector = new TimeCollector(stack_table, interval, allocation_sample_rate);
     } else {
         rb_raise(rb_eArgError, "invalid mode");
     }
@@ -1786,8 +1989,24 @@ Init_vernier(void)
   rb_define_singleton_method(rb_cVernierCollector, "_new", collector_new, 2);
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
+  rb_define_method(rb_cVernierCollector, "stack_table", collector_stack_table, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
   rb_define_private_method(rb_cVernierCollector, "markers",  markers, 0);
+
+  rb_cStackTable = rb_define_class_under(rb_mVernier, "StackTable", rb_cObject);
+  rb_undef_alloc_func(rb_cStackTable);
+  rb_define_singleton_method(rb_cStackTable, "new", stack_table_new, 0);
+  rb_define_method(rb_cStackTable, "current_stack", stack_table_current_stack, -1);
+  rb_define_method(rb_cStackTable, "stack_parent_idx", stack_table_stack_parent_idx, 1);
+  rb_define_method(rb_cStackTable, "stack_frame_idx", stack_table_stack_frame_idx, 1);
+  rb_define_method(rb_cStackTable, "frame_line_no", StackTable::stack_table_frame_line_no, 1);
+  rb_define_method(rb_cStackTable, "frame_func_idx", StackTable::stack_table_frame_func_idx, 1);
+  rb_define_method(rb_cStackTable, "func_name", StackTable::stack_table_func_name, 1);
+  rb_define_method(rb_cStackTable, "func_filename", StackTable::stack_table_func_filename, 1);
+  rb_define_method(rb_cStackTable, "func_first_lineno", StackTable::stack_table_func_first_lineno, 1);
+  rb_define_method(rb_cStackTable, "stack_count", StackTable::stack_table_stack_count, 0);
+  rb_define_method(rb_cStackTable, "frame_count", StackTable::stack_table_frame_count, 0);
+  rb_define_method(rb_cStackTable, "func_count", StackTable::stack_table_func_count, 0);
 
   Init_consts(rb_mVernierMarkerPhase);
 
