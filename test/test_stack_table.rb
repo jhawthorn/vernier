@@ -146,6 +146,8 @@ class TestStackTable < Minitest::Test
     actual.reverse_each do |line|
       if line.start_with?("<cfunc>:0")
         line.gsub!(/\A<cfunc>:0/, prev)
+      elsif line.start_with?("<internal:")
+        line.gsub!(/\A<internal:[^>]*>/, "")
       else
         prev = line[/\A(.*):in '/, 1]
       end
