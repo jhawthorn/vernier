@@ -53,7 +53,7 @@ written to /tmp/profile20240328-82441-gkzffc.vernier.json
 ### Block of code
 
 ``` ruby
-Vernier.run(out: "time_profile.json") do
+Vernier.trace(out: "time_profile.json") do
   some_slow_method
 end
 ```
