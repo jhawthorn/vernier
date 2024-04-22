@@ -35,7 +35,7 @@ module Vernier
       return name if name && !name.empty?
 
       if thread == Thread.main
-        return "main"
+        return $0
       end
 
       name = Thread.instance_method(:inspect).bind_call(thread)
