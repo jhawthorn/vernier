@@ -25,6 +25,9 @@ parser = OptionParser.new(banner) do |o|
   o.on('--start-paused', "don't automatically start the profiler") do
     options[:start_paused] = true
   end
+  o.on('--hooks [HOOKS]', String, "Enable instrumentation hooks. Currently supported: rails") do |s|
+    options[:hooks] = s
+  end
 end
 
 parser.parse!

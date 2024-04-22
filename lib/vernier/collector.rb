@@ -29,11 +29,11 @@ module Vernier
     end
 
     private def add_hook(hook)
-      case hook
+      case hook.to_sym
       when :rails, :activesupport
         @hooks << Vernier::Hooks::ActiveSupport.new(self)
       else
-        warn "Unknown hook: #{hook}"
+        warn "Unknown hook: #{hook.inspect}"
       end
     end
 
