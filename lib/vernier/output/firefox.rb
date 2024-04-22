@@ -120,7 +120,7 @@ module Vernier
             product: "Ruby/Vernier",
             stackwalk: 1,
             version: 28,
-            preprocessedProfileVersion: 47,
+            preprocessedProfileVersion: 48,
             symbolicated: true,
             markerSchema: marker_schema,
             sampleUnits: {
@@ -137,9 +137,18 @@ module Vernier
             end,
             sourceCodeIsNotOnSearchfox: true
           },
+          counters: counter_data,
           libs: [],
           threads: thread_data
         }
+      end
+
+      def counter_data
+        profile.hooks.flat_map do |hook|
+          if hook.respond_to?(:firefox_counters)
+            hook.firefox_counters
+          end
+        end.compact
       end
 
       def marker_schema
