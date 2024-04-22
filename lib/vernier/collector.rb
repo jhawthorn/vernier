@@ -31,6 +31,8 @@ module Vernier
       case hook.to_sym
       when :rails, :activesupport
         @hooks << Vernier::Hooks::ActiveSupport.new(self)
+      when :memory_usage
+        @hooks << Vernier::Hooks::MemoryUsage.new(self)
       else
         warn "Unknown hook: #{hook.inspect}"
       end
