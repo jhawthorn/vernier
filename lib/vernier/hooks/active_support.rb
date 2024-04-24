@@ -7,9 +7,12 @@ module Vernier
         {
           name: "sql.active_record",
           display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: "{marker.data.name}",
+          chartLabel: "{marker.data.name}",
+          tableLabel: "{marker.data.sql}",
           data: [
-            { key: "sql", format: "string" },
-            { key: "name", format: "string" },
+            { key: "sql", format: "string", searchable: true },
+            { key: "name", format: "string", searchable: true },
             { key: "type_casted_binds", label: "binds", format: "string"
             }
           ]
@@ -25,6 +28,9 @@ module Vernier
         {
           name: "process_action.action_controller",
           display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: '{marker.data.method} {marker.data.controller}#{marker.data.action}',
+          chartLabel:   '{marker.data.method} {marker.data.controller}#{marker.data.action}',
+          tableLabel:   '{marker.data.method} {marker.data.controller}#{marker.data.action}',
           data: [
             { key: "controller", format: "string" },
             { key: "action", format: "string" },
@@ -59,6 +65,17 @@ module Vernier
           data: [
             { key: "key", format: "string" },
             { key: "store", format: "string" }
+          ]
+        },
+        {
+          name: "render_template.action_view",
+          display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: '{marker.data.identifier}',
+          chartLabel:   '{marker.data.identifier}',
+          tableLabel:   '{marker.data.identifier}',
+          data: [
+            { key: "key", format: "string" },
+            { key: "identifier", format: "string" }
           ]
         }
       ])
