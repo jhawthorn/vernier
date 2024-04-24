@@ -39,7 +39,7 @@ module Vernier
             { key: "action", format: "string" },
             { key: "status", format: "integer" },
             { key: "path", format: "string" },
-            { key: "method", format: "string" }
+            { key: "method", format: "string" },
             { key: "format", format: "string" }
           ]
         },
@@ -54,7 +54,7 @@ module Vernier
             { key: "action", format: "string" },
             { key: "status", format: "integer" },
             { key: "path", format: "string" },
-            { key: "method", format: "string" }
+            { key: "method", format: "string" },
             { key: "format", format: "string" }
           ]
         },
