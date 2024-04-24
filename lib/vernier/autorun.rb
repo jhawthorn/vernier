@@ -58,7 +58,7 @@ end
 if signal = Vernier::Autorun.options[:signal]
   STDERR.puts "to toggle profiler: kill -#{signal} #{Process.pid}"
   trap(signal) do
-    Vernier::Autorun.toggle
+    Thread.new { Vernier::Autorun.toggle }
   end
 end
 
