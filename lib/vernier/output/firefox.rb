@@ -152,7 +152,7 @@ module Vernier
         [
           {
             name: "THREAD_RUNNING",
-            display: [ "marker-chart", "marker-table" ],
+            display: [ "marker-chart" ],
             data: [
               {
                 label: "Description",
@@ -162,7 +162,7 @@ module Vernier
           },
           {
             name: "THREAD_STALLED",
-            display: [ "marker-chart", "marker-table" ],
+            display: [ "marker-chart" ],
             data: [
               {
                 label: "Description",
@@ -172,7 +172,7 @@ module Vernier
           },
           {
             name: "THREAD_SUSPENDED",
-            display: [ "marker-chart", "marker-table" ],
+            display: [ "marker-chart" ],
             data: [
               {
                 label: "Description",
