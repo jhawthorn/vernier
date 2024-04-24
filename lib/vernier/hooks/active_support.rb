@@ -20,6 +20,9 @@ module Vernier
         {
           name: "instantiation.active_record",
           display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: "{marker.data.record_count} × {marker.data.name}",
+          chartLabel: "{marker.data.record_count} × {marker.data.name}",
+          tableLabel: "Instantiate {marker.data.record_count} × {marker.data.sql}",
           data: [
             { key: "record_count", format: "integer" },
             { key: "class_name", format: "string" }
@@ -74,8 +77,48 @@ module Vernier
           chartLabel:   '{marker.data.identifier}',
           tableLabel:   '{marker.data.identifier}',
           data: [
-            { key: "key", format: "string" },
             { key: "identifier", format: "string" }
+          ]
+        },
+        {
+          name: "render_layout.action_view",
+          display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: '{marker.data.identifier}',
+          chartLabel:   '{marker.data.identifier}',
+          tableLabel:   '{marker.data.identifier}',
+          data: [
+            { key: "identifier", format: "string" }
+          ]
+        },
+        {
+          name: "render_partial.action_view",
+          display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: '{marker.data.identifier}',
+          chartLabel:   '{marker.data.identifier}',
+          tableLabel:   '{marker.data.identifier}',
+          data: [
+            { key: "identifier", format: "string" }
+          ]
+        },
+        {
+          name: "render_collection.action_view",
+          display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: '{marker.data.identifier}',
+          chartLabel:   '{marker.data.identifier}',
+          tableLabel:   '{marker.data.identifier}',
+          data: [
+            { key: "identifier", format: "string" },
+            { key: "count", format: "integer" }
+          ]
+        },
+        {
+          name: "load_config_initializer.railties",
+          display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: '{marker.data.initializer}',
+          chartLabel:   '{marker.data.initializer}',
+          tableLabel:   '{marker.data.initializer}',
+          data: [
+            { key: "initializer", format: "string" }
           ]
         }
       ])
