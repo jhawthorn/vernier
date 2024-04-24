@@ -20,12 +20,27 @@ module Vernier
         {
           name: "instantiation.active_record",
           display: [ "marker-chart", "marker-table" ],
-          tooltipLabel: "{marker.data.record_count} × {marker.data.name}",
-          chartLabel: "{marker.data.record_count} × {marker.data.name}",
-          tableLabel: "Instantiate {marker.data.record_count} × {marker.data.sql}",
+          tooltipLabel: "{marker.data.record_count} × {marker.data.class_name}",
+          chartLabel: "{marker.data.record_count} × {marker.data.class_name}",
+          tableLabel: "Instantiate {marker.data.record_count} × {marker.data.class_name}",
           data: [
             { key: "record_count", format: "integer" },
             { key: "class_name", format: "string" }
+          ]
+        },
+        {
+          name: "start_processing.action_controller",
+          display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: '{marker.data.method} {marker.data.controller}#{marker.data.action}',
+          chartLabel:   '{marker.data.method} {marker.data.controller}#{marker.data.action}',
+          tableLabel:   '{marker.data.method} {marker.data.controller}#{marker.data.action}',
+          data: [
+            { key: "controller", format: "string" },
+            { key: "action", format: "string" },
+            { key: "status", format: "integer" },
+            { key: "path", format: "string" },
+            { key: "method", format: "string" }
+            { key: "format", format: "string" }
           ]
         },
         {
@@ -40,11 +55,15 @@ module Vernier
             { key: "status", format: "integer" },
             { key: "path", format: "string" },
             { key: "method", format: "string" }
+            { key: "format", format: "string" }
           ]
         },
         {
           name: "cache_read.active_support",
           display: [ "marker-chart", "marker-table" ],
+          tooltipLabel: '{marker.data.super_operation} {marker.data.key}',
+          chartLabel:   '{marker.data.super_operation} {marker.data.key}',
+          tableLabel:   '{marker.data.super_operation} {marker.data.key}',
           data: [
             { key: "key", format: "string" },
             { key: "store", format: "string" },
@@ -64,6 +83,9 @@ module Vernier
         },
         {
           name: "cache_fetch_hit.active_support",
+          tooltipLabel: 'HIT {marker.data.key}',
+          chartLabel:   'HIT {marker.data.key}',
+          tableLabel:   'HIT {marker.data.key}',
           display: [ "marker-chart", "marker-table" ],
           data: [
             { key: "key", format: "string" },
