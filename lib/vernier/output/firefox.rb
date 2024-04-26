@@ -16,6 +16,7 @@ module Vernier
 
           add_category(name: "Default", color: "grey")
           add_category(name: "Idle", color: "transparent")
+          add_category(name: "Stalled", color: "transparent")
 
           add_category(name: "GC", color: "red")
           add_category(

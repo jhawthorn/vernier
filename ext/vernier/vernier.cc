@@ -884,8 +884,9 @@ class GCMarkerTable: public MarkerTable {
 };
 
 enum Category{
-	CATEGORY_NORMAL,
-	CATEGORY_IDLE
+    CATEGORY_NORMAL,
+    CATEGORY_IDLE,
+    CATEGORY_STALLED
 };
 
 class ObjectSampleList {
@@ -1172,7 +1173,7 @@ class ThreadTable {
             for (auto &threadptr : list) {
                 auto &thread = *threadptr;
                 if (thread_equal(th, thread.ruby_thread)) {
-                    if (new_state == Thread::State::SUSPENDED) {
+                    if (new_state == Thread::State::SUSPENDED || new_state == Thread::State::READY && (thread.state != Thread::State::SUSPENDED)) {
 
                         RawSample sample;
                         sample.sample();
@@ -1636,6 +1637,11 @@ class TimeCollector : public BaseCollector {
                             thread.stack_on_suspend_idx,
                             sample_start,
                             CATEGORY_IDLE);
+                } else if (thread.state == Thread::State::READY) {
+                    thread.samples.record_sample(
+                            thread.stack_on_suspend_idx,
+                            sample_start,
+                            CATEGORY_STALLED);
                 } else {
                 }
             }
