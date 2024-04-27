@@ -14,35 +14,28 @@ module Vernier
           @categories = []
           @categories_by_name = {}
 
-          add_category(name: "Default", color: "grey")
+          add_category(name: "Ruby", color: "grey") do |c|
+            rails_components = %w[ activesupport activemodel activerecord
+              actionview actionpack activejob actionmailer actioncable
+              activestorage actionmailbox actiontext railties ]
+            c.add_subcategory(
+              name: "Rails",
+              matcher: gem_path(*rails_components)
+            )
+            c.add_subcategory(
+              name: "gem",
+              matcher: starts_with(*Gem.path)
+            )
+            c.add_subcategory(
+              name: "stdlib",
+              matcher: starts_with(RbConfig::CONFIG["rubylibdir"])
+            )
+          end
           add_category(name: "Idle", color: "transparent")
           add_category(name: "Stalled", color: "transparent")
 
           add_category(name: "GC", color: "red")
-          add_category(
-            name: "stdlib",
-            color: "red",
-            matcher: starts_with(RbConfig::CONFIG["rubylibdir"])
-          )
           add_category(name: "cfunc", color: "yellow", matcher: "<cfunc>")
-
-          rails_components = %w[ activesupport activemodel activerecord
-          actionview actionpack activejob actionmailer actioncable
-          activestorage actionmailbox actiontext railties ]
-          add_category(
-            name: "Rails",
-            color: "green",
-            matcher: gem_path(*rails_components)
-          )
-          add_category(
-            name: "gem",
-            color: "red",
-            matcher: starts_with(*Gem.path)
-          )
-          add_category(
-            name: "Application",
-            color: "purple"
-          )
 
           add_category(name: "Thread", color: "grey")
         end
@@ -51,6 +44,8 @@ module Vernier
           category = Category.new(@categories.length, name: name, **kw)
           @categories << category
           @categories_by_name[name] = category
+          category.add_subcategory(name: "Other")
+          yield category if block_given?
           category
         end
 
@@ -71,12 +66,17 @@ module Vernier
         end
 
         class Category
-          attr_reader :idx, :name, :color, :matcher
+          attr_reader :idx, :name, :color, :matcher, :subcategories
           def initialize(idx, name:, color:, matcher: nil)
             @idx = idx
             @name = name
             @color = color
             @matcher = matcher
+            @subcategories = []
+          end
+
+          def add_subcategory(**args)
+            @subcategories << Category.new(@subcategories.size, color: nil, **args)
           end
 
           def matches?(path)
@@ -138,7 +138,7 @@ module Vernier
               {
                 name: category.name,
                 color: category.color,
-                subcategories: []
+                subcategories: category.subcategories.map(&:name)
               }
             end,
             sourceCodeIsNotOnSearchfox: true
@@ -257,11 +257,21 @@ module Vernier
             func_implementations[func_idx]
           end
 
+          cfunc_category = @categorizer.get_category("cfunc")
+          ruby_category = @categorizer.get_category("Ruby")
           func_categories = filenames.map do |filename|
-            @categorizer.categorize(filename)
+            filename == "<cfunc>" ? cfunc_category : ruby_category
+          end
+          func_subcategories = filenames.map do |filename|
+            next 0 if filename == "<cfunc>"
+
+            (ruby_category.subcategories.detect {|c| c.matches?(filename) } || ruby_category.subcategories.first).idx
           end
           @frame_categories = profile.frame_table.fetch(:func).map do |func_idx|
             func_categories[func_idx]
+          end
+          @frame_subcategories = profile.frame_table.fetch(:func).map do |func_idx|
+            func_subcategories[func_idx]
           end
         end
 
@@ -418,6 +428,7 @@ module Vernier
           frames = profile.stack_table.fetch(:frame).dup
           prefixes = profile.stack_table.fetch(:parent).dup
           categories  = frames.map{|idx| @frame_categories[idx].idx }
+          subcategories  = frames.map{|idx| @frame_subcategories[idx] }
 
           @categorized_stacks.keys.each do |(stack, category)|
             frames << frames[stack]
@@ -431,7 +442,7 @@ module Vernier
           {
             frame: frames,
             category: categories,
-            subcategory: [0] * size,
+            subcategory: subcategories,
             prefix: prefixes,
             length: prefixes.length
           }
