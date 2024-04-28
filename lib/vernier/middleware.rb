@@ -18,10 +18,10 @@ module Vernier
       result = Vernier.trace(interval:, allocation_sample_rate:, hooks: [:rails]) do
         @app.call(env)
       end
-      body = result.to_gecko
-      filename = "#{request.path.gsub("/", "_")}_#{DateTime.now.strftime("%Y-%m-%d-%H-%M-%S")}.vernier.json"
+      body = result.to_gecko(gzip: true)
+      filename = "#{request.path.gsub("/", "_")}_#{DateTime.now.strftime("%Y-%m-%d-%H-%M-%S")}.vernier.json.gz"
       headers = {
-        "Content-Type" => "application/json; charset=utf-8",
+        "Content-Type" => "application/octet-stream",
         "Content-Disposition" => "attachment; filename=\"#{filename}\"",
         "Content-Length" => body.bytesize.to_s
       }
