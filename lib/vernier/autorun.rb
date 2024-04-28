@@ -30,8 +30,8 @@ module Vernier
       result = @collector.stop
       @collector = nil
       output_path = options[:output]
-      output_path ||= Tempfile.create(["profile", ".vernier.json"]).path
-      File.write(output_path, Vernier::Output::Firefox.new(result).output)
+      output_path ||= Tempfile.create(["profile", ".vernier.json.gz"]).path
+      result.write(out: output_path)
 
       STDERR.puts(result.inspect)
       STDERR.puts("written to #{output_path}")
