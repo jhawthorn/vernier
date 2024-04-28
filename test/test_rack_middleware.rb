@@ -27,10 +27,11 @@ class TestOutputFirefox < Minitest::Test
     response = build_app(app).call(request(params: { vernier: 1 }))
     status, headers, body = response
     assert_equal 200, status
-    assert_equal "application/json; charset=utf-8", headers["content-type"]
+    assert_equal "application/octet-stream", headers["content-type"]
     assert_match /\Aattachment; filename="/, headers["content-disposition"]
 
-    profile_json = body.to_enum.to_a[0]
+    profile_gzip = body.to_enum.to_a[0]
+    profile_json = Zlib.gunzip(profile_gzip)
     assert_valid_firefox_profile(profile_json)
   end
 end
