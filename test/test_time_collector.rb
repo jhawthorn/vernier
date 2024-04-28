@@ -76,6 +76,27 @@ class TestTimeCollector < Minitest::Test
     # TODO: some assertions on behaviour
   end
 
+  def test_existing_thread
+    mutex = Mutex.new
+    mutex.lock
+    th = Thread.new do
+      Thread.current.name = "measure me"
+      mutex.lock
+    end
+    Thread.pass
+
+    collector = Vernier::Collector.new(:wall, interval: SAMPLE_SCALE_INTERVAL)
+    collector.start
+    sleep 0.01
+    result = collector.stop
+
+    mutex.unlock
+    th.join
+
+    assert_equal 2, result.threads.count
+    assert_includes result.threads.values.map{ _1[:name] }, "measure me"
+  end
+
   def count_up_to(n)
     i = 0
     while i < n

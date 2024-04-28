@@ -1003,7 +1003,8 @@ class Thread {
             RUNNING,
             READY,
             SUSPENDED,
-            STOPPED
+            STOPPED,
+            INITIAL,
         };
 
         VALUE ruby_thread;
@@ -1059,12 +1060,14 @@ class Thread {
             }
 
             switch (new_state) {
+                case State::INITIAL:
+                    break;
                 case State::STARTED:
                     markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
                     return; // no mutation of current state
                     break;
                 case State::RUNNING:
-                    assert(state == State::READY || state == State::RUNNING);
+                    assert(state == INITIAL || state == State::READY || state == State::RUNNING);
                     pthread_id = pthread_self();
                     native_tid = get_native_thread_id();
 
@@ -1082,7 +1085,7 @@ class Thread {
                     // Threads can be preempted, which means they will have been in "Running"
                     // state, and then the VM was like "no I need to stop you from working,
                     // so I'll put you in the 'ready' (or stalled) state"
-                    assert(state == State::STARTED || state == State::SUSPENDED || state == State::RUNNING);
+                    assert(state == State::INITIAL || state == State::STARTED || state == State::SUSPENDED || state == State::RUNNING);
                     if (state == State::SUSPENDED) {
                         markers->record_interval(Marker::Type::MARKER_THREAD_SUSPENDED, from, now, stack_on_suspend_idx);
                     }
@@ -1092,12 +1095,12 @@ class Thread {
                     break;
                 case State::SUSPENDED:
                     // We can go from RUNNING or STARTED to SUSPENDED
-                    assert(state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
+                    assert(state == State::INITIAL || state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
                     markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
                     break;
                 case State::STOPPED:
                     // We can go from RUNNING or STARTED or SUSPENDED to STOPPED
-                    assert(state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
+                    assert(state == State::INITIAL || state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
                     markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
                     markers->record(Marker::Type::MARKER_GVL_THREAD_EXITED);
 
@@ -1136,6 +1139,10 @@ class ThreadTable {
             for (const auto &thread : list) {
                 thread->mark();
             }
+        }
+
+        void initial(VALUE th) {
+            set_state(Thread::State::INITIAL, th);
         }
 
         void started(VALUE th) {
@@ -1755,6 +1762,13 @@ class TimeCollector : public BaseCollector {
     bool start() {
         if (!BaseCollector::start()) {
             return false;
+        }
+
+        // Record one sample from each thread
+        VALUE all_threads = rb_funcall(rb_path2class("Thread"), rb_intern("list"), 0);
+        for (int i = 0; i < RARRAY_LEN(all_threads); i++) {
+            VALUE thread = RARRAY_AREF(all_threads, i);
+            this->threads.initial(thread);
         }
 
         if (allocation_sample_rate > 0) {
