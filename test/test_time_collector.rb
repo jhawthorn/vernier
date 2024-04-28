@@ -198,6 +198,18 @@ class TestTimeCollector < Minitest::Test
     assert File.exist?(output_file)
   end
 
+  def test_gzip_output
+    output_file = File.join(__dir__, "../tmp/gzip_output.json.gz")
+
+    Vernier.trace(out: output_file) do
+      sleep 0.01
+    end
+
+    assert File.exist?(output_file)
+    data = File.binread(output_file)
+    assert_equal "\x1f\x8b".b, data.byteslice(0, 2)
+  end
+
   class ThreadWithInspect < ::Thread
     def inspect
       raise "boom!"

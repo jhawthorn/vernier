@@ -90,8 +90,13 @@ module Vernier
         @categorizer = Categorizer.new
       end
 
-      def output
-        ::JSON.fast_generate(data)
+      def output(gzip: false)
+        result = ::JSON.fast_generate(data)
+        if gzip
+          require "zlib"
+          result = Zlib.gzip(result)
+        end
+        result
       end
 
       private

@@ -37,12 +37,13 @@ module Vernier
       (current_time_real_ns - current_time_mono_ns + started_at_mono_ns)
     end
 
-    def to_gecko
-      Output::Firefox.new(self).output
+    def to_gecko(gzip: false)
+      Output::Firefox.new(self).output(gzip:)
     end
 
     def write(out:)
-      File.write(out, to_gecko)
+      gzip = out.end_with?(".gz")
+      File.write(out, to_gecko(gzip:))
     end
 
     def elapsed_seconds
