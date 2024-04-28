@@ -1,5 +1,9 @@
 module Vernier
   class StackTable
+    def inspect
+      "#<#{self.class.name} #{stack_count} stacks, #{frame_count} frames, #{func_count} funcs>"
+    end
+
     def to_h
       {
         stack_table: {
