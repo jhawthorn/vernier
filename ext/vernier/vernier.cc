@@ -59,6 +59,8 @@ static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
 static VALUE rb_cStackTable;
 
+static VALUE sym_state, sym_gc_by;
+
 static const char *gvl_event_name(rb_event_flag_t event) {
     switch (event) {
       case RUBY_INTERNAL_THREAD_EVENT_STARTED:
@@ -796,6 +798,12 @@ static native_thread_id_t get_native_thread_id() {
 #endif
 }
 
+union MarkerInfo {
+    struct {
+        VALUE gc_by;
+        VALUE gc_state;
+    } gc_data;
+};
 
 class Marker {
     public:
@@ -833,8 +841,10 @@ class Marker {
     //native_thread_id_t thread_id;
     int stack_index = -1;
 
+    MarkerInfo extra_info;
+
     VALUE to_array() {
-        VALUE record[6] = {0};
+        VALUE record[7] = {0};
         record[0] = Qnil; // FIXME
         record[1] = INT2NUM(type);
         record[2] = INT2NUM(phase);
@@ -848,7 +858,14 @@ class Marker {
         }
         record[5] = stack_index == -1 ? Qnil : INT2NUM(stack_index);
 
-        return rb_ary_new_from_values(6, record);
+        if (type == Marker::MARKER_GC_PAUSE) {
+            VALUE hash = rb_hash_new();
+            record[6] = hash;
+
+            rb_hash_aset(hash, sym_gc_by, extra_info.gc_data.gc_by);
+            rb_hash_aset(hash, sym_state, extra_info.gc_data.gc_state);
+        }
+        return rb_ary_new_from_values(7, record);
     }
 };
 
@@ -863,7 +880,7 @@ class MarkerTable {
             list.push_back({ type, Marker::INTERVAL, from, to, stack_index });
         }
 
-        void record(Marker::Type type, int stack_index = -1) {
+        void record(Marker::Type type, int stack_index = -1, MarkerInfo extra_info = {}) {
             const std::lock_guard<std::mutex> lock(mutex);
 
             list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), stack_index });
@@ -874,12 +891,34 @@ class GCMarkerTable: public MarkerTable {
     TimeStamp last_gc_entry;
 
     public:
+        void record_gc_start() {
+            record(Marker::Type::MARKER_GC_START);
+        }
+
         void record_gc_entered() {
           last_gc_entry = TimeStamp::Now();
         }
 
         void record_gc_leave() {
-          list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), -1 });
+            VALUE gc_state = rb_gc_latest_gc_info(sym_state);
+            VALUE gc_by = rb_gc_latest_gc_info(sym_gc_by);
+            union MarkerInfo info = {
+                .gc_data = {
+                    .gc_by = gc_by,
+                    .gc_state = gc_state
+                }
+            };
+            list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), -1, info });
+        }
+
+        void record_gc_end_mark() {
+            record_gc_leave();
+            record(Marker::Type::MARKER_GC_END_MARK);
+            record_gc_entered();
+        }
+
+        void record_gc_end_sweep() {
+            record(Marker::Type::MARKER_GC_END_SWEEP);
         }
 };
 
@@ -1701,13 +1740,13 @@ class TimeCollector : public BaseCollector {
 
         switch (event) {
             case RUBY_INTERNAL_EVENT_GC_START:
-                collector->gc_markers.record(Marker::Type::MARKER_GC_START);
+                collector->gc_markers.record_gc_start();
                 break;
             case RUBY_INTERNAL_EVENT_GC_END_MARK:
-                collector->gc_markers.record(Marker::Type::MARKER_GC_END_MARK);
+                collector->gc_markers.record_gc_end_mark();
                 break;
             case RUBY_INTERNAL_EVENT_GC_END_SWEEP:
-                collector->gc_markers.record(Marker::Type::MARKER_GC_END_SWEEP);
+                collector->gc_markers.record_gc_end_sweep();
                 break;
             case RUBY_INTERNAL_EVENT_GC_ENTER:
                 collector->gc_markers.record_gc_entered();
@@ -1998,6 +2037,10 @@ Init_consts(VALUE rb_mVernierMarkerPhase) {
 extern "C" void
 Init_vernier(void)
 {
+    sym_state = sym("state");
+    sym_gc_by = sym("gc_by");
+    rb_gc_latest_gc_info(sym_state); // HACK: needs to be warmed so that it can be called during GC
+
   rb_mVernier = rb_define_module("Vernier");
   rb_cVernierResult = rb_define_class_under(rb_mVernier, "Result", rb_cObject);
   VALUE rb_mVernierMarker = rb_define_module_under(rb_mVernier, "Marker");
