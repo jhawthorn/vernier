@@ -430,10 +430,11 @@ module Vernier
           categories  = frames.map{|idx| @frame_categories[idx].idx }
           subcategories  = frames.map{|idx| @frame_subcategories[idx] }
 
-          @categorized_stacks.keys.each do |(stack, category)|
+          @categorized_stacks.each_key do |(stack, category)|
             frames << frames[stack]
             prefixes << prefixes[stack]
             categories << category
+            subcategories << 0
           end
 
           size = frames.length
