@@ -25,7 +25,7 @@ Rails benchmark - lobste.rs (time)
 Vernier requires Ruby version 3.2.1 or greater
 
 ```ruby
-gem 'vernier'
+gem "vernier", "~> 1.0"
 ```
 
 ## Usage
