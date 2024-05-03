@@ -18,6 +18,13 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = spec.homepage
   spec.metadata["changelog_uri"] = spec.homepage
 
+  spec.post_install_message = <<~WARNING
+    #{'!'*80}
+    WARNING! You've installed a very old version of Vernier, likely due to Ruby >= 3.2 version requirement.
+    Please use gem "vernier", "~> 1.0" in your gemspec to install a modern version.
+    #{'!'*80}
+  WARNING
+
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
   spec.files = Dir.chdir(File.expand_path(__dir__)) do
