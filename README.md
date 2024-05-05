@@ -8,10 +8,10 @@ Next-generation Ruby 3.2.1+ sampling profiler. Tracks multiple threads, GVL acti
 
 [Livestreamed demo: Pairin' with Aaron (YouTube)](https://www.youtube.com/watch?v=9nvX3OHykGQ#t=27m43)
 
-Sidekiq jobs from Mastodon (time, threded)
+Sidekiq jobs from Mastodon (time, threaded)
 : https://share.firefox.dev/44jZRf3
 
-Puma web requests from Mastodon (time, threded)
+Puma web requests from Mastodon (time, threaded)
 : https://share.firefox.dev/48FOTnF
 
 Rails benchmark - lobste.rs (time)
@@ -50,15 +50,33 @@ starting profiler with interval 500
 written to /tmp/profile20240328-82441-gkzffc.vernier.json
 ```
 
-### Block of code
+#### Block of code
 
 ``` ruby
-Vernier.run(out: "time_profile.json") do
+Vernier.profile(out: "time_profile.json") do
   some_slow_method
 end
 ```
 
+Alternatively you can use the aliases `Vernier.run` and `Vernier.trace`.
+
+#### Start and stop
+
+```ruby
+Vernier.start_profile(out: "time_profile.json")
+
+some_slow_method
+
+# some other file
+
+some_other_slow_method
+
+Vernier.stop_profile
+```
+
 ### Retained memory
+
+#### Block of code
 
 Record a flamegraph of all **retained** allocations from loading `irb`.
 
@@ -67,6 +85,14 @@ ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "i
 ```
 
 Retained-memory flamegraphs must be interpreted a little differently than a typical profiling flamegraph. In a retained-memory flamegraph, the x-axis represents a proportion of memory in bytes,  _not time or samples_ The topmost boxes on the y-axis represent the retained objects, with their stacktrace below; their width represents the percentage of overall retained memory each object occupies.
+
+### Options
+
+Option | Description
+:- | :-
+`mode` | The sampling mode to use. One of `:wall`, `:retained` or `:custom`. Default is `:wall`.
+`out` | The file to write the profile to.
+`gc` | Initiate a full and immediate garbage collection cycle before profiling. Only available in `:retained` mode.
 
 ## Development
 
