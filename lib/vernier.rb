@@ -56,8 +56,8 @@ module Vernier
     result
   end
 
-  def self.trace_retained(out: nil, gc: true, &block)
-    profile(mode: :retained, out:, gc:, &block)
+  def self.trace_retained(**profile_options, &block)
+    profile(**profile_options.merge(mode: :retained), &block)
   end
 
   class Collector
