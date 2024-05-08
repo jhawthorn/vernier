@@ -43,7 +43,7 @@ module Vernier
 
     def write(out:)
       gzip = out.end_with?(".gz")
-      File.write(out, to_gecko(gzip:))
+      File.binwrite(out, to_gecko(gzip:))
     end
 
     def elapsed_seconds
