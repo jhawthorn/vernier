@@ -14,9 +14,13 @@
 
 #include <sys/time.h>
 #include <signal.h>
-#ifdef __APPLE__
+#if defined(__APPLE__)
 /* macOS */
 #include <dispatch/dispatch.h>
+#elif defined(__FreeBSD__)
+/* FreeBSD */
+#include <pthread_np.h>
+#include <semaphore.h>
 #else
 /* Linux */
 #include <semaphore.h>
@@ -786,11 +790,13 @@ class SampleTranslator {
 
 typedef uint64_t native_thread_id_t;
 static native_thread_id_t get_native_thread_id() {
-#ifdef __APPLE__
+#if defined(__APPLE__)
     uint64_t thread_id;
     int e = pthread_threadid_np(pthread_self(), &thread_id);
     if (e != 0) rb_syserr_fail(e, "pthread_threadid_np");
     return thread_id;
+#elif defined(__FreeBSD__)
+    return pthread_getthreadid_np();
 #else
     // gettid() is only available as of glibc 2.30
     pid_t tid = syscall(SYS_gettid);
