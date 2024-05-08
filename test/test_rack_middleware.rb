@@ -28,7 +28,7 @@ class TestOutputFirefox < Minitest::Test
     status, headers, body = response
     assert_equal 200, status
     assert_equal "application/octet-stream", headers["content-type"]
-    assert_match /\Aattachment; filename="/, headers["content-disposition"]
+    assert_match(/\Aattachment; filename="/, headers["content-disposition"])
 
     profile_gzip = body.to_enum.to_a[0]
     profile_json = Zlib.gunzip(profile_gzip)

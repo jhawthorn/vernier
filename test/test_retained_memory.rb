@@ -77,6 +77,7 @@ class TestRetainedMemory < Minitest::Test
     result = Vernier.trace_retained do
       Thread.new { }.join
     end
+    assert_valid_result result
   end
 
   def test_nothing_retained

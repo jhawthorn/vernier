@@ -100,7 +100,7 @@ class TestOutputFirefox < Minitest::Test
 
   def test_thread_names
     orig_name = Thread.current.name
-    th1_loc, th2_loc = nil
+    th1_loc = nil
 
     # Case with just the named, main thread and no location
     result = Vernier.trace do
@@ -135,7 +135,7 @@ class TestOutputFirefox < Minitest::Test
 
     # Case with named thread and location
     result = Vernier.trace do
-      th2 = Thread.new { th2_loc = file_lineno; sleep 0.01 }
+      th2 = Thread.new { sleep 0.01 }
       th2.name = "named thread"
       th2.join
     end

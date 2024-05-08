@@ -243,8 +243,6 @@ module Vernier
             @strings[filename]
           end
 
-          lines = profile.frame_table.fetch(:line)
-
           func_implementations = filenames.map do |filename|
             # Must match strings in `src/profile-logic/profile-data.js`
             # inside the firefox profiler. See `getFriendlyStackTypeName`
