@@ -25,18 +25,47 @@ module FirefoxTestHelpers
       assert thread["stackTable"]
       assert thread["stringArray"]
 
+      stack_length = thread["stackTable"]["length"]
+      frame_length = thread["frameTable"]["length"]
+
       string_array = thread["stringArray"]
+
+      # Check stack table
+      assert_equal stack_length, thread["stackTable"]["frame"].length
+      assert_equal stack_length, thread["stackTable"]["category"].length
+      assert_equal stack_length, thread["stackTable"]["subcategory"].length
+      assert_equal stack_length, thread["stackTable"]["prefix"].length
+
+      thread["stackTable"]["prefix"].each do |prefix|
+        next if prefix.nil?
+        assert_operator prefix, :<, stack_length
+      end
+
+      thread["stackTable"]["frame"].each do |idx|
+        assert_operator idx, :<, frame_length
+      end
+
+      # Check frame table
+      assert_equal frame_length, thread["frameTable"]["column"].length
+      assert_equal frame_length, thread["frameTable"]["line"].length
+      assert_equal frame_length, thread["frameTable"]["implementation"].length
+      assert_equal frame_length, thread["frameTable"]["innerWindowID"].length
+      assert_equal frame_length, thread["frameTable"]["func"].length
+      assert_equal frame_length, thread["frameTable"]["category"].length
+      assert_equal frame_length, thread["frameTable"]["inlineDepth"].length
+      assert_equal frame_length, thread["frameTable"]["address"].length
+
+      thread["frameTable"]["implementation"].each do |idx|
+        next if idx.nil?
+        assert_kind_of Integer, idx
+        assert idx < string_array.size
+      end
+
       thread["funcTable"]["name"].each do |idx|
         assert_kind_of Integer, idx
         assert idx < string_array.size
       end
       thread["funcTable"]["fileName"].each do |idx|
-        assert_kind_of Integer, idx
-        assert idx < string_array.size
-      end
-
-      thread["frameTable"]["implementation"].each do |idx|
-        next if idx.nil?
         assert_kind_of Integer, idx
         assert idx < string_array.size
       end
@@ -55,6 +84,8 @@ module FirefoxTestHelpers
         start_time = markers["startTime"][i]
         assert start_time, "start time is required"
 
+        data = markers["data"][i]
+
         end_time = markers["endTime"][i]
 
         phase = markers["phase"][i]
@@ -66,6 +97,10 @@ module FirefoxTestHelpers
           assert end_time, "intervals must have an end time"
           assert_operator start_time, :<=, end_time
         else
+        end
+
+        if stack_idx = data.dig("cause", "stack")
+          assert_operator stack_idx, :<=, stack_length
         end
       end
 

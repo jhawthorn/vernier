@@ -219,14 +219,23 @@ module Vernier
           end
           @is_main = true if profile.threads.size == 1
 
-          @stack_table = profile._stack_table
-          @samples = samples # FIXME
+          @stack_table = Vernier::StackTable.new
+          samples = samples.map { |sample| @stack_table.convert(profile._stack_table, sample) }
+
+          @samples = samples
           @stack_table_hash = @stack_table.to_h
 
           timestamps ||= [0] * samples.size
           @weights, @timestamps = weights, timestamps
           @sample_categories = sample_categories || ([0] * samples.size)
-          @markers = markers
+          @markers = markers.map do |marker|
+            if stack_idx = marker[5]&.dig(:cause, :stack)
+              marker = marker.dup
+              new_idx = @stack_table.convert(profile._stack_table, stack_idx)
+              marker[5] = marker[5].merge({ cause: { stack: new_idx }})
+            end
+            marker
+          end
 
           @started_at, @stopped_at = started_at, stopped_at
 
