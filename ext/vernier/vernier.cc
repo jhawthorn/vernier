@@ -563,6 +563,20 @@ struct StackTable {
         }
     }
 
+    StackNode *convert_stack(StackTable &other, int original_idx) {
+        if (original_idx < 0) {
+            return &root_stack_node;
+        }
+
+        StackNode &original_node = other.stack_node_list[original_idx];
+        StackNode *parent_node = convert_stack(other, original_node.parent);
+        StackNode *node = next_stack_node(parent_node, original_node.frame);
+
+        return node;
+    }
+
+    static VALUE stack_table_convert(VALUE self, VALUE other, VALUE original_stack);
+
     static VALUE stack_table_stack_count(VALUE self);
     static VALUE stack_table_frame_count(VALUE self);
     static VALUE stack_table_func_count(VALUE self);
@@ -659,6 +673,32 @@ StackTable::stack_table_stack_count(VALUE self) {
         count = stack_table->stack_node_list.size();
     }
     return INT2NUM(count);
+}
+
+VALUE
+StackTable::stack_table_convert(VALUE self, VALUE original_tableval, VALUE original_idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    StackTable *original_table = get_stack_table(original_tableval);
+    int original_idx = NUM2INT(original_idxval);
+
+    int original_size;
+    {
+        const std::lock_guard<std::mutex> lock(original_table->stack_mutex);
+        original_size = original_table->stack_node_list.size();
+    }
+
+    if (original_idx >= original_size || original_idx < 0) {
+        rb_raise(rb_eRangeError, "index out of range");
+    }
+
+    int result_idx;
+    {
+        const std::lock_guard<std::mutex> lock1(stack_table->stack_mutex);
+        const std::lock_guard<std::mutex> lock2(original_table->stack_mutex);
+        StackNode *node = stack_table->convert_stack(*original_table, original_idx);
+        result_idx = node->index;
+    }
+    return INT2NUM(result_idx);
 }
 
 VALUE
@@ -2060,6 +2100,7 @@ Init_vernier(void)
   rb_undef_alloc_func(rb_cStackTable);
   rb_define_singleton_method(rb_cStackTable, "new", stack_table_new, 0);
   rb_define_method(rb_cStackTable, "current_stack", stack_table_current_stack, -1);
+  rb_define_method(rb_cStackTable, "convert", StackTable::stack_table_convert, 2);
   rb_define_method(rb_cStackTable, "stack_parent_idx", stack_table_stack_parent_idx, 1);
   rb_define_method(rb_cStackTable, "stack_frame_idx", stack_table_stack_frame_idx, 1);
   rb_define_method(rb_cStackTable, "frame_line_no", StackTable::stack_table_frame_line_no, 1);
