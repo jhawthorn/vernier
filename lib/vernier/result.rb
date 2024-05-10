@@ -1,15 +1,11 @@
 module Vernier
   class Result
-    def stack_table
-      @stack_table[:stack_table]
+    def stack_table=(stack_table)
+      @stack_table = stack_table
     end
 
-    def frame_table
-      @stack_table[:frame_table]
-    end
-
-    def func_table
-      @stack_table[:func_table]
+    def _stack_table
+      @stack_table
     end
 
     attr_reader :markers
@@ -81,12 +77,12 @@ module Vernier
 
     class Func < BaseType
       def label
-        result.func_table[:name][idx]
+        result._stack_table.func_name(idx)
       end
       alias name label
 
       def filename
-        result.func_table[:filename][idx]
+        result._stack_table.func_filename(idx)
       end
 
       def to_s
@@ -100,12 +96,12 @@ module Vernier
       alias name label
 
       def func
-        func_idx = result.frame_table[:func][idx]
+        func_idx = result._stack_table.frame_func_idx(idx)
         Func.new(result, func_idx)
       end
 
       def line
-        result.frame_table[:line][idx]
+        result.frame_line_idx(idx)
       end
 
       def to_s
@@ -119,14 +115,14 @@ module Vernier
 
         stack_idx = idx
         while stack_idx
-          frame_idx = result.stack_table[:frame][stack_idx]
+          frame_idx = result._stack_table.stack_frame_idx(stack_idx)
           yield Frame.new(result, frame_idx)
-          stack_idx = result.stack_table[:parent][stack_idx]
+          stack_idx = result._stack_table.stack_parent_idx(stack_idx)
         end
       end
 
       def leaf_frame_idx
-        result.stack_table[:frame][idx]
+        result._stack_table.stack_frame_idx(idx)
       end
 
       def leaf_frame
