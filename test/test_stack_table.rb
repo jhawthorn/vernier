@@ -125,6 +125,25 @@ class TestStackTable < Minitest::Test
     collector.stop
   end
 
+  def test_convert
+    original = Vernier::StackTable.new
+    samples = []
+    1000.times do |i|
+      samples << eval("original.current_stack", binding, "(eval)", i)
+    end
+    assert original.stack_count > 1000
+
+    original_sample = samples[50]
+    reduced = Vernier::StackTable.new
+    new_sample = reduced.convert(original, original_sample)
+
+    assert reduced.stack_count < 100
+
+    expected = original.backtrace(original_sample)
+    actual = reduced.backtrace(new_sample)
+    assert_equal expected, actual
+  end
+
   def test_backtrace
     stack_table = Vernier::StackTable.new
     expected = caller_locations(0); index = stack_table.current_stack
