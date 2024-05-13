@@ -19,6 +19,7 @@ module Vernier
     attr_accessor :pid, :end_time
     attr_accessor :threads
     attr_accessor :meta
+    attr_accessor :mode
 
     def main_thread
       threads.values.detect {|x| x[:is_main] }

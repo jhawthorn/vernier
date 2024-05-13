@@ -418,8 +418,7 @@ module Vernier
             stack: samples,
             time: times,
             weight: weights,
-            weightType: "samples",
-            #weightType: "bytes",
+            weightType: profile.mode == :retained ? "bytes" : "samples",
             length: samples.length
           }
         end

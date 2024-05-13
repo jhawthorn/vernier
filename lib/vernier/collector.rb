@@ -75,6 +75,7 @@ module Vernier
     def stop
       result = finish
 
+      result.mode = @mode
       result.instance_variable_set("@stack_table", stack_table.to_h)
       @thread_names.finish
 
