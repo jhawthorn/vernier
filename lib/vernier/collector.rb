@@ -76,7 +76,7 @@ module Vernier
       result = finish
 
       result.mode = @mode
-      result.instance_variable_set("@stack_table", stack_table.to_h)
+      result.stack_table = stack_table
       @thread_names.finish
 
       @hooks.each do |hook|
