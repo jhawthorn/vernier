@@ -1198,8 +1198,8 @@ class Thread {
             state_changed_at = now;
         }
 
-        bool is_main() {
-            return rb_thread_main() == ruby_thread;
+        bool is_main(VALUE start_ruby_thread) {
+            return ruby_thread == start_ruby_thread;
         }
 
         bool running() {
@@ -1306,6 +1306,7 @@ class BaseCollector {
 
     public:
     bool running = false;
+    VALUE start_ruby_thread;
     StackTable *stack_table;
     VALUE stack_table_value;
 
@@ -1323,6 +1324,7 @@ class BaseCollector {
         started_at = TimeStamp::Now();
 
         running = true;
+        start_ruby_thread = rb_thread_current();
         return true;
     }
 
@@ -1928,7 +1930,7 @@ class TimeCollector : public BaseCollector {
             if (!thread->stopped_at.zero()) {
                 rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread->stopped_at.nanoseconds()));
             }
-            rb_hash_aset(hash, sym("is_main"), thread->is_main() ? Qtrue : Qfalse);
+            rb_hash_aset(hash, sym("is_main"), thread->is_main(BaseCollector::start_ruby_thread) ? Qtrue : Qfalse);
 
         }
 
