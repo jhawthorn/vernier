@@ -1335,17 +1335,19 @@ class BaseCollector {
         return Qnil;
     }
 
-    void write_meta(VALUE result) {
-        VALUE meta = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@meta"), meta);
+    virtual void write_meta(VALUE meta, VALUE result) {
         rb_hash_aset(meta, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
+        rb_hash_aset(meta, sym("interval"), Qnil);
+        rb_hash_aset(meta, sym("allocation_sample_rate"), Qnil);
 
     }
 
     virtual VALUE build_collector_result() {
         VALUE result = rb_obj_alloc(rb_cVernierResult);
 
-        write_meta(result);
+        VALUE meta = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@meta"), meta);
+        write_meta(meta, result);
 
         return result;
     }
@@ -1659,6 +1661,13 @@ class TimeCollector : public BaseCollector {
             }
         }
         threads.mutex.unlock();
+
+    }
+
+    void write_meta(VALUE meta, VALUE result) {
+        BaseCollector::write_meta(meta, result);
+        rb_hash_aset(meta, sym("interval"), ULL2NUM(interval.microseconds()));
+        rb_hash_aset(meta, sym("allocation_sample_rate"), ULL2NUM(allocation_sample_rate));
 
     }
 
