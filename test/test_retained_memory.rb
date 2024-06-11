@@ -102,28 +102,6 @@ class TestRetainedMemory < Minitest::Test
     assert_operator result.total_bytes, :<, 40 * 8
   end
 
-  def build_large_module
-    eval <<~'RUBY'
-    mod = Module.new
-    1.times do |i|
-      mod.module_eval "define_singleton_method(:test#{i}) { Object.new }; test#{i}"
-    end
-    RUBY
-    nil
-  end
-
-  def alloc_a
-    Object.new
-  end
-
-  def alloc_b
-    Object.new
-  end
-
-  def alloc_c
-    Object.new
-  end
-
   def test_alloc_order
     result = Vernier.trace_retained do
       alloc_a
@@ -163,5 +141,29 @@ class TestRetainedMemory < Minitest::Test
     # Ideally this would be lower around 320, but in many cases it does seem to
     # use more memory
     assert_operator result.total_bytes, :<, 2500
+  end
+
+  private
+
+  def build_large_module
+    eval <<~'RUBY'
+    mod = Module.new
+    1.times do |i|
+      mod.module_eval "define_singleton_method(:test#{i}) { Object.new }; test#{i}"
+    end
+    RUBY
+    nil
+  end
+
+  def alloc_a
+    Object.new
+  end
+
+  def alloc_b
+    Object.new
+  end
+
+  def alloc_c
+    Object.new
   end
 end

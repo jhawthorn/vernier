@@ -245,17 +245,6 @@ class TestTimeCollector < Minitest::Test
     assert_equal expected, thread_names
   end
 
-  def assert_similar expected, actual
-    delta_ratio =
-      if SLOW_RUNNER
-        0.25
-      else
-        0.1
-      end
-    delta = expected * delta_ratio
-    assert_in_delta expected, actual, delta
-  end
-
   def test_start_stop
     Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
     two_slow_methods
@@ -277,5 +266,18 @@ class TestTimeCollector < Minitest::Test
       Vernier.stop_profile
     end
     assert_equal "No profile started", error.message
+  end
+
+  private
+
+  def assert_similar expected, actual
+    delta_ratio =
+      if SLOW_RUNNER
+        0.25
+      else
+        0.1
+      end
+    delta = expected * delta_ratio
+    assert_in_delta expected, actual, delta
   end
 end
