@@ -92,6 +92,8 @@ Option | Description
 :- | :-
 `mode` | The sampling mode to use. One of `:wall`, `:retained` or `:custom`. Default is `:wall`.
 `out` | The file to write the profile to.
+`interval` | The sampling interval in microseconds. Default is 500µs. Only available in `:wall` mode.
+`allocation_sample_rate` | The rate at which to sample allocations. Default is 0 allocations (disabled). Only available in `:wall` mode.
 `gc` | Initiate a full and immediate garbage collection cycle before profiling. Only available in `:retained` mode.
 
 ## Development
