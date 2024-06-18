@@ -12,6 +12,7 @@ class TestTimeCollector < Minitest::Test
       end
   SLEEP_SCALE = ENV.fetch("TEST_SLEEP_SCALE", DEFAULT_SLEEP_SCALE).to_f # seconds/100ms
   SAMPLE_SCALE_INTERVAL = 10_000 * SLEEP_SCALE # Microseconds
+  SAMPLE_SCALE_ALLOCATIONS = 100
 
   def slow_method
     sleep SLEEP_SCALE
@@ -266,6 +267,21 @@ class TestTimeCollector < Minitest::Test
       Vernier.stop_profile
     end
     assert_equal "No profile started", error.message
+  end
+
+  def test_includes_options_in_result_meta
+    output_file = File.join(__dir__, "../tmp/exception_output.json")
+    result = Vernier.profile(
+      out: output_file,
+      interval: SAMPLE_SCALE_INTERVAL,
+      allocation_sample_rate: SAMPLE_SCALE_ALLOCATIONS
+    ) { }
+
+    assert_equal :wall, result.meta[:mode]
+    assert_equal output_file, result.meta[:out]
+    assert_equal SAMPLE_SCALE_INTERVAL, result.meta[:interval]
+    assert_equal SAMPLE_SCALE_ALLOCATIONS, result.meta[:allocation_sample_rate]
+    assert_equal false, result.meta[:gc]
   end
 
   private

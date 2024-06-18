@@ -143,6 +143,17 @@ class TestRetainedMemory < Minitest::Test
     assert_operator result.total_bytes, :<, 2500
   end
 
+  def test_includes_options_in_result_meta
+    output_file = File.join(__dir__, "../tmp/exception_output.json")
+    result = Vernier.trace_retained(out: output_file) { }
+
+    assert_equal :retained, result.meta[:mode]
+    assert_equal output_file, result.meta[:out]
+    assert_nil result.meta[:interval]
+    assert_nil result.meta[:allocation_sample_rate]
+    assert_equal true, result.meta[:gc]
+  end
+
   private
 
   def build_large_module
