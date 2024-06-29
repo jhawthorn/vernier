@@ -14,6 +14,8 @@ module FirefoxTestHelpers
     threads = data["threads"]
     assert_equal 1, threads.count { _1["isMainThread"] }
     assert_operator threads.size, :>=, 1
+    assert_equal threads.size, meta["initialVisibleThreads"].size
+    assert_equal 1, meta["initialSelectedThreads"].size
     threads.each do |thread|
       assert thread["name"]
       assert thread["pid"]

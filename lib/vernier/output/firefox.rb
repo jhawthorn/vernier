@@ -106,7 +106,7 @@ module Vernier
       def data
         markers_by_thread = profile.markers.group_by { |marker| marker[0] }
 
-        thread_data = profile.threads.map do |ruby_thread_id, thread_info|
+        threads = profile.threads.map do |ruby_thread_id, thread_info|
           markers = markers_by_thread[ruby_thread_id] || []
           Thread.new(
             ruby_thread_id,
@@ -114,7 +114,7 @@ module Vernier
             @categorizer,
             markers: markers,
             **thread_info,
-          ).data
+          )
         end
 
         {
@@ -141,10 +141,12 @@ module Vernier
                 subcategories: category.subcategories.map(&:name)
               }
             end,
-            sourceCodeIsNotOnSearchfox: true
+            sourceCodeIsNotOnSearchfox: true,
+            initialVisibleThreads: threads.each_index.to_a,
+            initialSelectedThreads: Array(threads.find_index(&:is_start))
           },
           libs: [],
-          threads: thread_data
+          threads: threads.map(&:data)
         }
       end
 
@@ -204,9 +206,9 @@ module Vernier
       end
 
       class Thread
-        attr_reader :profile
+        attr_reader :profile, :is_start
 
-        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil, allocations: nil, is_main: nil)
+        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil, allocations: nil, is_main: nil, is_start: nil)
           @ruby_thread_id = ruby_thread_id
           @profile = profile
           @categorizer = categorizer
@@ -218,6 +220,7 @@ module Vernier
             @is_main = @ruby_thread_id == ::Thread.main.object_id
           end
           @is_main = true if profile.threads.size == 1
+          @is_start = is_start.nil? ? @is_main : is_start
 
           @stack_table = Vernier::StackTable.new
           samples = samples.map { |sample| @stack_table.convert(profile._stack_table, sample) }
