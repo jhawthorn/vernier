@@ -275,13 +275,16 @@ module Vernier
 
           cfunc_category = @categorizer.get_category("cfunc")
           ruby_category = @categorizer.get_category("Ruby")
-          func_categories = filenames.map do |filename|
-            filename == "<cfunc>" ? cfunc_category : ruby_category
-          end
-          func_subcategories = filenames.map do |filename|
-            next 0 if filename == "<cfunc>"
-
-            (ruby_category.subcategories.detect {|c| c.matches?(filename) } || ruby_category.subcategories.first).idx
+          func_categories, func_subcategories = [], []
+          filenames.each do |filename|
+            if filename == "<cfunc>"
+              func_categories << cfunc_category
+              func_subcategories << 0
+            else
+              func_categories << ruby_category
+              subcategory = ruby_category.subcategories.detect {|c| c.matches?(filename) }&.idx || 0
+              func_subcategories << subcategory
+            end
           end
           @frame_categories = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_categories[func_idx]
