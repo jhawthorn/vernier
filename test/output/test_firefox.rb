@@ -97,7 +97,6 @@ class TestOutputFirefox < Minitest::Test
     assert_includes markers, {"type"=>"UserTiming", "entryType"=>"measure", "name"=>"custom"}
   end
 
-
   def test_thread_names
     orig_name = Thread.current.name
     th1_loc = nil
@@ -151,9 +150,47 @@ class TestOutputFirefox < Minitest::Test
       next if tr["isMainThread"]
       assert_equal "named thread", tr["name"]
     end
-
   ensure
     Thread.current.name = orig_name
+  end
+
+  def test_selected_thread_with_main_thread_start
+    result = Vernier.trace do
+      Thread.new do
+        sleep 0.01
+      end.join
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    data = JSON.parse(output)
+    threads = data["threads"]
+    assert_equal 2, threads.size
+
+    meta = data["meta"]
+    main_thread_index = threads.find_index { |tr| tr["isMainThread"] }
+    assert_equal [main_thread_index], meta["initialSelectedThreads"]
+  end
+
+  def test_selected_thread_with_spawned_thread_start
+    result = nil
+    Thread.new do
+      result = Vernier.trace do
+        sleep 0.01
+      end
+    end.join
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    data = JSON.parse(output)
+    threads = data["threads"]
+    assert_equal 2, threads.size
+
+    meta = data["meta"]
+    spawned_thread_index = threads.find_index { |tr| !tr["isMainThread"] }
+    assert_equal [spawned_thread_index], meta["initialSelectedThreads"]
   end
 
   private
