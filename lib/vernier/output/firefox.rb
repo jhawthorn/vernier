@@ -226,7 +226,6 @@ module Vernier
           samples = samples.map { |sample| @stack_table.convert(profile._stack_table, sample) }
 
           @samples = samples
-          @stack_table_hash = @stack_table.to_h
 
           timestamps ||= [0] * samples.size
           @weights, @timestamps = weights, timestamps
@@ -242,6 +241,7 @@ module Vernier
 
           @started_at, @stopped_at = started_at, stopped_at
 
+          @stack_table_hash = @stack_table.to_h
           names = @stack_table_hash[:func_table].fetch(:name)
           filenames = @stack_table_hash[:func_table].fetch(:filename)
 

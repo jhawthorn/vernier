@@ -6,6 +6,35 @@ require "firefox_test_helpers"
 class TestOutputFirefox < Minitest::Test
   include FirefoxTestHelpers
 
+  def test_complex_profile
+    result = Vernier.trace do
+      # Proper Ruby sleep
+      sleep 0.01
+
+      # Sleep inside rb_thread_call_without_gvl
+      GVLTest.sleep_without_gvl(0.01)
+
+      # Sleep with GVL held
+      GVLTest.sleep_holding_gvl(0.01)
+
+      # Ruby busy sleep
+      target = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.01
+      while Process.clock_gettime(Process::CLOCK_MONOTONIC) < target
+      end
+
+      # Short sleeps (likely) create markers without matching sampling stacks
+      1.times { sleep 0.00001 }
+      1.times { sleep 0.00001 }
+      1.times { sleep 0.00001 }
+
+      # Some GC time
+      GC.start
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+  end
+
   def test_gc_events_have_duration
     result = Vernier.trace do
       GC.start

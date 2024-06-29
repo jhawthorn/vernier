@@ -2,6 +2,7 @@
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "vernier"
+require "gvltest"
 
 ENV["MT_CPU"] = "0"
 require "minitest/autorun"

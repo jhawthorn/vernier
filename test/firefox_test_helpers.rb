@@ -11,6 +11,7 @@ module FirefoxTestHelpers
     assert meta["interval"]
     assert meta["startTime"]
 
+    categories = data["meta"]["categories"]
     threads = data["threads"]
     assert_equal 1, threads.count { _1["isMainThread"] }
     assert_operator threads.size, :>=, 1
@@ -47,6 +48,13 @@ module FirefoxTestHelpers
         assert_operator idx, :<, frame_length
       end
 
+      stack_length.times do |idx|
+        category_idx = thread["stackTable"]["category"][idx]
+        subcategory_idx = thread["stackTable"]["subcategory"][idx]
+        assert category_idx < categories.length
+        assert subcategory_idx < categories[category_idx]["subcategories"].length
+      end
+
       # Check frame table
       assert_equal frame_length, thread["frameTable"]["column"].length
       assert_equal frame_length, thread["frameTable"]["line"].length
@@ -61,6 +69,13 @@ module FirefoxTestHelpers
         next if idx.nil?
         assert_kind_of Integer, idx
         assert idx < string_array.size
+      end
+
+      frame_length.times do |idx|
+        category_idx = thread["frameTable"]["category"][idx]
+        #subcategory_idx = thread["frameTable"]["subcategory"][idx]
+        assert category_idx < categories.length
+        #assert subcategory_idx < categories[category_idx]["subcategories"].length
       end
 
       thread["funcTable"]["name"].each do |idx|
