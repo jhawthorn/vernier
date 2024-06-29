@@ -10,7 +10,7 @@ module Vernier
     end
 
     def [](object_id)
-      @names[object_id] || "unknown thread #{object_id}"
+      @names[object_id] || "thread obj_id:#{object_id}"
     end
 
     def finish

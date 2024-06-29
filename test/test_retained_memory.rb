@@ -77,6 +77,7 @@ class TestRetainedMemory < Minitest::Test
     result = Vernier.trace_retained do
       Thread.new { }.join
     end
+    assert_valid_result result
   end
 
   def test_nothing_retained
@@ -99,28 +100,6 @@ class TestRetainedMemory < Minitest::Test
 
     result = ReportReader.new(result)
     assert_operator result.total_bytes, :<, 40 * 8
-  end
-
-  def build_large_module
-    eval <<~'RUBY'
-    mod = Module.new
-    1.times do |i|
-      mod.module_eval "define_singleton_method(:test#{i}) { Object.new }; test#{i}"
-    end
-    RUBY
-    nil
-  end
-
-  def alloc_a
-    Object.new
-  end
-
-  def alloc_b
-    Object.new
-  end
-
-  def alloc_c
-    Object.new
   end
 
   def test_alloc_order
@@ -162,5 +141,40 @@ class TestRetainedMemory < Minitest::Test
     # Ideally this would be lower around 320, but in many cases it does seem to
     # use more memory
     assert_operator result.total_bytes, :<, 2500
+  end
+
+  def test_includes_options_in_result_meta
+    output_file = File.join(__dir__, "../tmp/exception_output.json")
+    result = Vernier.trace_retained(out: output_file) { }
+
+    assert_equal :retained, result.meta[:mode]
+    assert_equal output_file, result.meta[:out]
+    assert_nil result.meta[:interval]
+    assert_nil result.meta[:allocation_sample_rate]
+    assert_equal true, result.meta[:gc]
+  end
+
+  private
+
+  def build_large_module
+    eval <<~'RUBY'
+    mod = Module.new
+    1.times do |i|
+      mod.module_eval "define_singleton_method(:test#{i}) { Object.new }; test#{i}"
+    end
+    RUBY
+    nil
+  end
+
+  def alloc_a
+    Object.new
+  end
+
+  def alloc_b
+    Object.new
+  end
+
+  def alloc_c
+    Object.new
   end
 end

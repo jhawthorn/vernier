@@ -106,7 +106,7 @@ module Vernier
       def data
         markers_by_thread = profile.markers.group_by { |marker| marker[0] }
 
-        thread_data = profile.threads.map do |ruby_thread_id, thread_info|
+        threads = profile.threads.map do |ruby_thread_id, thread_info|
           markers = markers_by_thread[ruby_thread_id] || []
           Thread.new(
             ruby_thread_id,
@@ -114,7 +114,7 @@ module Vernier
             @categorizer,
             markers: markers,
             **thread_info,
-          ).data
+          )
         end
 
         {
@@ -141,10 +141,12 @@ module Vernier
                 subcategories: category.subcategories.map(&:name)
               }
             end,
-            sourceCodeIsNotOnSearchfox: true
+            sourceCodeIsNotOnSearchfox: true,
+            initialVisibleThreads: threads.each_index.to_a,
+            initialSelectedThreads: Array(threads.find_index(&:is_start))
           },
           libs: [],
-          threads: thread_data
+          threads: threads.map(&:data)
         }
       end
 
@@ -204,9 +206,9 @@ module Vernier
       end
 
       class Thread
-        attr_reader :profile
+        attr_reader :profile, :is_start
 
-        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil, allocations: nil, is_main: nil)
+        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil, allocations: nil, is_main: nil, is_start: nil)
           @ruby_thread_id = ruby_thread_id
           @profile = profile
           @categorizer = categorizer
@@ -218,18 +220,32 @@ module Vernier
             @is_main = @ruby_thread_id == ::Thread.main.object_id
           end
           @is_main = true if profile.threads.size == 1
+          @is_start = is_start.nil? ? @is_main : is_start
+
+          @stack_table = Vernier::StackTable.new
+          samples = samples.map { |sample| @stack_table.convert(profile._stack_table, sample) }
+
+          @samples = samples
 
           timestamps ||= [0] * samples.size
-          @samples, @weights, @timestamps = samples, weights, timestamps
+          @weights, @timestamps = weights, timestamps
           @sample_categories = sample_categories || ([0] * samples.size)
-          @markers = markers
+          @markers = markers.map do |marker|
+            if stack_idx = marker[5]&.dig(:cause, :stack)
+              marker = marker.dup
+              new_idx = @stack_table.convert(profile._stack_table, stack_idx)
+              marker[5] = marker[5].merge({ cause: { stack: new_idx }})
+            end
+            marker
+          end
 
           @started_at, @stopped_at = started_at, stopped_at
 
-          names = profile.func_table.fetch(:name)
-          filenames = profile.func_table.fetch(:filename)
+          @stack_table_hash = @stack_table.to_h
+          names = @stack_table_hash[:func_table].fetch(:name)
+          filenames = @stack_table_hash[:func_table].fetch(:filename)
 
-          stacks_size = profile.stack_table.fetch(:frame).size
+          stacks_size = @stack_table.stack_count
           @categorized_stacks = Hash.new do |h, k|
             h[k] = h.size + stacks_size
           end
@@ -243,8 +259,6 @@ module Vernier
             @strings[filename]
           end
 
-          lines = profile.frame_table.fetch(:line)
-
           func_implementations = filenames.map do |filename|
             # Must match strings in `src/profile-logic/profile-data.js`
             # inside the firefox profiler. See `getFriendlyStackTypeName`
@@ -255,24 +269,27 @@ module Vernier
               nil
             end
           end
-          @frame_implementations = profile.frame_table.fetch(:func).map do |func_idx|
+          @frame_implementations = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_implementations[func_idx]
           end
 
           cfunc_category = @categorizer.get_category("cfunc")
           ruby_category = @categorizer.get_category("Ruby")
-          func_categories = filenames.map do |filename|
-            filename == "<cfunc>" ? cfunc_category : ruby_category
+          func_categories, func_subcategories = [], []
+          filenames.each do |filename|
+            if filename == "<cfunc>"
+              func_categories << cfunc_category
+              func_subcategories << 0
+            else
+              func_categories << ruby_category
+              subcategory = ruby_category.subcategories.detect {|c| c.matches?(filename) }&.idx || 0
+              func_subcategories << subcategory
+            end
           end
-          func_subcategories = filenames.map do |filename|
-            next 0 if filename == "<cfunc>"
-
-            (ruby_category.subcategories.detect {|c| c.matches?(filename) } || ruby_category.subcategories.first).idx
-          end
-          @frame_categories = profile.frame_table.fetch(:func).map do |func_idx|
+          @frame_categories = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_categories[func_idx]
           end
-          @frame_subcategories = profile.frame_table.fetch(:func).map do |func_idx|
+          @frame_subcategories = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_subcategories[func_idx]
           end
         end
@@ -420,15 +437,14 @@ module Vernier
             stack: samples,
             time: times,
             weight: weights,
-            weightType: "samples",
-            #weightType: "bytes",
+            weightType: profile.meta[:mode] == :retained ? "bytes" : "samples",
             length: samples.length
           }
         end
 
         def stack_table
-          frames = profile.stack_table.fetch(:frame).dup
-          prefixes = profile.stack_table.fetch(:parent).dup
+          frames =   @stack_table_hash[:stack_table].fetch(:frame).dup
+          prefixes = @stack_table_hash[:stack_table].fetch(:parent).dup
           categories  = frames.map{|idx| @frame_categories[idx].idx }
           subcategories  = frames.map{|idx| @frame_subcategories[idx] }
 
@@ -452,8 +468,8 @@ module Vernier
         end
 
         def frame_table
-          funcs = profile.frame_table.fetch(:func)
-          lines = profile.frame_table.fetch(:line)
+          funcs = @stack_table_hash[:frame_table].fetch(:func)
+          lines = @stack_table_hash[:frame_table].fetch(:line)
           size = funcs.length
           none = [nil] * size
           categories = @frame_categories.map(&:idx)
@@ -480,7 +496,7 @@ module Vernier
 
           cfunc_idx = @strings["<cfunc>"]
           is_js = @filenames.map { |fn| fn != cfunc_idx }
-          line_numbers = profile.func_table.fetch(:first_line).map.with_index do |line, i|
+          line_numbers = @stack_table_hash[:func_table].fetch(:first_line).map.with_index do |line, i|
             if is_js[i] || line != 0
               line
             else

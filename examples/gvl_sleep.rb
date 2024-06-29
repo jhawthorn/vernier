@@ -1,34 +1,19 @@
 # Different (bad) ways to sleep
 
-File.write("#{__dir__}/my_sleep.c", <<~EOF)
-#include <time.h>
-#include <sys/errno.h>
+require 'bundler/inline'
 
-void my_sleep() {
-  struct timespec ts;
-  ts.tv_sec = 1;
-  ts.tv_nsec = 0;
+gemfile do
+  source 'https://rubygems.org'
 
-  int rc;
-  do {
-    rc = nanosleep(&ts, &ts);
-  } while (rc < 0 && errno == EINTR);
-}
-EOF
-
-soext = RbConfig::CONFIG["SOEXT"]
-system("gcc", "-shared", "-fPIC", "#{__dir__}/my_sleep.c", "-o", "#{__dir__}/my_sleep.#{soext}")
-
-require "fiddle"
-
-SLEEP_LIB = Fiddle.dlopen("./my_sleep.#{soext}")
+  gem "gvltest"
+end
 
 def cfunc_sleep_gvl
-  Fiddle::Function.new(SLEEP_LIB['my_sleep'], [], Fiddle::TYPE_VOID, need_gvl: true).call
+  GVLTest.sleep_holding_gvl(1)
 end
 
 def cfunc_sleep_idle
-  Fiddle::Function.new(SLEEP_LIB['my_sleep'], [], Fiddle::TYPE_VOID, need_gvl: true).call
+  GVLTest.sleep_without_gvl(1)
 end
 
 def ruby_sleep_gvl

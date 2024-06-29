@@ -14,9 +14,13 @@
 
 #include <sys/time.h>
 #include <signal.h>
-#ifdef __APPLE__
+#if defined(__APPLE__)
 /* macOS */
 #include <dispatch/dispatch.h>
+#elif defined(__FreeBSD__)
+/* FreeBSD */
+#include <pthread_np.h>
+#include <semaphore.h>
 #else
 /* Linux */
 #include <semaphore.h>
@@ -563,6 +567,20 @@ struct StackTable {
         }
     }
 
+    StackNode *convert_stack(StackTable &other, int original_idx) {
+        if (original_idx < 0) {
+            return &root_stack_node;
+        }
+
+        StackNode &original_node = other.stack_node_list[original_idx];
+        StackNode *parent_node = convert_stack(other, original_node.parent);
+        StackNode *node = next_stack_node(parent_node, original_node.frame);
+
+        return node;
+    }
+
+    static VALUE stack_table_convert(VALUE self, VALUE other, VALUE original_stack);
+
     static VALUE stack_table_stack_count(VALUE self);
     static VALUE stack_table_frame_count(VALUE self);
     static VALUE stack_table_func_count(VALUE self);
@@ -659,6 +677,32 @@ StackTable::stack_table_stack_count(VALUE self) {
         count = stack_table->stack_node_list.size();
     }
     return INT2NUM(count);
+}
+
+VALUE
+StackTable::stack_table_convert(VALUE self, VALUE original_tableval, VALUE original_idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    StackTable *original_table = get_stack_table(original_tableval);
+    int original_idx = NUM2INT(original_idxval);
+
+    int original_size;
+    {
+        const std::lock_guard<std::mutex> lock(original_table->stack_mutex);
+        original_size = original_table->stack_node_list.size();
+    }
+
+    if (original_idx >= original_size || original_idx < 0) {
+        rb_raise(rb_eRangeError, "index out of range");
+    }
+
+    int result_idx;
+    {
+        const std::lock_guard<std::mutex> lock1(stack_table->stack_mutex);
+        const std::lock_guard<std::mutex> lock2(original_table->stack_mutex);
+        StackNode *node = stack_table->convert_stack(*original_table, original_idx);
+        result_idx = node->index;
+    }
+    return INT2NUM(result_idx);
 }
 
 VALUE
@@ -786,11 +830,13 @@ class SampleTranslator {
 
 typedef uint64_t native_thread_id_t;
 static native_thread_id_t get_native_thread_id() {
-#ifdef __APPLE__
+#if defined(__APPLE__)
     uint64_t thread_id;
     int e = pthread_threadid_np(pthread_self(), &thread_id);
     if (e != 0) rb_syserr_fail(e, "pthread_threadid_np");
     return thread_id;
+#elif defined(__FreeBSD__)
+    return pthread_getthreadid_np();
 #else
     // gettid() is only available as of glibc 2.30
     pid_t tid = syscall(SYS_gettid);
@@ -1157,6 +1203,10 @@ class Thread {
             return rb_thread_main() == ruby_thread;
         }
 
+        bool is_start(VALUE start_thread) {
+            return start_thread == ruby_thread;
+        }
+
         bool running() {
             return state != State::STOPPED;
         }
@@ -1264,6 +1314,7 @@ class BaseCollector {
     StackTable *stack_table;
     VALUE stack_table_value;
 
+    VALUE start_thread;
     TimeStamp started_at;
 
     BaseCollector(VALUE stack_table_value) : stack_table_value(stack_table_value), stack_table(get_stack_table(stack_table_value)) {
@@ -1275,6 +1326,7 @@ class BaseCollector {
             return false;
         }
 
+        start_thread = rb_thread_current();
         started_at = TimeStamp::Now();
 
         running = true;
@@ -1290,17 +1342,19 @@ class BaseCollector {
         return Qnil;
     }
 
-    void write_meta(VALUE result) {
-        VALUE meta = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@meta"), meta);
+    virtual void write_meta(VALUE meta, VALUE result) {
         rb_hash_aset(meta, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
+        rb_hash_aset(meta, sym("interval"), Qnil);
+        rb_hash_aset(meta, sym("allocation_sample_rate"), Qnil);
 
     }
 
     virtual VALUE build_collector_result() {
         VALUE result = rb_obj_alloc(rb_cVernierResult);
 
-        write_meta(result);
+        VALUE meta = rb_hash_new();
+        rb_ivar_set(result, rb_intern("@meta"), meta);
+        write_meta(meta, result);
 
         return result;
     }
@@ -1623,6 +1677,12 @@ class TimeCollector : public BaseCollector {
         gc_running = value;
     }
 
+    void write_meta(VALUE meta, VALUE result) {
+        BaseCollector::write_meta(meta, result);
+        rb_hash_aset(meta, sym("interval"), ULL2NUM(interval.microseconds()));
+        rb_hash_aset(meta, sym("allocation_sample_rate"), ULL2NUM(allocation_sample_rate));
+    }
+
     private:
 
     void record_sample(const RawSample &sample, TimeStamp time, Thread &thread, Category category) {
@@ -1892,6 +1952,7 @@ class TimeCollector : public BaseCollector {
                 rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread->stopped_at.nanoseconds()));
             }
             rb_hash_aset(hash, sym("is_main"), thread->is_main() ? Qtrue : Qfalse);
+            rb_hash_aset(hash, sym("is_start"), thread->is_start(BaseCollector::start_thread) ? Qtrue : Qfalse);
 
         }
 
@@ -2069,6 +2130,7 @@ Init_vernier(void)
   rb_undef_alloc_func(rb_cStackTable);
   rb_define_singleton_method(rb_cStackTable, "new", stack_table_new, 0);
   rb_define_method(rb_cStackTable, "current_stack", stack_table_current_stack, -1);
+  rb_define_method(rb_cStackTable, "convert", StackTable::stack_table_convert, 2);
   rb_define_method(rb_cStackTable, "stack_parent_idx", stack_table_stack_parent_idx, 1);
   rb_define_method(rb_cStackTable, "stack_frame_idx", stack_table_stack_frame_idx, 1);
   rb_define_method(rb_cStackTable, "frame_line_no", StackTable::stack_table_frame_line_no, 1);

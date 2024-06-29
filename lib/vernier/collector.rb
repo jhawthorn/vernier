@@ -6,9 +6,8 @@ require_relative "thread_names"
 module Vernier
   class Collector
     def initialize(mode, options = {})
-      if options.fetch(:gc, true) && (mode == :retained)
-        GC.start
-      end
+      @gc = options.fetch(:gc, true) && (mode == :retained)
+      GC.start if @gc
 
       @mode = mode
       @out = options[:out]
@@ -75,7 +74,11 @@ module Vernier
     def stop
       result = finish
 
-      result.instance_variable_set("@stack_table", stack_table.to_h)
+      result.meta[:mode] = @mode
+      result.meta[:out] = @out
+      result.meta[:gc] = @gc
+
+      result.stack_table = stack_table
       @thread_names.finish
 
       @hooks.each do |hook|
