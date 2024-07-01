@@ -554,19 +554,6 @@ struct StackTable {
         }
     }
 
-    // FIXME: probably should remove
-    void clear() {
-        frame_map.clear();
-        func_map.clear();
-        func_info_list.clear();
-
-        {
-            const std::lock_guard<std::mutex> lock(stack_mutex);
-            stack_node_list.clear();
-            root_stack_node.children.clear();
-        }
-    }
-
     StackNode *convert_stack(StackTable &other, int original_idx) {
         if (original_idx < 0) {
             return &root_stack_node;
