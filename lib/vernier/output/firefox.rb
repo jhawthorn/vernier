@@ -34,7 +34,7 @@ module Vernier
           add_category(name: "Idle", color: "transparent")
           add_category(name: "Stalled", color: "transparent")
 
-          add_category(name: "GC", color: "red")
+          add_category(name: "GC", color: "orange")
           add_category(name: "cfunc", color: "yellow", matcher: "<cfunc>")
 
           add_category(name: "Thread", color: "grey")
