@@ -213,7 +213,6 @@ module Vernier
           @profile = profile
           @categorizer = categorizer
           @tid = tid
-          @allocations = allocations
           @name = name
           @is_main = is_main
           if is_main.nil?
@@ -226,6 +225,15 @@ module Vernier
           samples = samples.map { |sample| @stack_table.convert(profile._stack_table, sample) }
 
           @samples = samples
+
+          if allocations
+            allocation_samples = allocations[:samples].dup
+            allocation_samples.map! do |sample|
+              @stack_table.convert(profile._stack_table, sample)
+            end
+            allocations = allocations.merge(samples: allocation_samples)
+          end
+          @allocations = allocations
 
           timestamps ||= [0] * samples.size
           @weights, @timestamps = weights, timestamps

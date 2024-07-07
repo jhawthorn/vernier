@@ -128,6 +128,18 @@ module FirefoxTestHelpers
       assert_equal samples["length"], samples["time"].size
 
       assert_operator samples["stack"].max || -1, :<, thread["stackTable"]["length"]
+
+      if allocations = thread["jsAllocations"]
+        assert_equal allocations["length"], allocations["stack"].size
+        assert_equal allocations["length"], allocations["weight"].size
+        assert_equal allocations["length"], allocations["time"].size
+        assert_equal allocations["length"], allocations["className"].size
+        assert_equal allocations["length"], allocations["typeName"].size
+        assert_equal allocations["length"], allocations["coarseType"].size
+        assert_equal allocations["length"], allocations["inNursery"].size
+
+        assert_operator allocations["stack"].max || -1, :<, thread["stackTable"]["length"]
+      end
     end
   end
 end

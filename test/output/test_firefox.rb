@@ -222,6 +222,15 @@ class TestOutputFirefox < Minitest::Test
     assert_equal [spawned_thread_index], meta["initialSelectedThreads"]
   end
 
+  def test_allocation_samples
+    result = Vernier.trace(allocation_sample_rate: 1) do
+      JSON.parse(%{{ "foo": { "bar": ["baz", 123] } }})
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+  end
+
   private
 
   def file_lineno
