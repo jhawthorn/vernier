@@ -672,6 +672,10 @@ StackTable::stack_table_convert(VALUE self, VALUE original_tableval, VALUE origi
     StackTable *original_table = get_stack_table(original_tableval);
     int original_idx = NUM2INT(original_idxval);
 
+    if (original_idx == -1) {
+        return original_idxval;
+    }
+
     int original_size;
     {
         const std::lock_guard<std::mutex> lock(original_table->stack_mutex);
