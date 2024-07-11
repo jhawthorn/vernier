@@ -12,7 +12,10 @@ Gem::Specification.new do |spec|
   spec.description = "Next-generation Ruby 3.2.1+ sampling profiler. Tracks multiple threads, GVL activity, GC pauses, idle time, and more."
   spec.homepage = "https://github.com/jhawthorn/vernier"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2.1"
+
+  unless ENV["IGNORE_REQUIRED_RUBY_VERSION"]
+    spec.required_ruby_version = ">= 3.2.1"
+  end
 
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = spec.homepage
