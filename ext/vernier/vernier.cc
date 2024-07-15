@@ -57,7 +57,7 @@ extern "C" size_t rb_obj_memsize_of(VALUE);
 
 using namespace std;
 
-static VALUE rb_mVernier;
+VALUE rb_mVernier;
 static VALUE rb_cVernierResult;
 static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
@@ -2087,7 +2087,7 @@ Init_consts(VALUE rb_mVernierMarkerPhase) {
 #undef PHASE_CONST
 }
 
-extern "C" void
+extern "C" __attribute__ ((__visibility__("default"))) void
 Init_vernier(void)
 {
     sym_state = sym("state");
@@ -2126,6 +2126,7 @@ Init_vernier(void)
   rb_define_method(rb_cStackTable, "func_count", StackTable::stack_table_func_count, 0);
 
   Init_consts(rb_mVernierMarkerPhase);
+  Init_memory();
 
   //static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, collector_mark, NULL, &_collector);
   //rb_global_variable(&gc_hook);
