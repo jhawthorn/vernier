@@ -17,7 +17,6 @@ module Vernier
       end
 
       def firefox_counters
-        p @tracker.results
         timestamps, memory = @tracker.results
         memory = ([0] + memory).each_cons(2).map { _2 - _1 }
         {
