@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    name: Ruby ${{ matrix.ruby }}{{ matrix.mn_threads == "1" && " +MN" }} ${{ matrix.os }}
+    name: Ruby ${{ matrix.ruby }}${{ matrix.mn_threads == "1" && " +MN" }} ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
