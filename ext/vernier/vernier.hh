@@ -3,4 +3,8 @@
 
 #include "ruby.h"
 
+extern VALUE rb_mVernier;
+
+void Init_memory();
+
 #endif /* VERNIER_H */

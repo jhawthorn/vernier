@@ -2,6 +2,7 @@
 
 require "mkmf"
 
+$CXXFLAGS += " -fvisibility=hidden "
 $CXXFLAGS += " -std=c++14 "
 $CXXFLAGS += " -ggdb3 -Og "
 
