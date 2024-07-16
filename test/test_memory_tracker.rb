@@ -7,6 +7,7 @@ class TestMemoryTracker < Minitest::Test
   REASONABLE_RANGE = (10_000_000)..(200_000_000)
 
   def test_memory_rss
+    return skip("https://bugs.ruby-lang.org/issues/20638") if ENV["RUBY_MN_THREADS"]
     assert_includes REASONABLE_RANGE, Vernier.memory_rss
   end
 
