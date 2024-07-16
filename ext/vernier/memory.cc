@@ -1,16 +1,18 @@
-#ifdef __APPLE__
-
-#include <vector>
+#include <atomic>
+#include <mutex>
 #include <stdio.h>
-
-// Based loosely on https://github.com/zombocom/get_process_mem
-#include <libproc.h>
 #include <unistd.h>
+#include <vector>
 
 #include "vernier.hh"
 #include "timestamp.hh"
 
-inline uint64_t memory_rss() {
+#if defined(__APPLE__)
+
+// Based loosely on https://github.com/zombocom/get_process_mem
+#include <libproc.h>
+
+uint64_t memory_rss() {
     pid_t pid = getpid();
 
     struct proc_taskinfo tinfo;
@@ -25,11 +27,28 @@ inline uint64_t memory_rss() {
     return tinfo.pti_resident_size;
 }
 
+#elif defined(__linux__)
+
+uint64_t memory_rss() {
+    long rss = 0;
+
+    // I'd heard that you shouldn't read /proc/*/smaps with fopen and family,
+    // but maybe it's fine for statm which is much smaller and will almost
+    // certainly fit in any internal buffer.
+    FILE *file = fopen("/proc/self/statm", "r");
+    if (!file) return 0;
+    if (fscanf(file, "%*s%ld", &rss) != 1) {
+        fclose(file);
+        return 0;
+    }
+    fclose(file);
+    return rss * sysconf(_SC_PAGESIZE);
+}
+
 #else
 
-// Assume linux for now
-inline uint64_t memory_rss() {
-    // TODO: read /proc/self/statm
+// Unsupported
+uint64_t memory_rss() {
     return 0;
 }
 

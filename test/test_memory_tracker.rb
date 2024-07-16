@@ -3,6 +3,13 @@
 require "test_helper"
 
 class TestMemoryTracker < Minitest::Test
+  # 10MB to 200MB
+  REASONABLE_RANGE = (10_000_000)..(200_000_000)
+
+  def test_memory_rss
+    assert_includes REASONABLE_RANGE, Vernier.memory_rss
+  end
+
   def test_explicit_record
     memory_tracker = Vernier::MemoryTracker.new
     memory_tracker.record
