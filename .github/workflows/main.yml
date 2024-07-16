@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    name: Ruby ${{ matrix.ruby }}${{ matrix.mn_threads == "1" && " +MN" || "" }} ${{ matrix.os }}
+    name: Ruby ${{ matrix.ruby }}${{ matrix.mn_threads == 1 && " +MN" || "" }} ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -27,10 +27,10 @@ jobs:
         include:
           - os: ubuntu-latest
             ruby: '3.3.0'
-            mn_threads: '1'
+            mn_threads: 1
           - os: ubuntu-latest
             ruby: 'head'
-            mn_threads: '1'
+            mn_threads: 1
 
     steps:
     - uses: actions/checkout@v2
