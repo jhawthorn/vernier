@@ -5,6 +5,7 @@ require_relative "vernier/collector"
 require_relative "vernier/stack_table"
 require_relative "vernier/result"
 require_relative "vernier/hooks"
+require_relative "vernier/fork"
 require_relative "vernier/vernier"
 require_relative "vernier/output/firefox"
 require_relative "vernier/output/top"
@@ -54,6 +55,11 @@ module Vernier
     @collector = nil
 
     result
+  end
+
+  def self.cancel_profile
+    @collector&.cancel
+    @collector = nil
   end
 
   def self.trace_retained(**profile_options, &block)
