@@ -2,43 +2,122 @@
 
 require "optparse"
 
-banner = <<-END
+module Vernier
+  module CLI
+    def self.run(options)
+      banner = <<-END
 Usage: vernier run [FLAGS] -- COMMAND
 
 FLAGS:
-END
+      END
+
+      OptionParser.new(banner) do |o|
+        o.on('--output [FILENAME]', String, "output filename") do |s|
+          options[:output] = s
+        end
+        o.on('--interval [MICROSECONDS]', Integer, "sampling interval (default 500)") do |i|
+          options[:interval] = i
+        end
+        o.on('--allocation_sample_rate [ALLOCATIONS]', Integer, "allocation sampling interval (default 0 disabled)") do |i|
+          options[:allocation_sample_rate] = i
+        end
+        o.on('--signal [NAME]', String, "specify a signal to start and stop the profiler") do |s|
+          options[:signal] = s
+        end
+        o.on('--start-paused', "don't automatically start the profiler") do
+          options[:start_paused] = true
+        end
+        o.on('--hooks [HOOKS]', String, "Enable instrumentation hooks. Currently supported: rails") do |s|
+          options[:hooks] = s
+        end
+      end
+    end
+
+    def self.view(options)
+      banner = <<-END
+Usage: vernier view [FILENAME]
+
+FLAGS:
+      END
+
+      OptionParser.new(banner) do |o|
+        o.on('--top [COUNT]', Integer, "number of frames to show") do |i|
+          options[:top] = i
+        end
+      end
+    end
+
+    def self.inverted_tree(top, file)
+      # Print the inverted tree from a Vernier profile
+      require "json"
+
+      info = JSON.load File.read file
+      main = info["threads"].find { |thread| thread["isMainThread"] }
+
+      weight_by_frame = Hash.new(0)
+
+      stack_frames = main["stackTable"]["frame"]
+      frame_table = main["frameTable"]["func"]
+      func_table = main["funcTable"]["name"]
+      string_array = main["stringArray"]
+
+      main["samples"]["stack"].zip(main["samples"]["weight"]).each do |stack, weight|
+        top_frame_index = stack_frames[stack]
+        func_index = frame_table[top_frame_index]
+        string_index = func_table[func_index]
+        str = string_array[string_index]
+        weight_by_frame[str] += weight
+      end
+
+      total = weight_by_frame.values.inject :+
+
+      header = ["Samples", "%", ""]
+      widths = header.map(&:bytesize)
+
+      columns = weight_by_frame.sort_by { |k,v| v }.reverse.first(top).map { |k,v|
+        entry = [v.to_s, ((v / total.to_f) * 100).round(1).to_s, k]
+        entry.each_with_index { |str, i| widths[i] = str.bytesize if widths[i] < str.bytesize }
+        entry
+      }
+
+      print_separator widths
+      print_row header, widths
+      print_separator widths
+      columns.each { print_row(_1, widths) }
+      print_separator widths
+    end
+
+    def self.print_row(list, widths)
+      puts("|" + list.map.with_index { |str, i| " " + str.ljust(widths[i] + 1) }.join("|") + "|")
+    end
+
+    def self.print_separator(widths)
+      puts("+" + widths.map { |i| "-" * (i + 2) }.join("+") + "+")
+    end
+  end
+end
 
 options = {}
-parser = OptionParser.new(banner) do |o|
-  o.on('--output [FILENAME]', String, "output filename") do |s|
-    options[:output] = s
+run = Vernier::CLI.run(options)
+view = Vernier::CLI.view(options)
+
+case ARGV.shift
+when "run"
+  run.parse!
+  run.abort(run.help) if ARGV.empty?
+
+  env = {}
+  options.each do |k, v|
+    env["VERNIER_#{k.to_s.upcase}"] = v.to_s
   end
-  o.on('--interval [MICROSECONDS]', Integer, "sampling interval (default 500)") do |i|
-    options[:interval] = i
-  end
-  o.on('--allocation_sample_rate [ALLOCATIONS]', Integer, "allocation sampling interval (default 0 disabled)") do |i|
-    options[:allocation_sample_rate] = i
-  end
-  o.on('--signal [NAME]', String, "specify a signal to start and stop the profiler") do |s|
-    options[:signal] = s
-  end
-  o.on('--start-paused', "don't automatically start the profiler") do
-    options[:start_paused] = true
-  end
-  o.on('--hooks [HOOKS]', String, "Enable instrumentation hooks. Currently supported: rails") do |s|
-    options[:hooks] = s
-  end
+  vernier_path = File.expand_path('../lib', __dir__)
+  env['RUBYOPT'] = "-I #{vernier_path} -r vernier/autorun #{ENV['RUBYOPT']}"
+
+  Kernel.exec(env, *ARGV)
+when "view"
+  view.parse!
+  view.abort(view.help) if ARGV.empty?
+  Vernier::CLI.inverted_tree(options[:top] || 20, ARGV.shift)
+else
+  run.abort(run.help + "\n" + view.help)
 end
-
-parser.parse!
-parser.abort(parser.help) if ARGV.shift != "run"
-parser.abort(parser.help) if ARGV.empty?
-
-env = {}
-options.each do |k, v|
-  env["VERNIER_#{k.to_s.upcase}"] = v.to_s
-end
-vernier_path = File.expand_path('../lib', __dir__)
-env['RUBYOPT'] = "-I #{vernier_path} -r vernier/autorun #{ENV['RUBYOPT']}"
-
-Kernel.exec(env, *ARGV)
