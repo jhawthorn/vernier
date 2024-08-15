@@ -51,7 +51,17 @@ FLAGS:
       # Print the inverted tree from a Vernier profile
       require "json"
 
-      info = JSON.load File.read file
+      is_gzip = File.binread(file, 2) == "\x1F\x8B".b # check for gzip header
+
+      json = if is_gzip
+        require "zlib"
+        Zlib::GzipReader.open(file) { |gz| gz.read }
+      else
+        File.read file
+      end
+
+      info = JSON.load json
+
       main = info["threads"].find { |thread| thread["isMainThread"] }
 
       weight_by_frame = Hash.new(0)
