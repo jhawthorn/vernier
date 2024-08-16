@@ -35,13 +35,13 @@ FLAGS:
 
     def self.view(options)
       banner = <<-END
-Usage: vernier view [FILENAME]
+Usage: vernier view [FLAGS] FILENAME
 
 FLAGS:
       END
 
       OptionParser.new(banner) do |o|
-        o.on('--top [COUNT]', Integer, "number of frames to show") do |i|
+        o.on('--top [COUNT]', Integer, "number of frames to show (default 20)") do |i|
           options[:top] = i
         end
       end
