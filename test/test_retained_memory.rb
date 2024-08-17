@@ -111,13 +111,21 @@ class TestRetainedMemory < Minitest::Test
 
     frames = result.each_sample.map {|stack, _| stack.frames[0] }
     labels = frames.map(&:label)
+    inspects = frames.map(&:to_s)
 
-    expected = %W[
+    expected_labels = %W[
       #{self.class.name}#alloc_a
       #{self.class.name}#alloc_b
       #{self.class.name}#alloc_c
     ]
-    assert_equal expected, labels.grep(/#alloc_[abc]\z/)
+    assert_equal expected_labels, labels.grep(/#alloc_[abc]\z/)
+
+    expected_inspects = [
+      "#{self.class.name}#alloc_a at #{method(:alloc_a).source_location.join(":")}",
+      "#{self.class.name}#alloc_b at #{method(:alloc_b).source_location.join(":")}",
+      "#{self.class.name}#alloc_c at #{method(:alloc_c).source_location.join(":")}"
+    ]
+    assert_equal expected_inspects, inspects.grep(/#alloc_[abc]/)
   end
 
   def test_nothing_retained_in_module_eval
@@ -166,15 +174,9 @@ class TestRetainedMemory < Minitest::Test
     nil
   end
 
-  def alloc_a
-    Object.new
-  end
+  def alloc_a = Object.new
 
-  def alloc_b
-    Object.new
-  end
+  def alloc_b = Object.new
 
-  def alloc_c
-    Object.new
-  end
+  def alloc_c = Object.new
 end
