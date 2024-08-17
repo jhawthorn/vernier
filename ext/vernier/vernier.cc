@@ -1027,13 +1027,15 @@ class SampleList {
         }
 
         void record_sample(int stack_index, TimeStamp time, Category category) {
-            if (
-                    !empty() &&
-                    stacks.back() == stack_index &&
-                    categories.back() == category)
-            {
-                // We don't compare timestamps for de-duplication
-                weights.back() += 1;
+          // FIXME: probably better to avoid generating -1 higher up.
+          // Currently this happens when we measure an empty stack. Ideally we would have a better representation
+          if (stack_index < 0)
+            return;
+
+          if (!empty() && stacks.back() == stack_index &&
+              categories.back() == category) {
+            // We don't compare timestamps for de-duplication
+            weights.back() += 1;
             } else {
                 stacks.push_back(stack_index);
                 timestamps.push_back(time);
