@@ -224,6 +224,16 @@ class TestTimeCollector < Minitest::Test
     assert_equal expected, thread_names
   end
 
+  def test_process_detach
+    result = Vernier.trace do
+      pid = Process.spawn("sleep", "0.01")
+      wait_thr = Process.detach(pid)
+      wait_thr.join
+    end
+    assert_valid_result result
+    assert_operator result.threads.count, :>=, 2
+  end
+
   def test_start_stop
     Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
     two_slow_methods
