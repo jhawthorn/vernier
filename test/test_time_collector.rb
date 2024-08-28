@@ -3,28 +3,6 @@
 require "test_helper"
 
 class TestTimeCollector < Minitest::Test
-  SLOW_RUNNER = ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
-  DEFAULT_SLEEP_SCALE =
-      if SLOW_RUNNER
-        1
-      else
-        0.1
-      end
-  SLEEP_SCALE = ENV.fetch("TEST_SLEEP_SCALE", DEFAULT_SLEEP_SCALE).to_f # seconds/100ms
-  SAMPLE_SCALE_INTERVAL = 10_000 * SLEEP_SCALE # Microseconds
-  SAMPLE_SCALE_ALLOCATIONS = 100
-
-  def slow_method
-    sleep SLEEP_SCALE
-  end
-
-  def two_slow_methods
-    slow_method
-    1.times do
-      slow_method
-    end
-  end
-
   def test_receives_gc_events
     collector = Vernier::Collector.new(:wall)
     collector.start
@@ -246,6 +224,16 @@ class TestTimeCollector < Minitest::Test
     assert_equal expected, thread_names
   end
 
+  def test_process_detach
+    result = Vernier.trace do
+      pid = Process.spawn("sleep", "0.01")
+      wait_thr = Process.detach(pid)
+      wait_thr.join
+    end
+    assert_valid_result result
+    assert_operator result.threads.count, :>=, 2
+  end
+
   def test_start_stop
     Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
     two_slow_methods
@@ -285,6 +273,29 @@ class TestTimeCollector < Minitest::Test
   end
 
   private
+
+  SLOW_RUNNER = ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
+  DEFAULT_SLEEP_SCALE =
+      if SLOW_RUNNER
+        1
+      else
+        0.1
+      end
+  SLEEP_SCALE = ENV.fetch("TEST_SLEEP_SCALE", DEFAULT_SLEEP_SCALE).to_f # seconds/100ms
+  SAMPLE_SCALE_INTERVAL = 10_000 * SLEEP_SCALE # Microseconds
+  SAMPLE_SCALE_ALLOCATIONS = 100
+  private_constant :SLOW_RUNNER, :DEFAULT_SLEEP_SCALE, :SLEEP_SCALE, :SAMPLE_SCALE_INTERVAL, :SAMPLE_SCALE_ALLOCATIONS
+
+  def slow_method
+    sleep SLEEP_SCALE
+  end
+
+  def two_slow_methods
+    slow_method
+    1.times do
+      slow_method
+    end
+  end
 
   def assert_similar expected, actual
     delta_ratio =

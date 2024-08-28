@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 
 require "optparse"
+require "vernier/version"
 
 module Vernier
   module CLI
@@ -12,6 +13,8 @@ FLAGS:
       END
 
       OptionParser.new(banner) do |o|
+        o.version = Vernier::VERSION
+
         o.on('--output [FILENAME]', String, "output filename") do |s|
           options[:output] = s
         end

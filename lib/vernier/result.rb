@@ -102,7 +102,7 @@ module Vernier
       end
 
       def line
-        result.frame_line_idx(idx)
+        result._stack_table.frame_line_no(idx)
       end
 
       def to_s

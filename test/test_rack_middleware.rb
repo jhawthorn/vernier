@@ -8,14 +8,6 @@ require "rack"
 class TestOutputFirefox < Minitest::Test
   include FirefoxTestHelpers
 
-  def build_app(...)
-    Rack::Lint.new(Vernier::Middleware.new(...))
-  end
-
-  def request(opts = {})
-    Rack::MockRequest.env_for("", opts)
-  end
-
   def test_middleware_disabled
     app = lambda { |env| [200, { 'content-type' => 'text/plain' }, ["Hello, World!"]] }
     response = build_app(app).call(request)
@@ -33,5 +25,15 @@ class TestOutputFirefox < Minitest::Test
     profile_gzip = body.to_enum.to_a[0]
     profile_json = Zlib.gunzip(profile_gzip)
     assert_valid_firefox_profile(profile_json)
+  end
+
+  private
+
+  def build_app(...)
+    Rack::Lint.new(Vernier::Middleware.new(...))
+  end
+
+  def request(opts = {})
+    Rack::MockRequest.env_for("", opts)
   end
 end
