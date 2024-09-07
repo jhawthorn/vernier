@@ -229,7 +229,7 @@ module Vernier
           if allocations
             allocation_samples = allocations[:samples].dup
             allocation_samples.map! do |sample|
-              @stack_table.convert(profile._stack_table, sample)
+              @stack_table.convert(profile._stack_table, sample.clamp(0..))
             end
             allocations = allocations.merge(samples: allocation_samples)
           end
