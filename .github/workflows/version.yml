@@ -1,0 +1,29 @@
+
+name: Bump version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'What version level of bump?'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+        - major
+        - minor
+        - patch
+
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+    - name: Bump version
+      run: gem exec bump ${{ github.event.inputs.version }}
