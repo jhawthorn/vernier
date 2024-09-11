@@ -27,6 +27,12 @@ jobs:
       uses: ruby/setup-ruby@v1
       with:
         ruby-version: '3.3'
+    - name: Set git config
+      run: |
+        git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
+        git config --global user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
+        git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/$GITHUB_REPOSITORY"
+      shell: bash
     - name: Bump version
       run: gem exec bump ${{ github.event.inputs.version }}
     - name: push
