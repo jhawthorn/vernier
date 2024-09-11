@@ -1114,7 +1114,11 @@ class Thread {
             sample.sample();
 
             int stack_idx = translator.translate(frame_list, sample);
-            allocation_samples.record_sample(stack_idx, TimeStamp::Now(), 1);
+            if (stack_idx >= 0) {
+                allocation_samples.record_sample(stack_idx, TimeStamp::Now(), 1);
+            } else {
+                // TODO: should we log an empty frame?
+            }
         }
 
         void set_state(State new_state) {
