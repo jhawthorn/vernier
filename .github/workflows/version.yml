@@ -21,6 +21,8 @@ permissions:
 jobs:
   bump:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up Ruby
