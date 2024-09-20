@@ -30,10 +30,10 @@ compare do
   end
 end
 
-compare(allocation_sample_rate: 1000) do
+compare(allocation_interval: 1000) do
   Object.new
 end
 
-compare(allocation_sample_rate: 1) do
+compare(allocation_interval: 1) do
   Object.new
 end

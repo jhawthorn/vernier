@@ -8,7 +8,7 @@ class IntegrationTest < Minitest::Test
   LIB_DIR = File.expand_path("../lib", __dir__)
 
   def test_allocations
-    result = run_vernier({allocation_sample_rate: 1}, "-e", "")
+    result = run_vernier({allocation_interval: 1}, "-e", "")
     assert_valid_firefox_profile(result)
   end
 

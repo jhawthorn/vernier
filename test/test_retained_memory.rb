@@ -158,7 +158,7 @@ class TestRetainedMemory < Minitest::Test
     assert_equal :retained, result.meta[:mode]
     assert_equal output_file, result.meta[:out]
     assert_nil result.meta[:interval]
-    assert_nil result.meta[:allocation_sample_rate]
+    assert_nil result.meta[:allocation_interval]
     assert_equal true, result.meta[:gc]
   end
 

@@ -262,13 +262,13 @@ class TestTimeCollector < Minitest::Test
     result = Vernier.profile(
       out: output_file,
       interval: SAMPLE_SCALE_INTERVAL,
-      allocation_sample_rate: SAMPLE_SCALE_ALLOCATIONS
+      allocation_interval: SAMPLE_SCALE_ALLOCATIONS
     ) { }
 
     assert_equal :wall, result.meta[:mode]
     assert_equal output_file, result.meta[:out]
     assert_equal SAMPLE_SCALE_INTERVAL, result.meta[:interval]
-    assert_equal SAMPLE_SCALE_ALLOCATIONS, result.meta[:allocation_sample_rate]
+    assert_equal SAMPLE_SCALE_ALLOCATIONS, result.meta[:allocation_interval]
     assert_equal false, result.meta[:gc]
   end
 
