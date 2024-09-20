@@ -13,9 +13,9 @@ module Vernier
       return @app.call(env) unless permitted
 
       interval = request.GET.fetch("vernier_interval", 200).to_i
-      allocation_sample_rate = request.GET.fetch("vernier_allocation_sample_rate", 200).to_i
+      allocation_interval = request.GET.fetch("vernier_allocation_interval", 200).to_i
 
-      result = Vernier.trace(interval:, allocation_sample_rate:, hooks: [:rails]) do
+      result = Vernier.trace(interval:, allocation_interval:, hooks: [:rails]) do
         @app.call(env)
       end
       body = result.to_gecko(gzip: true)

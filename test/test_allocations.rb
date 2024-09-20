@@ -4,7 +4,7 @@ require "test_helper"
 
 class TestAllocations < Minitest::Test
   def test_plain_objects
-    result = Vernier.trace(allocation_sample_rate: 1) do
+    result = Vernier.trace(allocation_interval: 1) do
       100.times do
         Object.new
       end
@@ -17,7 +17,7 @@ class TestAllocations < Minitest::Test
   end
 
   def test_sample_rate
-    result = Vernier.trace(allocation_sample_rate: 10) do
+    result = Vernier.trace(allocation_interval: 10) do
       1000.times do
         Object.new
       end
@@ -32,7 +32,7 @@ class TestAllocations < Minitest::Test
   end
 
   def test_thread_allocation
-    result = Vernier.trace(allocation_sample_rate: 1) do
+    result = Vernier.trace(allocation_interval: 1) do
       Thread.new do
         100.times do
           Object.new
