@@ -57,7 +57,7 @@ class TestOutputFirefox < Minitest::Test
     names = intervals.map { |record| thread["stringArray"][record.first] }.uniq
 
     # We should have a GC pause in there
-    assert_includes names, "GC pause"
+    assert_predicate names.grep(/.GC pause/), :any?
   end
 
   def test_retained_firefox_output

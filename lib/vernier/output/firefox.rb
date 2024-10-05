@@ -372,9 +372,9 @@ module Vernier
             phases << phase
 
             category =
-              if name.start_with?("GC")
+              if name.start_with?(/.GC/)
                 gc_category.idx
-              elsif name.start_with?("Thread")
+              elsif name.start_with?(/.Thread/)
                 thread_category.idx
               else
                 0

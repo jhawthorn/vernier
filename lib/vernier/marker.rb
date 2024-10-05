@@ -12,19 +12,19 @@ module Vernier
 
     MARKER_STRINGS = []
 
-    MARKER_STRINGS[Type::GVL_THREAD_STARTED] = "Thread started"
-    MARKER_STRINGS[Type::GVL_THREAD_EXITED] = "Thread exited"
+    MARKER_STRINGS[Type::GVL_THREAD_STARTED] = "\u2001Thread started"
+    MARKER_STRINGS[Type::GVL_THREAD_EXITED] = "\u2002Thread exited"
 
-    MARKER_STRINGS[Type::GC_START] = "GC start"
-    MARKER_STRINGS[Type::GC_END_MARK] = "GC end marking"
-    MARKER_STRINGS[Type::GC_END_SWEEP] = "GC end sweeping"
-    MARKER_STRINGS[Type::GC_ENTER] = "GC enter"
-    MARKER_STRINGS[Type::GC_EXIT] = "GC exit"
-    MARKER_STRINGS[Type::GC_PAUSE] = "GC pause"
+    MARKER_STRINGS[Type::GC_ENTER] = "\u2001GC enter"
+    MARKER_STRINGS[Type::GC_START] = "\u2002GC start"
+    MARKER_STRINGS[Type::GC_PAUSE] = "\u2003GC pause"
+    MARKER_STRINGS[Type::GC_END_MARK] = "\u2004GC end marking"
+    MARKER_STRINGS[Type::GC_END_SWEEP] = "\u2005GC end sweeping"
+    MARKER_STRINGS[Type::GC_EXIT] = "\u2006GC exit"
 
-    MARKER_STRINGS[Type::THREAD_RUNNING] = "Thread Running"
-    MARKER_STRINGS[Type::THREAD_STALLED] = "Thread Stalled"
-    MARKER_STRINGS[Type::THREAD_SUSPENDED] = "Thread Suspended"
+    MARKER_STRINGS[Type::THREAD_RUNNING] = "\u2001Thread Running"
+    MARKER_STRINGS[Type::THREAD_STALLED] = "\u2002Thread Stalled"
+    MARKER_STRINGS[Type::THREAD_SUSPENDED] = "\u2003Thread Suspended"
 
     MARKER_STRINGS.freeze
 
