@@ -4,11 +4,26 @@ require "test_helper"
 
 class TestAllocations < Minitest::Test
   def test_plain_objects
-    result = Vernier.trace(allocation_sample_rate: 1) do
+    result = Vernier.trace(allocation_interval: 1) do
       100.times do
         Object.new
       end
     end
+
+    allocations = result.main_thread.fetch(:allocations)
+    stacks = allocations.fetch(:samples)
+
+    assert_includes 100..102, stacks.tally.values.max
+  end
+
+  def test_interval
+    result = Vernier.trace(allocation_interval: 10) do
+      1000.times do
+        Object.new
+      end
+    end
+
+    assert_valid_result result
 
     allocations = result.main_thread.fetch(:allocations)
     stacks = allocations.fetch(:samples)
@@ -32,7 +47,7 @@ class TestAllocations < Minitest::Test
   end
 
   def test_thread_allocation
-    result = Vernier.trace(allocation_sample_rate: 1) do
+    result = Vernier.trace(allocation_interval: 1) do
       Thread.new do
         100.times do
           Object.new

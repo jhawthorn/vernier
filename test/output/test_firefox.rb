@@ -223,7 +223,7 @@ class TestOutputFirefox < Minitest::Test
   end
 
   def test_allocation_samples
-    result = Vernier.trace(allocation_sample_rate: 1) do
+    result = Vernier.trace(allocation_interval: 1) do
       JSON.parse(%{{ "foo": { "bar": ["baz", 123] } }})
     end
 
