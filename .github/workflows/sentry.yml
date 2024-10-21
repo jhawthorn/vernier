@@ -1,0 +1,41 @@
+name: Sentry integration
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    name: Sentry integration test
+    steps:
+    - name: Checkout sentry
+      uses: actions/checkout@v4
+      with:
+        repository: getsentry/sentry-ruby
+        path: sentry-ruby
+    - name: Checkout vernier
+      uses: actions/checkout@v4
+      with:
+        path: vernier
+    - name: Set up Ruby
+      uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: ruby
+    - name: Build vernier
+      run: |
+        cd vernier
+        bundle
+        bundle exec rake compile
+    - name: Run tests
+      run: |
+        VERNIER_PATH="$(pwd)/vernier"
+        cd sentry-ruby/sentry-ruby
+        sed -i "/gem *['\"]vernier/d" Gemfile
+        echo "gem \"vernier\", path: \"$VERNIER_PATH\"" >> Gemfile
+        cat Gemfile
+        bundle install
+        bundle exec rspec spec/sentry/vernier/profiler_spec.rb
