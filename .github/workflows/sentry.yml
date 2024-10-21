@@ -30,12 +30,14 @@ jobs:
         cd vernier
         bundle
         bundle exec rake compile
-    - name: Run tests
+    - name: Setup sentry-ruby
       run: |
         VERNIER_PATH="$(pwd)/vernier"
         cd sentry-ruby/sentry-ruby
         sed -i "/gem *['\"]vernier/d" Gemfile
         echo "gem \"vernier\", path: \"$VERNIER_PATH\"" >> Gemfile
-        cat Gemfile
         bundle install
+    - name: Run tests
+      run: |
+        cd sentry-ruby/sentry-ruby
         bundle exec rspec spec/sentry/vernier/profiler_spec.rb
