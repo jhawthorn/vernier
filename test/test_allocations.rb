@@ -16,8 +16,23 @@ class TestAllocations < Minitest::Test
     assert_includes 100..102, stacks.tally.values.max
   end
 
-  def test_sample_rate
+  def test_interval
     result = Vernier.trace(allocation_interval: 10) do
+      1000.times do
+        Object.new
+      end
+    end
+
+    assert_valid_result result
+
+    allocations = result.main_thread.fetch(:allocations)
+    stacks = allocations.fetch(:samples)
+
+    assert_includes 100..102, stacks.tally.values.max
+  end
+
+  def test_sample_rate
+    result = Vernier.trace(allocation_sample_rate: 10) do
       1000.times do
         Object.new
       end

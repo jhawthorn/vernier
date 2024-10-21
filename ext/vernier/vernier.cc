@@ -2043,6 +2043,9 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         }
 
         VALUE allocation_intervalv = rb_hash_aref(options, sym("allocation_interval"));
+        if (NIL_P(allocation_intervalv))
+            allocation_intervalv = rb_hash_aref(options, sym("allocation_sample_rate"));
+
         unsigned int allocation_interval;
         if (NIL_P(allocation_intervalv)) {
             allocation_interval = 0;
