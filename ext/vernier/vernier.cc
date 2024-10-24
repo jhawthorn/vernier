@@ -1554,7 +1554,17 @@ class RetainedCollector : public BaseCollector {
     void compact() {
         RetainedCollector *collector = this;
         for (auto& obj: collector->object_list) {
-            obj = rb_gc_location(obj);
+            VALUE reloc_obj = rb_gc_location(obj);
+            
+            const auto search = collector->object_frames.find(obj);
+            if (search != collector->object_frames.end()) {
+                int stack_index = search->second;
+                
+                collector->object_frames.erase(search);
+                collector->object_frames.emplace(reloc_obj, stack_index);
+            }
+            
+            obj = reloc_obj;
         }
     }
 };
