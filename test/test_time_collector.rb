@@ -247,14 +247,14 @@ class TestTimeCollector < Minitest::Test
       Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
       Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
     end
-    assert_equal "Profile already started, stopping...", error.message
+    assert_equal "profile already started, stopping...", error.message
   end
 
   def test_stop_without_start
     error = assert_raises("No trace started") do
       Vernier.stop_profile
     end
-    assert_equal "No profile started", error.message
+    assert_equal "profile not started", error.message
   end
 
   def test_includes_options_in_result_meta

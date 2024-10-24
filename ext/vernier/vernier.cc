@@ -1989,7 +1989,7 @@ collector_start(VALUE self) {
     auto *collector = get_collector(self);
 
     if (!collector->start()) {
-        rb_raise(rb_eRuntimeError, "already running");
+        rb_raise(rb_eRuntimeError, "collector already running");
     }
 
     return Qtrue;
