@@ -41,7 +41,7 @@ module Vernier
       @collector.stop
       @collector = nil
 
-      raise "Profile already started, stopping..."
+      raise "profile already started, stopping..."
     end
 
     @collector = Vernier::Collector.new(mode, collector_options)
@@ -49,7 +49,7 @@ module Vernier
   end
 
   def self.stop_profile
-    raise "No profile started" unless @collector
+    raise "profile not started" unless @collector
 
     result = @collector.stop
     @collector = nil

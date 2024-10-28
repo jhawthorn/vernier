@@ -672,10 +672,6 @@ StackTable::stack_table_convert(VALUE self, VALUE original_tableval, VALUE origi
     StackTable *original_table = get_stack_table(original_tableval);
     int original_idx = NUM2INT(original_idxval);
 
-    if (original_idx == -1) {
-        return original_idxval;
-    }
-
     int original_size;
     {
         const std::lock_guard<std::mutex> lock(original_table->stack_mutex);
@@ -1027,13 +1023,15 @@ class SampleList {
         }
 
         void record_sample(int stack_index, TimeStamp time, Category category) {
-            if (
-                    !empty() &&
-                    stacks.back() == stack_index &&
-                    categories.back() == category)
-            {
-                // We don't compare timestamps for de-duplication
-                weights.back() += 1;
+          // FIXME: probably better to avoid generating -1 higher up.
+          // Currently this happens when we measure an empty stack. Ideally we would have a better representation
+          if (stack_index < 0)
+            return;
+
+          if (!empty() && stacks.back() == stack_index &&
+              categories.back() == category) {
+            // We don't compare timestamps for de-duplication
+            weights.back() += 1;
             } else {
                 stacks.push_back(stack_index);
                 timestamps.push_back(time);
@@ -1116,7 +1114,11 @@ class Thread {
             sample.sample();
 
             int stack_idx = translator.translate(frame_list, sample);
-            allocation_samples.record_sample(stack_idx, TimeStamp::Now(), 1);
+            if (stack_idx >= 0) {
+                allocation_samples.record_sample(stack_idx, TimeStamp::Now(), 1);
+            } else {
+                // TODO: should we log an empty frame?
+            }
         }
 
         void set_state(State new_state) {
@@ -1335,7 +1337,7 @@ class BaseCollector {
     virtual void write_meta(VALUE meta, VALUE result) {
         rb_hash_aset(meta, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
         rb_hash_aset(meta, sym("interval"), Qnil);
-        rb_hash_aset(meta, sym("allocation_sample_rate"), Qnil);
+        rb_hash_aset(meta, sym("allocation_interval"), Qnil);
 
     }
 
@@ -1625,8 +1627,8 @@ class TimeCollector : public BaseCollector {
     SignalSafeSemaphore thread_stopped;
 
     TimeStamp interval;
-    unsigned int allocation_sample_rate;
-    unsigned int allocation_sample_tick = 0;
+    unsigned int allocation_interval;
+    unsigned int allocation_tick = 0;
 
     VALUE tp_newobj = Qnil;
 
@@ -1639,14 +1641,14 @@ class TimeCollector : public BaseCollector {
     }
 
     public:
-    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_sample_rate) : BaseCollector(stack_table), interval(interval), allocation_sample_rate(allocation_sample_rate), threads(*get_stack_table(stack_table)) {
+    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_interval) : BaseCollector(stack_table), interval(interval), allocation_interval(allocation_interval), threads(*get_stack_table(stack_table)) {
     }
 
     void record_newobj(VALUE obj) {
-        if (++allocation_sample_tick < allocation_sample_rate) {
+        if (++allocation_tick < allocation_interval) {
             return;
         }
-        allocation_sample_tick = 0;
+        allocation_tick = 0;
 
         VALUE current_thread = rb_thread_current();
         threads.mutex.lock();
@@ -1664,7 +1666,7 @@ class TimeCollector : public BaseCollector {
     void write_meta(VALUE meta, VALUE result) {
         BaseCollector::write_meta(meta, result);
         rb_hash_aset(meta, sym("interval"), ULL2NUM(interval.microseconds()));
-        rb_hash_aset(meta, sym("allocation_sample_rate"), ULL2NUM(allocation_sample_rate));
+        rb_hash_aset(meta, sym("allocation_interval"), ULL2NUM(allocation_interval));
 
     }
 
@@ -1862,7 +1864,7 @@ class TimeCollector : public BaseCollector {
             this->threads.initial(thread);
         }
 
-        if (allocation_sample_rate > 0) {
+        if (allocation_interval > 0) {
             tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
             rb_tracepoint_enable(tp_newobj);
         }
@@ -1987,7 +1989,7 @@ collector_start(VALUE self) {
     auto *collector = get_collector(self);
 
     if (!collector->start()) {
-        rb_raise(rb_eRuntimeError, "already running");
+        rb_raise(rb_eRuntimeError, "collector already running");
     }
 
     return Qtrue;
@@ -2040,14 +2042,17 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
             interval = TimeStamp::from_microseconds(NUM2UINT(intervalv));
         }
 
-        VALUE allocation_sample_ratev = rb_hash_aref(options, sym("allocation_sample_rate"));
-        unsigned int allocation_sample_rate;
-        if (NIL_P(allocation_sample_ratev)) {
-            allocation_sample_rate = 0;
+        VALUE allocation_intervalv = rb_hash_aref(options, sym("allocation_interval"));
+        if (NIL_P(allocation_intervalv))
+            allocation_intervalv = rb_hash_aref(options, sym("allocation_sample_rate"));
+
+        unsigned int allocation_interval;
+        if (NIL_P(allocation_intervalv)) {
+            allocation_interval = 0;
         } else {
-            allocation_sample_rate = NUM2UINT(allocation_sample_ratev);
+            allocation_interval = NUM2UINT(allocation_intervalv);
         }
-        collector = new TimeCollector(stack_table, interval, allocation_sample_rate);
+        collector = new TimeCollector(stack_table, interval, allocation_interval);
     } else {
         rb_raise(rb_eArgError, "invalid mode");
     }

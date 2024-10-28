@@ -3,28 +3,6 @@
 require "test_helper"
 
 class TestTimeCollector < Minitest::Test
-  SLOW_RUNNER = ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
-  DEFAULT_SLEEP_SCALE =
-      if SLOW_RUNNER
-        1
-      else
-        0.1
-      end
-  SLEEP_SCALE = ENV.fetch("TEST_SLEEP_SCALE", DEFAULT_SLEEP_SCALE).to_f # seconds/100ms
-  SAMPLE_SCALE_INTERVAL = 10_000 * SLEEP_SCALE # Microseconds
-  SAMPLE_SCALE_ALLOCATIONS = 100
-
-  def slow_method
-    sleep SLEEP_SCALE
-  end
-
-  def two_slow_methods
-    slow_method
-    1.times do
-      slow_method
-    end
-  end
-
   def test_receives_gc_events
     collector = Vernier::Collector.new(:wall)
     collector.start
@@ -246,6 +224,16 @@ class TestTimeCollector < Minitest::Test
     assert_equal expected, thread_names
   end
 
+  def test_process_detach
+    result = Vernier.trace do
+      pid = Process.spawn("sleep", "0.01")
+      wait_thr = Process.detach(pid)
+      wait_thr.join
+    end
+    assert_valid_result result
+    assert_operator result.threads.count, :>=, 2
+  end
+
   def test_start_stop
     Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
     two_slow_methods
@@ -259,14 +247,14 @@ class TestTimeCollector < Minitest::Test
       Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
       Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)
     end
-    assert_equal "Profile already started, stopping...", error.message
+    assert_equal "profile already started, stopping...", error.message
   end
 
   def test_stop_without_start
     error = assert_raises("No trace started") do
       Vernier.stop_profile
     end
-    assert_equal "No profile started", error.message
+    assert_equal "profile not started", error.message
   end
 
   def test_includes_options_in_result_meta
@@ -274,17 +262,40 @@ class TestTimeCollector < Minitest::Test
     result = Vernier.profile(
       out: output_file,
       interval: SAMPLE_SCALE_INTERVAL,
-      allocation_sample_rate: SAMPLE_SCALE_ALLOCATIONS
+      allocation_interval: SAMPLE_SCALE_ALLOCATIONS
     ) { }
 
     assert_equal :wall, result.meta[:mode]
     assert_equal output_file, result.meta[:out]
     assert_equal SAMPLE_SCALE_INTERVAL, result.meta[:interval]
-    assert_equal SAMPLE_SCALE_ALLOCATIONS, result.meta[:allocation_sample_rate]
+    assert_equal SAMPLE_SCALE_ALLOCATIONS, result.meta[:allocation_interval]
     assert_equal false, result.meta[:gc]
   end
 
   private
+
+  SLOW_RUNNER = ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
+  DEFAULT_SLEEP_SCALE =
+      if SLOW_RUNNER
+        1
+      else
+        0.1
+      end
+  SLEEP_SCALE = ENV.fetch("TEST_SLEEP_SCALE", DEFAULT_SLEEP_SCALE).to_f # seconds/100ms
+  SAMPLE_SCALE_INTERVAL = 10_000 * SLEEP_SCALE # Microseconds
+  SAMPLE_SCALE_ALLOCATIONS = 100
+  private_constant :SLOW_RUNNER, :DEFAULT_SLEEP_SCALE, :SLEEP_SCALE, :SAMPLE_SCALE_INTERVAL, :SAMPLE_SCALE_ALLOCATIONS
+
+  def slow_method
+    sleep SLEEP_SCALE
+  end
+
+  def two_slow_methods
+    slow_method
+    1.times do
+      slow_method
+    end
+  end
 
   def assert_similar expected, actual
     delta_ratio =

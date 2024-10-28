@@ -32,7 +32,7 @@ module Vernier
       when :rails, :activesupport
         @hooks << Vernier::Hooks::ActiveSupport.new(self)
       else
-        warn "Unknown hook: #{hook.inspect}"
+        warn "unknown hook: #{hook.inspect}"
       end
     end
 
