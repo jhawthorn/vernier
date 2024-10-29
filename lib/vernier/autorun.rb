@@ -20,7 +20,7 @@ module Vernier
       allocation_interval = options.fetch(:allocation_interval, 0).to_i
       hooks = options.fetch(:hooks, "").split(",")
 
-      STDERR.puts("starting profiler with interval #{interval}")
+      STDERR.puts("starting profiler with interval #{interval} and allocation interval #{allocation_interval}")
 
       @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, hooks:)
       @collector.start
