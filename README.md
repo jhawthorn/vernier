@@ -22,7 +22,7 @@ Rails benchmark - lobste.rs (time)
 
 ## Installation
 
-Vernier requires Ruby version 3.2.1 or greater
+Vernier requires Ruby version 3.2.1 or greater.
 
 ```ruby
 gem "vernier", "~> 1.0"
@@ -30,24 +30,29 @@ gem "vernier", "~> 1.0"
 
 ## Usage
 
-The output can be viewed in the web app at https://vernier.prof or locally using the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (both are lightly customized versions of the firefox profiler frontend, which profiles are also compatible with).
+The output can be viewed in the web app at https://vernier.prof, locally using the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (both lightly customized versions of the firefox profiler frontend, which profiles are also compatible with) or by using the `verrnier view` command in the CLI.
 
 - **Flame Graph**: Shows proportionally how much time is spent within particular stack frames. Frames are grouped together, which means that x-axis / left-to-right order is not meaningful.
 - **Stack Chart**: Shows the stack at each sample with the x-axis representing time and can be read left-to-right.
 
-
-### Time
-
+### Time and Allocations
 
 #### Command line
 
-The easiest way to record a program or script is via the CLI
+The easiest way to record a program or script is via the CLI:
 
 ```
 $ vernier run -- ruby -e 'sleep 1'
-starting profiler with interval 500
-#<Vernier::Result 1.001589 seconds, 1 threads, 2002 samples, 1 unique>
-written to /tmp/profile20240328-82441-gkzffc.vernier.json
+starting profiler with interval 500 and allocation interval 0
+#<Vernier::Result 1.001589 seconds, 1 threads, 1 samples, 1 unique>
+written to /tmp/profile20240328-82441-gkzffc.vernier.json.gz
+```
+
+```
+$ vernier run --interval 100 --allocation-interval 10 -- ruby -e '10.times { Object.new }'
+starting profiler with interval 100 and allocation interval 10
+#<Vernier::Result 0.00067 seconds, 1 threads, 1 samples, 1 unique>
+written to /tmp/profile20241029-26525-dalmym.vernier.json.gz
 ```
 
 #### Block of code
@@ -58,12 +63,18 @@ Vernier.profile(out: "time_profile.json") do
 end
 ```
 
+``` ruby
+Vernier.profile(out: "time_profile.json", interval: 100, allocation_interval: 10) do
+  some_slow_method
+end
+```
+
 Alternatively you can use the aliases `Vernier.run` and `Vernier.trace`.
 
 #### Start and stop
 
 ```ruby
-Vernier.start_profile(out: "time_profile.json")
+Vernier.start_profile(out: "time_profile.json", interval: 10_000, allocation_interval: 100_000)
 
 some_slow_method
 
@@ -78,13 +89,14 @@ Vernier.stop_profile
 
 #### Block of code
 
-Record a flamegraph of all **retained** allocations from loading `irb`.
+Record a flamegraph of all **retained** allocations from loading `irb`:
 
 ```
 ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "irb" }'
 ```
 
-Retained-memory flamegraphs must be interpreted a little differently than a typical profiling flamegraph. In a retained-memory flamegraph, the x-axis represents a proportion of memory in bytes,  _not time or samples_ The topmost boxes on the y-axis represent the retained objects, with their stacktrace below; their width represents the percentage of overall retained memory each object occupies.
+> [!NOTE]
+> Retained-memory flamegraphs must be interpreted a little differently than a typical profiling flamegraph. In a retained-memory flamegraph, the x-axis represents a proportion of memory in bytes,  _not time or samples_ The topmost boxes on the y-axis represent the retained objects, with their stacktrace below; their width represents the percentage of overall retained memory each object occupies.
 
 ### Options
 
