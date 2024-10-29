@@ -38,7 +38,7 @@ FLAGS:
 
     def self.view(options)
       banner = <<-END
-Usage: vernier view [FLAGS] FILENAME
+Usage: vernier view [FLAGS] -- FILENAME
 
 FLAGS:
       END
