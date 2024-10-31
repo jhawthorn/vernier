@@ -128,6 +128,24 @@ class TestRetainedMemory < Minitest::Test
     assert_equal expected_inspects, inspects.grep(/#alloc_[abc]/)
   end
 
+  def test_compaction
+    retained = []
+
+    result = Vernier.trace_retained do
+      100.times {
+        Object.new
+        retained << Object.new
+      }
+      GC.verify_compaction_references(toward: :empty, expand_heap: true)
+      100.times {
+        Object.new
+        retained << Object.new
+      }
+    end
+
+    assert_operator result.samples.size, :>, 200
+  end
+
   def test_nothing_retained_in_module_eval
     skip("WIP")
 
