@@ -1360,6 +1360,9 @@ class BaseCollector {
         rb_gc_mark(stack_table_value);
     };
 
+    virtual void compact() {
+    };
+
     virtual VALUE get_markers() {
         return rb_ary_new();
     };
@@ -1546,6 +1549,23 @@ class RetainedCollector : public BaseCollector {
 
         rb_gc_mark(tp_newobj);
         rb_gc_mark(tp_freeobj);
+    }
+
+    void compact() {
+        RetainedCollector *collector = this;
+        for (auto& obj: collector->object_list) {
+            VALUE reloc_obj = rb_gc_location(obj);
+            
+            const auto search = collector->object_frames.find(obj);
+            if (search != collector->object_frames.end()) {
+                int stack_index = search->second;
+                
+                collector->object_frames.erase(search);
+                collector->object_frames.emplace(reloc_obj, stack_index);
+            }
+            
+            obj = reloc_obj;
+        }
     }
 };
 
@@ -1969,12 +1989,19 @@ collector_free(void *data) {
     delete collector;
 }
 
+static void
+collector_compact(void *data) {
+    BaseCollector *collector = static_cast<BaseCollector *>(data);
+    collector->compact();
+}
+
 static const rb_data_type_t rb_collector_type = {
     .wrap_struct_name = "vernier/collector",
     .function = {
         //.dmemsize = rb_collector_memsize,
         .dmark = collector_mark,
         .dfree = collector_free,
+        .dcompact = collector_compact,
     },
 };
 

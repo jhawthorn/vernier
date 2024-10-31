@@ -23,3 +23,5 @@ class Minitest::Test
     end
   end
 end
+
+GC.auto_compact = true
