@@ -2001,6 +2001,7 @@ static const rb_data_type_t rb_collector_type = {
         //.dmemsize = rb_collector_memsize,
         .dmark = collector_mark,
         .dfree = collector_free,
+        .dsize = NULL,
         .dcompact = collector_compact,
     },
 };
