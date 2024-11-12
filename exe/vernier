@@ -107,12 +107,90 @@ FLAGS:
     def self.print_separator(widths)
       puts("+" + widths.map { |i| "-" * (i + 2) }.join("+") + "+")
     end
+
+    def self.open(options)
+      banner = <<-END
+Usage: vernier open [FLAGS] -- FILENAME
+
+FLAGS:
+      END
+
+      OptionParser.new(banner) do |o|
+        o.on('--print', "print the url instead of opening it") do
+          options[:print] = true
+        end
+      end
+    end
+
+    def self.serve_profile(profile_path)
+      require 'socket'
+
+      profile_server = TCPServer.new('localhost', 0)
+
+      profile_server_thread = Thread.new do
+        Thread.current.abort_on_exception = true
+        loop do
+          client = profile_server.accept
+          request = client.gets
+
+          next unless request&.start_with?('GET')
+
+          File.open(profile_path, 'rb') do |file|
+            is_gzip = file.read(2) == "\x1F\x8B".b
+            file.rewind
+
+            client.print("HTTP/1.1 200 OK\r\n")
+            client.print("Content-Type: application/json\r\n")
+            client.print("Access-Control-Allow-Origin: *\r\n")
+            client.print("Content-Length: #{file.size}\r\n")
+            client.print("Content-Encoding: gzip\r\n") if is_gzip
+            client.print("\r\n")
+
+            IO.copy_stream(file, client)
+          end
+
+          break
+        ensure
+          client&.close
+        end
+      end
+
+      profile_server_port = profile_server.addr[1]
+      profile_server_url = "http://localhost:#{profile_server_port}"
+
+      begin
+        success = yield profile_server_url
+        profile_server_thread.kill unless success
+        success
+      ensure
+        profile_server_thread.join unless profile_server_thread.status.nil?
+        profile_server.close
+      end
+    end
+
+    def self.open_url(url)
+      require 'rbconfig'
+
+      os = RbConfig::CONFIG['host_os']
+      case os
+      when /linux|bsd/
+        system('xdg-open', url)
+      when /darwin/
+        system('open', url)
+      when /mswin|mingw|cygwin/
+        system('start', url)
+      else
+        warn("unsupported os: #{os}")
+        false
+      end
+    end
   end
 end
 
 options = {}
 run = Vernier::CLI.run(options)
 view = Vernier::CLI.view(options)
+open = Vernier::CLI.open(options)
 
 case ARGV.shift
 when "run"
@@ -131,6 +209,23 @@ when "view"
   view.parse!
   view.abort(view.help) if ARGV.empty?
   Vernier::CLI.inverted_tree(options[:top] || 20, ARGV.shift)
+when "open"
+  open.parse!
+  open.abort(open.help) if ARGV.empty?
+
+  success = Vernier::CLI.serve_profile(ARGV.shift) do |profile_url|
+    require 'uri'
+    vernier_url = ENV.fetch('VERNIER_WEB_ENDPOINT', 'https://vernier.prof')
+    vernier_profile_url = "#{vernier_url}/from-url/#{URI.encode_www_form_component(profile_url)}"
+    if options[:print]
+      puts(vernier_profile_url)
+      true
+    else
+      Vernier::CLI.open_url(vernier_profile_url)
+    end
+  end
+
+  Kernel.exit(1) unless success
 else
-  run.abort(run.help + "\n" + view.help)
+  run.abort(run.help + "\n" + view.help + "\n" + open.help)
 end
