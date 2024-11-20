@@ -104,9 +104,13 @@ module Vernier
       self.markers.map do |data|
         tid, type, phase, ts, te, stack, extra_info = data
         if type == Marker::Type::FIBER_SWITCH
-          phase = 1
           if last_fiber
-            markers[last_fiber][3] = ts
+            start_event = markers[last_fiber]
+            add_marker(name: "Fiber Running",
+              start: start_event[2],
+              finish: ts,
+              thread: start_event[0],
+              data: { type: "Fiber Running", fiber_id: start_event.last[:fiber_id] })
           end
           last_fiber = markers.size
         end
@@ -117,7 +121,13 @@ module Vernier
         data.merge!(extra_info) if extra_info
         markers << [tid, name, ts, te, phase, data]
       end
-      markers[last_fiber][3] = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond) if last_fiber
+
+      add_marker(
+        name: "Fiber Running",
+        start: markers[last_fiber][2],
+        finish: Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond),
+        thread: markers[last_fiber][0],
+        data: { type: "Fiber Running", fiber_id: markers[last_fiber].last[:fiber_id] }) if last_fiber
 
       markers.concat @markers
 

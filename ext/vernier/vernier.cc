@@ -1033,9 +1033,13 @@ class Thread {
             }
         }
 
-        void record_fiber(VALUE fiber) {
+        void record_fiber(VALUE fiber, StackTable &frame_list) {
+            RawSample sample;
+            sample.sample();
+
+            int stack_idx = translator.translate(frame_list, sample);
             VALUE fiber_id = rb_obj_id(fiber);
-            markers->record(Marker::Type::MARKER_FIBER_SWITCH, -1, { .fiber_data = { .fiber_id = fiber_id } });
+            markers->record(Marker::Type::MARKER_FIBER_SWITCH, stack_idx, { .fiber_data = { .fiber_id = fiber_id } });
         }
 
         void set_state(State new_state) {
@@ -1607,7 +1611,7 @@ class TimeCollector : public BaseCollector {
         for (auto &threadptr : threads.list) {
             auto &thread = *threadptr;
             if (th == thread.ruby_thread) {
-                thread.record_fiber(fiber);
+                thread.record_fiber(fiber, threads.frame_list);
                 break;
             }
         }
