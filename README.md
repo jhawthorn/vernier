@@ -30,7 +30,7 @@ gem "vernier", "~> 1.0"
 
 ## Usage
 
-The output can be viewed in the web app at https://vernier.prof, locally using the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (both lightly customized versions of the firefox profiler frontend, which profiles are also compatible with) or by using the `verrnier view` command in the CLI.
+The output can be viewed in the web app at https://vernier.prof, locally using the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (both lightly customized versions of the firefox profiler frontend, which profiles are also compatible with) or by using the `vernier view` command in the CLI.
 
 - **Flame Graph**: Shows proportionally how much time is spent within particular stack frames. Frames are grouped together, which means that x-axis / left-to-right order is not meaningful.
 - **Stack Chart**: Shows the stack at each sample with the x-axis representing time and can be read left-to-right.
