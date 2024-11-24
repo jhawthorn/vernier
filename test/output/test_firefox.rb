@@ -231,7 +231,20 @@ class TestOutputFirefox < Minitest::Test
     assert_valid_firefox_profile(output)
   end
 
+  def test_profile_with_unicode_method
+    result = Vernier.trace(mode: :custom) do |profiler|
+      ❤ { profiler.sample }
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+  end
+
   private
+
+  def ❤
+    yield
+  end
 
   def file_lineno
     caller_locations(1, 1).first.yield_self{|loc| "#{loc.path}:#{loc.lineno}"}

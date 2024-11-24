@@ -1397,11 +1397,13 @@ class CustomCollector : public BaseCollector {
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
 
-	VALUE thread_hash = rb_hash_new();
-	samples.write_result(thread_hash);
+        VALUE thread_hash = rb_hash_new();
+        samples.write_result(thread_hash);
 
-	rb_hash_aset(threads, ULL2NUM(0), thread_hash);
-	rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
+        rb_hash_aset(threads, ULL2NUM(0), thread_hash);
+        rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
+        rb_hash_aset(thread_hash, sym("name"), rb_str_new_cstr("custom"));
+        rb_hash_aset(thread_hash, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
 
         return result;
     }
