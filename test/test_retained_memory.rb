@@ -62,13 +62,15 @@ class TestRetainedMemory < Minitest::Test
   end
 
   def test_nested_collections
+    retained = nil
     result1 = result2 = nil
     result1 = Vernier.trace_retained do
       result2 = Vernier.trace_retained do
-        Object.new
+        retained = Object.new
       end
     end
 
+    assert retained
     assert_operator result2.samples.size, :>, 0
     assert_operator result1.samples.size, :>, result2.samples.size
   end
