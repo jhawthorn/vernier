@@ -29,8 +29,24 @@ module Vernier
     def self.stop
       result = @collector.stop
       @collector = nil
+
       output_path = options[:output]
-      output_path ||= Tempfile.create(["profile", ".vernier.json.gz"]).path
+      unless output_path
+        output_dir = options[:output_dir]
+        unless output_dir
+          if File.writable?(".")
+            output_dir = "."
+          else
+            output_dir = Dir.tmpdir
+          end
+        end
+        prefix = "profile-"
+        timestamp = Time.now.strftime("%Y%m%d-%H%M%S")
+        suffix = ".vernier.json.gz"
+
+        output_path = File.expand_path("#{output_dir}/#{prefix}#{timestamp}-#{$$}#{suffix}")
+      end
+
       result.write(out: output_path)
 
       STDERR.puts(result.inspect)
