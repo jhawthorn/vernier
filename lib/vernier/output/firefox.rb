@@ -525,7 +525,23 @@ module Vernier
         end
 
         def string_table
-          @strings.keys
+          @strings.keys.map do |string|
+            if string.ascii_only?
+              string
+            elsif string.encoding == Encoding::UTF_8
+              if string.valid_encoding?
+                string
+              else
+                string.scrub
+              end
+            elsif string.encoding == Encoding::BINARY
+              # TODO: We might want to guess UTF-8 and escape the binary more explicitly
+              string.dup.force_encoding("UTF-8").scrub
+            else
+              # TODO: ideally we should attempt to properly re-encode here, but right now I think this is dead code
+              string.dup.force_encoding("UTF-8").scrub
+            end
+          end
         end
 
         private

@@ -231,9 +231,17 @@ class TestOutputFirefox < Minitest::Test
     assert_valid_firefox_profile(output)
   end
 
-  def test_profile_with_unicode_method
+  def test_profile_with_various_encodings
     result = Vernier.trace(mode: :custom) do |profiler|
-      ❤ { profiler.sample }
+      sample = -> { profiler.sample }
+
+      encoded_method("ASCII", name: "ascii").call(&sample)
+      encoded_method("UTF-8").call(&sample)
+      encoded_method("BINARY").call(&sample)
+
+      # This doesn't quite work how I'd like, as we just interpret bytes as
+      # UTF-8, but what's most important is that we don't crash
+      encoded_method("Shift_JIS").call(&sample)
     end
 
     output = Vernier::Output::Firefox.new(result).output
@@ -242,8 +250,22 @@ class TestOutputFirefox < Minitest::Test
 
   private
 
-  def ❤
-    yield
+  def encoded_method(encoding, name: "文字化け")
+    obj = Object.new
+    code = <<~RUBY
+      def #{name}
+        yield
+      end
+    RUBY
+    if encoding == "BINARY"
+      code = code.b
+      name = name.b
+    else
+      code = code.encode(encoding)
+      name = name.encode(encoding)
+    end
+    obj.instance_eval(code)
+    return obj.method(name)
   end
 
   def file_lineno

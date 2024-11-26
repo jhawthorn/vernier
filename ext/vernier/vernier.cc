@@ -30,6 +30,7 @@
 #include "vernier.hh"
 
 #include "ruby/ruby.h"
+#include "ruby/encoding.h"
 #include "ruby/debug.h"
 #include "ruby/thread.h"
 
@@ -746,7 +747,20 @@ StackTable::stack_table_func_name(VALUE self, VALUE idxval) {
     } else {
         const auto &func_info = table[idx];
         const std::string &label = func_info.label;
-        return rb_interned_str(label.c_str(), label.length());
+
+        // Ruby constants are in an arbitrary (ASCII compatible) encoding and
+        // method names are in an arbitrary (ASCII compatible) encoding. These
+        // can be mixed in the same program.
+        //
+        // However, by this point we've lost the chain of what the correct
+        // encoding should be. Oops!
+        //
+        // Instead we'll just guess at UTF-8 which should satisfy most. It won't
+        // necessarily be valid but that can be scrubbed on the Ruby side.
+        //
+        // In the future we might keep class and method name separate for
+        // longer, preserve encodings, and defer formatting to the Ruby side.
+        return rb_enc_interned_str(label.c_str(), label.length(), rb_utf8_encoding());
     }
 }
 
@@ -761,7 +775,11 @@ StackTable::stack_table_func_filename(VALUE self, VALUE idxval) {
     } else {
         const auto &func_info = table[idx];
         const std::string &filename = func_info.file;
-        return rb_interned_str(filename.c_str(), filename.length());
+
+        // Technically filesystems are binary and then Ruby interprets that as
+        // default_external encoding. But to keep things simple for now we are
+        // going to assume UTF-8.
+        return rb_enc_interned_str(filename.c_str(), filename.length(), rb_utf8_encoding());
     }
 }
 
