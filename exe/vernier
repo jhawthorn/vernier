@@ -18,6 +18,9 @@ FLAGS:
         o.on('--output [FILENAME]', String, "output filename") do |s|
           options[:output] = s
         end
+        o.on('--output-dir [DIRECTORY]', String, "output directory (default .)") do |s|
+          options[:output_dir] = s
+        end
         o.on('--interval [MICROSECONDS]', Integer, "sampling interval (default 500)") do |i|
           options[:interval] = i
         end
