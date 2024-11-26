@@ -734,23 +734,27 @@ union MarkerInfo {
     } gc_data;
 };
 
+#define EACH_MARKER(XX) \
+    XX(GVL_THREAD_STARTED) \
+    XX(GVL_THREAD_EXITED) \
+\
+    XX(GC_START) \
+    XX(GC_END_MARK) \
+    XX(GC_END_SWEEP) \
+    XX(GC_ENTER) \
+    XX(GC_EXIT) \
+    XX(GC_PAUSE) \
+\
+    XX(THREAD_RUNNING) \
+    XX(THREAD_STALLED) \
+    XX(THREAD_SUSPENDED) \
+
 class Marker {
     public:
     enum Type {
-        MARKER_GVL_THREAD_STARTED,
-        MARKER_GVL_THREAD_EXITED,
-
-        MARKER_GC_START,
-        MARKER_GC_END_MARK,
-        MARKER_GC_END_SWEEP,
-        MARKER_GC_ENTER,
-        MARKER_GC_EXIT,
-        MARKER_GC_PAUSE,
-
-        MARKER_THREAD_RUNNING,
-        MARKER_THREAD_STALLED,
-        MARKER_THREAD_SUSPENDED,
-
+#define XX(name) MARKER_ ## name,
+        EACH_MARKER(XX)
+#undef XX
         MARKER_MAX,
     };
 
@@ -1989,24 +1993,10 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
 
 static void
 Init_consts(VALUE rb_mVernierMarkerPhase) {
-#define MARKER_CONST(name) \
-    rb_define_const(rb_mVernierMarkerType, #name, INT2NUM(Marker::Type::MARKER_##name))
-
-    MARKER_CONST(GVL_THREAD_STARTED);
-    MARKER_CONST(GVL_THREAD_EXITED);
-
-    MARKER_CONST(GC_START);
-    MARKER_CONST(GC_END_MARK);
-    MARKER_CONST(GC_END_SWEEP);
-    MARKER_CONST(GC_ENTER);
-    MARKER_CONST(GC_EXIT);
-    MARKER_CONST(GC_PAUSE);
-
-    MARKER_CONST(THREAD_RUNNING);
-    MARKER_CONST(THREAD_STALLED);
-    MARKER_CONST(THREAD_SUSPENDED);
-
-#undef MARKER_CONST
+#define XX(name) \
+    rb_define_const(rb_mVernierMarkerType, #name, INT2NUM(Marker::Type::MARKER_##name));
+    EACH_MARKER(XX)
+#undef XX
 
 #define PHASE_CONST(name) \
     rb_define_const(rb_mVernierMarkerPhase, #name, INT2NUM(Marker::Phase::name))
