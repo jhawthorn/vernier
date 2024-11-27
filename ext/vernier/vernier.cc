@@ -234,12 +234,8 @@ class RawSample {
             return;
         }
 
-        if (rb_during_gc()) {
-          gc = true;
-        } else {
-          len = rb_profile_frames(0, MAX_LEN, frames, lines);
-          this->offset = std::min(offset, len);
-        }
+        len = rb_profile_frames(0, MAX_LEN, frames, lines);
+        this->offset = std::min(offset, len);
     }
 
     void clear() {
@@ -858,7 +854,8 @@ class GCMarkerTable: public MarkerTable {
 enum Category{
     CATEGORY_NORMAL,
     CATEGORY_IDLE,
-    CATEGORY_STALLED
+    CATEGORY_STALLED,
+    CATEGORY_GC
 };
 
 class ObjectSampleList {
@@ -1552,6 +1549,8 @@ class TimeCollector : public BaseCollector {
     unsigned int allocation_interval;
     unsigned int allocation_tick = 0;
 
+    atomic_bool gc_running;
+
     VALUE tp_newobj = Qnil;
 
     static void newobj_i(VALUE tpval, void *data) {
@@ -1589,7 +1588,10 @@ class TimeCollector : public BaseCollector {
         BaseCollector::write_meta(meta, result);
         rb_hash_aset(meta, sym("interval"), ULL2NUM(interval.microseconds()));
         rb_hash_aset(meta, sym("allocation_interval"), ULL2NUM(allocation_interval));
+    }
 
+    void set_gc_running(bool value) {
+        gc_running = value;
     }
 
     private:
@@ -1652,7 +1654,7 @@ class TimeCollector : public BaseCollector {
                     } else if (sample.sample.empty()) {
                         // fprintf(stderr, "skipping GC sample\n");
                     } else {
-                        record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
+                        record_sample(sample.sample, sample_start, thread, gc_running ? CATEGORY_GC : CATEGORY_NORMAL);
                     }
                 } else if (thread.state == Thread::State::SUSPENDED) {
                     thread.samples.record_sample(
@@ -1725,9 +1727,11 @@ class TimeCollector : public BaseCollector {
                 collector->gc_markers.record_gc_end_sweep();
                 break;
             case RUBY_INTERNAL_EVENT_GC_ENTER:
+                collector->set_gc_running(true);
                 collector->gc_markers.record_gc_entered();
                 break;
             case RUBY_INTERNAL_EVENT_GC_EXIT:
+                collector->set_gc_running(false);
                 collector->gc_markers.record_gc_leave();
                 break;
         }
