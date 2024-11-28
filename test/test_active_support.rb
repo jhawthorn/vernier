@@ -19,7 +19,7 @@ class TestActiveSupport < Minitest::Test
       ActiveSupport::Notifications.instrument("foo.bar") {}
     end
 
-    markers = result.markers.select{|x| x[1] == "foo.bar" }
+    markers = result.main_thread[:markers].select{|x| x[1] == "foo.bar" }
     assert_equal 1, markers.size
 
     marker = markers[0]
@@ -33,7 +33,7 @@ class TestActiveSupport < Minitest::Test
       ActiveSupport::Notifications.instrument("foo.bar")
     end
 
-    markers = result.markers.select{|x| x[1] == "foo.bar" }
+    markers = result.main_thread[:markers].select{|x| x[1] == "foo.bar" }
     assert_equal 1, markers.size
 
     marker = markers[0]
@@ -47,7 +47,7 @@ class TestActiveSupport < Minitest::Test
       ActiveSupport::Notifications.publish("foo.bar")
     end
 
-    markers = result.markers.select{|x| x[1] == "foo.bar" }
+    markers = result.main_thread[:markers].select{|x| x[1] == "foo.bar" }
     assert_equal 0, markers.size
   end
 
