@@ -783,7 +783,7 @@ class Marker {
 
     MarkerInfo extra_info;
 
-    VALUE to_array() {
+    VALUE to_array() const {
         VALUE record[7] = {0};
         record[0] = Qnil; // FIXME
         record[1] = INT2NUM(type);
@@ -829,6 +829,14 @@ class MarkerTable {
             const std::lock_guard<std::mutex> lock(mutex);
 
             list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), stack_index, extra_info });
+        }
+
+        VALUE to_array() const {
+            VALUE ary = rb_ary_new();
+            for (auto& marker: list) {
+                rb_ary_push(ary, marker.to_array());
+            }
+            return ary;
         }
 };
 
@@ -1283,10 +1291,6 @@ class BaseCollector {
 
     virtual void compact() {
     };
-
-    virtual VALUE get_markers() {
-        return rb_ary_new();
-    };
 };
 
 class CustomCollector : public BaseCollector {
@@ -1638,28 +1642,6 @@ class TimeCollector : public BaseCollector {
         }
     }
 
-    VALUE get_markers() {
-        VALUE list = rb_ary_new();
-        VALUE main_thread = rb_thread_main();
-        VALUE main_thread_id = rb_obj_id(main_thread);
-
-        for (auto& marker: this->gc_markers.list) {
-            VALUE ary = marker.to_array();
-
-            RARRAY_ASET(ary, 0, main_thread_id);
-            rb_ary_push(list, ary);
-        }
-        for (auto &thread : threads.list) {
-            for (auto& marker: thread->markers->list) {
-                VALUE ary = marker.to_array();
-                RARRAY_ASET(ary, 0, thread->ruby_thread_id);
-                rb_ary_push(list, ary);
-            }
-        }
-
-        return list;
-    }
-
     void sample_thread_run() {
         LiveSample sample;
 
@@ -1880,6 +1862,8 @@ class TimeCollector : public BaseCollector {
     VALUE build_collector_result() {
         VALUE result = BaseCollector::build_collector_result();
 
+        rb_ivar_set(result, rb_intern("@gc_markers"), this->gc_markers.to_array());
+
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
 
@@ -1887,8 +1871,7 @@ class TimeCollector : public BaseCollector {
             VALUE hash = rb_hash_new();
             thread->samples.write_result(hash);
             thread->allocation_samples.write_result(hash);
-
-            rb_hash_aset(threads, thread->ruby_thread_id, hash);
+            rb_hash_aset(hash, sym("markers"), thread->markers->to_array());
             rb_hash_aset(hash, sym("tid"), ULL2NUM(thread->native_tid));
             rb_hash_aset(hash, sym("started_at"), ULL2NUM(thread->started_at.nanoseconds()));
             if (!thread->stopped_at.zero()) {
@@ -1897,6 +1880,7 @@ class TimeCollector : public BaseCollector {
             rb_hash_aset(hash, sym("is_main"), thread->is_main() ? Qtrue : Qfalse);
             rb_hash_aset(hash, sym("is_start"), thread->is_start(BaseCollector::start_thread) ? Qtrue : Qfalse);
 
+            rb_hash_aset(threads, thread->ruby_thread_id, hash);
         }
 
         return result;
@@ -1967,13 +1951,6 @@ collector_stop(VALUE self) {
 
     VALUE result = collector->stop();
     return result;
-}
-
-static VALUE
-markers(VALUE self) {
-    auto *collector = get_collector(self);
-
-    return collector->get_markers();
 }
 
 static VALUE
@@ -2065,7 +2042,6 @@ Init_vernier(void)
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
   rb_define_method(rb_cVernierCollector, "stack_table", collector_stack_table, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
-  rb_define_private_method(rb_cVernierCollector, "markers",  markers, 0);
 
   rb_cStackTable = rb_define_class_under(rb_mVernier, "StackTable", rb_cObject);
   rb_undef_alloc_func(rb_cStackTable);

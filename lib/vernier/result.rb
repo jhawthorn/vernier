@@ -8,7 +8,7 @@ module Vernier
       @stack_table
     end
 
-    attr_reader :markers
+    attr_reader :gc_markers
 
     attr_accessor :hooks
 
@@ -25,6 +25,13 @@ module Vernier
     def weights; threads.values.flat_map { _1[:weights] }; end
     def samples; threads.values.flat_map { _1[:samples] }; end
     def sample_categories; threads.values.flat_map { _1[:sample_categories] }; end
+
+    # Legacy format. Avoid
+    def markers
+      threads&.flat_map do |tid, thread|
+        thread[:markers] || []
+      end || []
+    end
 
     # Realtime in nanoseconds since the unix epoch
     def started_at

@@ -99,39 +99,44 @@ module Vernier
 
       marker_strings = Marker.name_table
 
-      last_fiber = nil
-      markers = []
-      self.markers.map do |data|
-        tid, type, phase, ts, te, stack, extra_info = data
-        if type == Marker::Type::FIBER_SWITCH
-          if last_fiber
-            start_event = markers[last_fiber]
-            add_marker(name: "Fiber Running",
-              start: start_event[2],
-              finish: ts,
-              thread: start_event[0],
-              data: { type: "Fiber Running", fiber_id: start_event.last[:fiber_id] })
+      markers_by_thread_id = (@markers || []).group_by(&:first)
+
+      result.threads.each do |tid, thread|
+        last_fiber = nil
+        markers = []
+
+        markers.concat markers_by_thread_id.fetch(tid, [])
+
+        original_markers = thread[:markers] || []
+        original_markers += result.gc_markers || []
+        original_markers.each do |data|
+          tid, type, phase, ts, te, stack, extra_info = data
+          if type == Marker::Type::FIBER_SWITCH
+            if last_fiber
+              start_event = markers[last_fiber]
+              markers << [nil, "Fiber Running", start_event[2], ts, Marker::Phase::INTERVAL, start_event[5].merge(type: "Fiber Running")]
+            end
+            last_fiber = markers.size
           end
-          last_fiber = markers.size
+          name = marker_strings[type]
+          sym = Marker::MARKER_SYMBOLS[type]
+          data = { type: sym }
+          data[:cause] = { stack: stack } if stack
+          data.merge!(extra_info) if extra_info
+          markers << [tid, name, ts, te, phase, data]
         end
-        name = marker_strings[type]
-        sym = Marker::MARKER_SYMBOLS[type]
-        data = { type: sym }
-        data[:cause] = { stack: stack } if stack
-        data.merge!(extra_info) if extra_info
-        markers << [tid, name, ts, te, phase, data]
+        if last_fiber
+          end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
+          start_event = markers[last_fiber]
+          markers << [nil, "Fiber Running", start_event[2], end_time, Marker::Phase::INTERVAL, start_event[5].merge(type: "Fiber Running")]
+        end
+
+        thread[:markers] = markers
       end
 
-      add_marker(
-        name: "Fiber Running",
-        start: markers[last_fiber][2],
-        finish: Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond),
-        thread: markers[last_fiber][0],
-        data: { type: "Fiber Running", fiber_id: markers[last_fiber].last[:fiber_id] }) if last_fiber
+      #markers.concat @markers
 
-      markers.concat @markers
-
-      result.instance_variable_set(:@markers, markers)
+      #result.instance_variable_set(:@markers, markers)
 
       if @out
         result.write(out: @out)

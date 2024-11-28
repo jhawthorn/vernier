@@ -104,15 +104,15 @@ module Vernier
       attr_reader :profile
 
       def data
-        markers_by_thread = profile.markers.group_by { |marker| marker[0] }
+        #markers_by_thread = profile.markers.group_by { |marker| marker[0] }
 
         threads = profile.threads.map do |ruby_thread_id, thread_info|
-          markers = markers_by_thread[ruby_thread_id] || []
+          #markers = markers_by_thread[ruby_thread_id] || []
           Thread.new(
             ruby_thread_id,
             profile,
             @categorizer,
-            markers: markers,
+            #markers: markers,
             **thread_info,
           )
         end
