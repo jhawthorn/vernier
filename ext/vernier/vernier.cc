@@ -784,33 +784,32 @@ class Marker {
     MarkerInfo extra_info;
 
     VALUE to_array() const {
-        VALUE record[7] = {0};
-        record[0] = Qnil; // FIXME
-        record[1] = INT2NUM(type);
-        record[2] = INT2NUM(phase);
-        record[3] = ULL2NUM(timestamp.nanoseconds());
+        VALUE record[6] = {0};
+        record[0] = INT2NUM(type);
+        record[1] = INT2NUM(phase);
+        record[2] = ULL2NUM(timestamp.nanoseconds());
 
         if (phase == Marker::Phase::INTERVAL) {
-            record[4] = ULL2NUM(finish.nanoseconds());
+            record[3] = ULL2NUM(finish.nanoseconds());
         }
         else {
-            record[4] = Qnil;
+            record[3] = Qnil;
         }
-        record[5] = stack_index == -1 ? Qnil : INT2NUM(stack_index);
+        record[4] = stack_index == -1 ? Qnil : INT2NUM(stack_index);
 
         if (type == Marker::MARKER_GC_PAUSE) {
             VALUE hash = rb_hash_new();
-            record[6] = hash;
+            record[5] = hash;
 
             rb_hash_aset(hash, sym_gc_by, extra_info.gc_data.gc_by);
             rb_hash_aset(hash, sym_state, extra_info.gc_data.gc_state);
         } else if (type == Marker::MARKER_FIBER_SWITCH) {
             VALUE hash = rb_hash_new();
-            record[6] = hash;
+            record[5] = hash;
 
             rb_hash_aset(hash, sym_fiber_id, extra_info.fiber_data.fiber_id);
         }
-        return rb_ary_new_from_values(7, record);
+        return rb_ary_new_from_values(6, record);
     }
 };
 

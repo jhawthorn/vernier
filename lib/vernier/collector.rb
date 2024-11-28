@@ -110,7 +110,7 @@ module Vernier
         original_markers = thread[:markers] || []
         original_markers += result.gc_markers || []
         original_markers.each do |data|
-          tid, type, phase, ts, te, stack, extra_info = data
+          type, phase, ts, te, stack, extra_info = data
           if type == Marker::Type::FIBER_SWITCH
             if last_fiber
               start_event = markers[last_fiber]
