@@ -99,14 +99,25 @@ module Vernier
 
       marker_strings = Marker.name_table
 
-      markers = self.markers.map do |(tid, type, phase, ts, te, stack, extra_info)|
+      last_fiber = nil
+      markers = []
+      self.markers.map do |data|
+        tid, type, phase, ts, te, stack, extra_info = data
+        if type == Marker::Type::FIBER_SWITCH
+          phase = 1
+          if last_fiber
+            markers[last_fiber][3] = ts
+          end
+          last_fiber = markers.size
+        end
         name = marker_strings[type]
         sym = Marker::MARKER_SYMBOLS[type]
         data = { type: sym }
         data[:cause] = { stack: stack } if stack
         data.merge!(extra_info) if extra_info
-        [tid, name, ts, te, phase, data]
+        markers << [tid, name, ts, te, phase, data]
       end
+      markers[last_fiber][3] = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond) if last_fiber
 
       markers.concat @markers
 

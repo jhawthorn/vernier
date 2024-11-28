@@ -210,6 +210,18 @@ module Vernier
               { key: "gc_by", format: "string" },
             ]
           },
+          {
+            name: "FIBER_SWITCH",
+            display: [ "marker-chart", "marker-table", "timeline-overview" ],
+            tooltipLabel: "{marker.name} - {marker.data.fiber_id}",
+            data: [
+              {
+                label: "Description",
+                value: "Switch running Fiber"
+              },
+              { key: "fiber_id", format: "integer" },
+            ]
+          },
           *hook_additions
         ]
       end

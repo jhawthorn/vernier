@@ -50,6 +50,7 @@
 
 #define RUBY_NORMAL_EVENTS \
   RUBY_EVENT_THREAD_BEGIN | \
+  RUBY_EVENT_FIBER_SWITCH | \
   RUBY_EVENT_THREAD_END
 
 #define sym(name) ID2SYM(rb_intern_const(name))
@@ -65,7 +66,7 @@ static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
 static VALUE rb_cStackTable;
 
-static VALUE sym_state, sym_gc_by;
+static VALUE sym_state, sym_gc_by, sym_fiber_id;
 
 static const char *gvl_event_name(rb_event_flag_t event) {
     switch (event) {
@@ -732,6 +733,9 @@ union MarkerInfo {
         VALUE gc_by;
         VALUE gc_state;
     } gc_data;
+    struct {
+        VALUE fiber_id;
+    } fiber_data;
 };
 
 #define EACH_MARKER(XX) \
@@ -748,6 +752,9 @@ union MarkerInfo {
     XX(THREAD_RUNNING) \
     XX(THREAD_STALLED) \
     XX(THREAD_SUSPENDED) \
+\
+    XX(FIBER_SWITCH)
+
 
 class Marker {
     public:
@@ -797,6 +804,11 @@ class Marker {
 
             rb_hash_aset(hash, sym_gc_by, extra_info.gc_data.gc_by);
             rb_hash_aset(hash, sym_state, extra_info.gc_data.gc_state);
+        } else if (type == Marker::MARKER_FIBER_SWITCH) {
+            VALUE hash = rb_hash_new();
+            record[6] = hash;
+
+            rb_hash_aset(hash, sym_fiber_id, extra_info.fiber_data.fiber_id);
         }
         return rb_ary_new_from_values(7, record);
     }
@@ -816,7 +828,7 @@ class MarkerTable {
         void record(Marker::Type type, int stack_index = -1, MarkerInfo extra_info = {}) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), stack_index });
+            list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), stack_index, extra_info });
         }
 };
 
@@ -1019,6 +1031,11 @@ class Thread {
             } else {
                 // TODO: should we log an empty frame?
             }
+        }
+
+        void record_fiber(VALUE fiber) {
+            VALUE fiber_id = rb_obj_id(fiber);
+            markers->record(Marker::Type::MARKER_FIBER_SWITCH, -1, { .fiber_data = { .fiber_id = fiber_id } });
         }
 
         void set_state(State new_state) {
@@ -1585,6 +1602,18 @@ class TimeCollector : public BaseCollector {
 
     }
 
+    void record_fiber(VALUE th, VALUE fiber) {
+        threads.mutex.lock();
+        for (auto &threadptr : threads.list) {
+            auto &thread = *threadptr;
+            if (th == thread.ruby_thread) {
+                thread.record_fiber(fiber);
+                break;
+            }
+        }
+        threads.mutex.unlock();
+    }
+
     void write_meta(VALUE meta, VALUE result) {
         BaseCollector::write_meta(meta, result);
         rb_hash_aset(meta, sym("interval"), ULL2NUM(interval.microseconds()));
@@ -1702,6 +1731,9 @@ class TimeCollector : public BaseCollector {
         TimeCollector *collector = static_cast<TimeCollector *>((void *)NUM2ULL(data));
 
         switch (event) {
+            case RUBY_EVENT_FIBER_SWITCH:
+                collector->record_fiber(rb_thread_current(), rb_fiber_current());
+                break;
             case RUBY_EVENT_THREAD_BEGIN:
                 collector->threads.started(self);
                 break;
@@ -2013,6 +2045,7 @@ Init_vernier(void)
 {
     sym_state = sym("state");
     sym_gc_by = sym("gc_by");
+    sym_fiber_id = sym("fiber_id");
     rb_gc_latest_gc_info(sym_state); // HACK: needs to be warmed so that it can be called during GC
 
   rb_mVernier = rb_define_module("Vernier");
