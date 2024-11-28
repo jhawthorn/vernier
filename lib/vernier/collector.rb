@@ -114,7 +114,7 @@ module Vernier
           if type == Marker::Type::FIBER_SWITCH
             if last_fiber
               start_event = markers[last_fiber]
-              markers << [nil, "Fiber Running", start_event[2], ts, Marker::Phase::INTERVAL, start_event[5].merge(type: "Fiber Running")]
+              markers << [nil, "Fiber Running", start_event[2], ts, Marker::Phase::INTERVAL, start_event[5].merge(type: "Fiber Running", cause: nil)]
             end
             last_fiber = markers.size
           end
@@ -128,7 +128,7 @@ module Vernier
         if last_fiber
           end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
           start_event = markers[last_fiber]
-          markers << [nil, "Fiber Running", start_event[2], end_time, Marker::Phase::INTERVAL, start_event[5].merge(type: "Fiber Running")]
+          markers << [nil, "Fiber Running", start_event[2], end_time, Marker::Phase::INTERVAL, start_event[5].merge(type: "Fiber Running", cause: nil)]
         end
 
         thread[:markers] = markers
