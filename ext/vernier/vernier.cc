@@ -50,6 +50,7 @@
 
 #define RUBY_NORMAL_EVENTS \
   RUBY_EVENT_THREAD_BEGIN | \
+  RUBY_EVENT_FIBER_SWITCH | \
   RUBY_EVENT_THREAD_END
 
 #define sym(name) ID2SYM(rb_intern_const(name))
@@ -65,7 +66,7 @@ static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
 static VALUE rb_cStackTable;
 
-static VALUE sym_state, sym_gc_by;
+static VALUE sym_state, sym_gc_by, sym_fiber_id;
 
 static const char *gvl_event_name(rb_event_flag_t event) {
     switch (event) {
@@ -732,6 +733,9 @@ union MarkerInfo {
         VALUE gc_by;
         VALUE gc_state;
     } gc_data;
+    struct {
+        VALUE fiber_id;
+    } fiber_data;
 };
 
 #define EACH_MARKER(XX) \
@@ -748,6 +752,9 @@ union MarkerInfo {
     XX(THREAD_RUNNING) \
     XX(THREAD_STALLED) \
     XX(THREAD_SUSPENDED) \
+\
+    XX(FIBER_SWITCH)
+
 
 class Marker {
     public:
@@ -776,29 +783,33 @@ class Marker {
 
     MarkerInfo extra_info;
 
-    VALUE to_array() {
-        VALUE record[7] = {0};
-        record[0] = Qnil; // FIXME
-        record[1] = INT2NUM(type);
-        record[2] = INT2NUM(phase);
-        record[3] = ULL2NUM(timestamp.nanoseconds());
+    VALUE to_array() const {
+        VALUE record[6] = {0};
+        record[0] = INT2NUM(type);
+        record[1] = INT2NUM(phase);
+        record[2] = ULL2NUM(timestamp.nanoseconds());
 
         if (phase == Marker::Phase::INTERVAL) {
-            record[4] = ULL2NUM(finish.nanoseconds());
+            record[3] = ULL2NUM(finish.nanoseconds());
         }
         else {
-            record[4] = Qnil;
+            record[3] = Qnil;
         }
-        record[5] = stack_index == -1 ? Qnil : INT2NUM(stack_index);
+        record[4] = stack_index == -1 ? Qnil : INT2NUM(stack_index);
 
         if (type == Marker::MARKER_GC_PAUSE) {
             VALUE hash = rb_hash_new();
-            record[6] = hash;
+            record[5] = hash;
 
             rb_hash_aset(hash, sym_gc_by, extra_info.gc_data.gc_by);
             rb_hash_aset(hash, sym_state, extra_info.gc_data.gc_state);
+        } else if (type == Marker::MARKER_FIBER_SWITCH) {
+            VALUE hash = rb_hash_new();
+            record[5] = hash;
+
+            rb_hash_aset(hash, sym_fiber_id, extra_info.fiber_data.fiber_id);
         }
-        return rb_ary_new_from_values(7, record);
+        return rb_ary_new_from_values(6, record);
     }
 };
 
@@ -816,7 +827,15 @@ class MarkerTable {
         void record(Marker::Type type, int stack_index = -1, MarkerInfo extra_info = {}) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), stack_index });
+            list.push_back({ type, Marker::INSTANT, TimeStamp::Now(), TimeStamp(), stack_index, extra_info });
+        }
+
+        VALUE to_array() const {
+            VALUE ary = rb_ary_new();
+            for (auto& marker: list) {
+                rb_ary_push(ary, marker.to_array());
+            }
+            return ary;
         }
 };
 
@@ -1019,6 +1038,15 @@ class Thread {
             } else {
                 // TODO: should we log an empty frame?
             }
+        }
+
+        void record_fiber(VALUE fiber, StackTable &frame_list) {
+            RawSample sample;
+            sample.sample();
+
+            int stack_idx = translator.translate(frame_list, sample);
+            VALUE fiber_id = rb_obj_id(fiber);
+            markers->record(Marker::Type::MARKER_FIBER_SWITCH, stack_idx, { .fiber_data = { .fiber_id = fiber_id } });
         }
 
         void set_state(State new_state) {
@@ -1261,10 +1289,6 @@ class BaseCollector {
     };
 
     virtual void compact() {
-    };
-
-    virtual VALUE get_markers() {
-        return rb_ary_new();
     };
 };
 
@@ -1585,6 +1609,18 @@ class TimeCollector : public BaseCollector {
 
     }
 
+    void record_fiber(VALUE th, VALUE fiber) {
+        threads.mutex.lock();
+        for (auto &threadptr : threads.list) {
+            auto &thread = *threadptr;
+            if (th == thread.ruby_thread) {
+                thread.record_fiber(fiber, threads.frame_list);
+                break;
+            }
+        }
+        threads.mutex.unlock();
+    }
+
     void write_meta(VALUE meta, VALUE result) {
         BaseCollector::write_meta(meta, result);
         rb_hash_aset(meta, sym("interval"), ULL2NUM(interval.microseconds()));
@@ -1603,28 +1639,6 @@ class TimeCollector : public BaseCollector {
                     category
                     );
         }
-    }
-
-    VALUE get_markers() {
-        VALUE list = rb_ary_new();
-        VALUE main_thread = rb_thread_main();
-        VALUE main_thread_id = rb_obj_id(main_thread);
-
-        for (auto& marker: this->gc_markers.list) {
-            VALUE ary = marker.to_array();
-
-            RARRAY_ASET(ary, 0, main_thread_id);
-            rb_ary_push(list, ary);
-        }
-        for (auto &thread : threads.list) {
-            for (auto& marker: thread->markers->list) {
-                VALUE ary = marker.to_array();
-                RARRAY_ASET(ary, 0, thread->ruby_thread_id);
-                rb_ary_push(list, ary);
-            }
-        }
-
-        return list;
     }
 
     void sample_thread_run() {
@@ -1702,6 +1716,9 @@ class TimeCollector : public BaseCollector {
         TimeCollector *collector = static_cast<TimeCollector *>((void *)NUM2ULL(data));
 
         switch (event) {
+            case RUBY_EVENT_FIBER_SWITCH:
+                collector->record_fiber(rb_thread_current(), rb_fiber_current());
+                break;
             case RUBY_EVENT_THREAD_BEGIN:
                 collector->threads.started(self);
                 break;
@@ -1844,6 +1861,8 @@ class TimeCollector : public BaseCollector {
     VALUE build_collector_result() {
         VALUE result = BaseCollector::build_collector_result();
 
+        rb_ivar_set(result, rb_intern("@gc_markers"), this->gc_markers.to_array());
+
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
 
@@ -1851,8 +1870,7 @@ class TimeCollector : public BaseCollector {
             VALUE hash = rb_hash_new();
             thread->samples.write_result(hash);
             thread->allocation_samples.write_result(hash);
-
-            rb_hash_aset(threads, thread->ruby_thread_id, hash);
+            rb_hash_aset(hash, sym("markers"), thread->markers->to_array());
             rb_hash_aset(hash, sym("tid"), ULL2NUM(thread->native_tid));
             rb_hash_aset(hash, sym("started_at"), ULL2NUM(thread->started_at.nanoseconds()));
             if (!thread->stopped_at.zero()) {
@@ -1861,6 +1879,7 @@ class TimeCollector : public BaseCollector {
             rb_hash_aset(hash, sym("is_main"), thread->is_main() ? Qtrue : Qfalse);
             rb_hash_aset(hash, sym("is_start"), thread->is_start(BaseCollector::start_thread) ? Qtrue : Qfalse);
 
+            rb_hash_aset(threads, thread->ruby_thread_id, hash);
         }
 
         return result;
@@ -1931,13 +1950,6 @@ collector_stop(VALUE self) {
 
     VALUE result = collector->stop();
     return result;
-}
-
-static VALUE
-markers(VALUE self) {
-    auto *collector = get_collector(self);
-
-    return collector->get_markers();
 }
 
 static VALUE
@@ -2013,6 +2025,7 @@ Init_vernier(void)
 {
     sym_state = sym("state");
     sym_gc_by = sym("gc_by");
+    sym_fiber_id = sym("fiber_id");
     rb_gc_latest_gc_info(sym_state); // HACK: needs to be warmed so that it can be called during GC
 
   rb_mVernier = rb_define_module("Vernier");
@@ -2028,7 +2041,6 @@ Init_vernier(void)
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
   rb_define_method(rb_cVernierCollector, "stack_table", collector_stack_table, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
-  rb_define_private_method(rb_cVernierCollector, "markers",  markers, 0);
 
   rb_cStackTable = rb_define_class_under(rb_mVernier, "StackTable", rb_cObject);
   rb_undef_alloc_func(rb_cStackTable);

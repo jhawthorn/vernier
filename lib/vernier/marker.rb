@@ -26,6 +26,8 @@ module Vernier
     MARKER_STRINGS[Type::THREAD_STALLED] = "Thread Stalled"
     MARKER_STRINGS[Type::THREAD_SUSPENDED] = "Thread Suspended"
 
+    MARKER_STRINGS[Type::FIBER_SWITCH] = "Fiber Switch"
+
     MARKER_STRINGS.freeze
 
     ##

@@ -8,7 +8,7 @@ module Vernier
       @stack_table
     end
 
-    attr_reader :markers
+    attr_reader :gc_markers
 
     attr_accessor :hooks
 

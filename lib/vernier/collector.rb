@@ -99,18 +99,44 @@ module Vernier
 
       marker_strings = Marker.name_table
 
-      markers = self.markers.map do |(tid, type, phase, ts, te, stack, extra_info)|
-        name = marker_strings[type]
-        sym = Marker::MARKER_SYMBOLS[type]
-        data = { type: sym }
-        data[:cause] = { stack: stack } if stack
-        data.merge!(extra_info) if extra_info
-        [tid, name, ts, te, phase, data]
+      markers_by_thread_id = (@markers || []).group_by(&:first)
+
+      result.threads.each do |tid, thread|
+        last_fiber = nil
+        markers = []
+
+        markers.concat markers_by_thread_id.fetch(tid, [])
+
+        original_markers = thread[:markers] || []
+        original_markers += result.gc_markers || []
+        original_markers.each do |data|
+          type, phase, ts, te, stack, extra_info = data
+          if type == Marker::Type::FIBER_SWITCH
+            if last_fiber
+              start_event = markers[last_fiber]
+              markers << [nil, "Fiber Running", start_event[2], ts, Marker::Phase::INTERVAL, start_event[5].merge(type: "Fiber Running", cause: nil)]
+            end
+            last_fiber = markers.size
+          end
+          name = marker_strings[type]
+          sym = Marker::MARKER_SYMBOLS[type]
+          data = { type: sym }
+          data[:cause] = { stack: stack } if stack
+          data.merge!(extra_info) if extra_info
+          markers << [tid, name, ts, te, phase, data]
+        end
+        if last_fiber
+          end_time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
+          start_event = markers[last_fiber]
+          markers << [nil, "Fiber Running", start_event[2], end_time, Marker::Phase::INTERVAL, start_event[5].merge(type: "Fiber Running", cause: nil)]
+        end
+
+        thread[:markers] = markers
       end
 
-      markers.concat @markers
+      #markers.concat @markers
 
-      result.instance_variable_set(:@markers, markers)
+      #result.instance_variable_set(:@markers, markers)
 
       if @out
         result.write(out: @out)

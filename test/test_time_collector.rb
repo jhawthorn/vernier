@@ -13,7 +13,7 @@ class TestTimeCollector < Minitest::Test
     assert_valid_result result
     # make sure we got all GC events (since we did GC.start twice)
     assert_equal ["GC end marking", "GC end sweeping", "GC pause", "GC start"].sort,
-      result.markers.map { |x| x[1] }.grep(/^GC/).uniq.sort
+      result.main_thread[:markers].map { |x| x[1] }.grep(/^GC/).uniq.sort
   end
 
   def test_time_collector
@@ -270,6 +270,32 @@ class TestTimeCollector < Minitest::Test
     assert_equal SAMPLE_SCALE_INTERVAL, result.meta[:interval]
     assert_equal SAMPLE_SCALE_ALLOCATIONS, result.meta[:allocation_interval]
     assert_equal false, result.meta[:gc]
+  end
+
+  def test_switching_fibers
+    th = []
+    result = Vernier.profile do
+      2.times do
+        th << Thread.new do
+          fiber = Fiber.new do
+            Fiber.yield 1
+            2
+          end
+          fiber.resume
+          fiber.resume
+        end
+      end
+      th.each(&:join)
+    end
+
+    th.each do |thread|
+      fiber_markers = result.threads[thread.__id__][:markers].select {|x| x[1].include?("Fiber") }
+      switch = fiber_markers.select { |x| x[1].include?("Switch") }
+      running = fiber_markers.select { |x| x[1].include?("Running") }
+
+      assert_equal 4, switch.size
+      assert_equal 4, running.size
+    end
   end
 
   private
