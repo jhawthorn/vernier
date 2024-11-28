@@ -18,3 +18,4 @@ Gemfile.lock
 /examples/my_sleep.dylib
 .DS_Store
 .gdbinit
+/profile-*.json.gz
