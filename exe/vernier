@@ -53,6 +53,20 @@ FLAGS:
       end
     end
 
+    class SamplesByLocation
+      attr_accessor :self, :total
+      def initialize
+        @self = @total = 0
+      end
+
+      def +(other)
+        ret = SamplesByLocation.new
+        ret.self = @self + other.self
+        ret.total = @total + other.total
+        ret
+      end
+    end
+
     def self.inverted_tree(top, file)
       # Print the inverted tree from a Vernier profile
       require "json"
@@ -73,14 +87,14 @@ FLAGS:
       weight_by_frame = Hash.new(0)
 
       stack_frames = main["stackTable"]["frame"]
-      frame_table = main["frameTable"]["func"]
-      func_table = main["funcTable"]["name"]
+      frame_func_table = main["frameTable"]["func"]
+      func_name_table = main["funcTable"]["name"]
       string_array = main["stringArray"]
 
       main["samples"]["stack"].zip(main["samples"]["weight"]).each do |stack, weight|
         top_frame_index = stack_frames[stack]
-        func_index = frame_table[top_frame_index]
-        string_index = func_table[func_index]
+        func_index = frame_func_table[top_frame_index]
+        string_index = func_name_table[func_index]
         str = string_array[string_index]
         weight_by_frame[str] += weight
       end
@@ -101,6 +115,68 @@ FLAGS:
       print_separator widths
       columns.each { print_row(_1, widths) }
       print_separator widths
+
+      self_samples_by_frame = Hash.new do |h, k|
+        h[k] = SamplesByLocation.new
+      end
+
+      stack_parents = main["stackTable"]["prefix"]
+      main["samples"]["stack"].zip(main["samples"]["weight"]).each do |stack_idx, weight|
+        # self time
+        top_frame_index = stack_frames[stack_idx]
+        self_samples_by_frame[top_frame_index].self += weight
+
+        # total time
+        while stack_idx
+          frame_idx = stack_frames[stack_idx]
+          self_samples_by_frame[frame_idx].total += weight
+          stack_idx = stack_parents[stack_idx]
+        end
+      end
+
+      samples_by_file = Hash.new do |h, k|
+        h[k] = Hash.new do |h2, k2|
+          h2[k2] = SamplesByLocation.new
+        end
+      end
+
+      frame_lines = main["frameTable"]["line"]
+      func_filenames = main["funcTable"]["fileName"]
+      self_samples_by_frame.each do |frame, samples|
+        line = frame_lines[frame]
+        func_index = frame_func_table[frame]
+        filename = func_filenames[func_index]
+        #string_index = func_name_table[func_index]
+
+        samples_by_file[filename][line] += samples
+      end
+
+      samples_by_file.transform_keys! { string_array[_1] }
+
+      #FIXME
+      print_file("examples/gvl_sleep.rb", samples_by_file)
+    end
+
+    def self.print_file(filename, all_samples)
+      samples = all_samples[filename]
+
+      output = +""
+      # file_name, lines, file_wall, file_cpu, file_idle, file_sort
+      output << sprintf("TOTAL |  SELF | SOURCE\n")
+      File.readlines(filename).each_with_index do |line, i|
+        lineno = i + 1
+        #wall, cpu, calls = lines[i + 1]
+        wall, cpu, calls = 0,0,0
+        calls = samples[lineno]
+
+        if calls && calls.total > 0
+          #output << sprintf("% 8.1fms (% 5d) | %s", wall, calls, line)
+          output << sprintf("% 5d | % 5d | %s", calls.total, calls.self, line)
+        else
+          output << sprintf("      |       | %s", line)
+        end
+      end
+      puts output
     end
 
     def self.print_row(list, widths)
