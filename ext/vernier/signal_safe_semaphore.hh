@@ -47,12 +47,15 @@ class SignalSafeSemaphore {
 #else
         // Use sem_timedwait so that we get a crash instead of a deadlock for
         // easier debugging
-        auto ts = (TimeStamp::Now() + TimeStamp::from_seconds(5)).timespec();
+        struct timespec ts = (TimeStamp::NowRealtime() + TimeStamp::from_seconds(5)).timespec();
 
         int ret;
         do {
-            ret = sem_wait(&sem);
+            ret = sem_timedwait(&sem, &ts);
         } while (ret && errno == EINTR);
+        if (ret != 0) {
+            rb_bug("VERNIER: sem_timedwait waited over 5 seconds");
+        }
         assert(ret == 0);
 #endif
     }
