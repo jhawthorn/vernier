@@ -4,12 +4,19 @@
 #include "timestamp.hh"
 
 class PeriodicThread {
-    std::atomic_bool running;
     pthread_t pthread;
     TimeStamp interval;
 
+    pthread_mutex_t running_mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_cond_t running_cv;
+    std::atomic_bool running;
+
     public:
         PeriodicThread(TimeStamp interval) : interval(interval), running(false) {
+            pthread_condattr_t attr;
+            pthread_condattr_init(&attr);
+            pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+            pthread_cond_init(&running_cv, &attr);
         }
 
         void set_interval(TimeStamp timestamp) {
@@ -31,7 +38,8 @@ class PeriodicThread {
 #endif
 
             TimeStamp next_sample_schedule = TimeStamp::Now();
-            while (running) {
+            bool done = false;
+            while (!done) {
                 TimeStamp sample_complete = TimeStamp::Now();
 
                 run_iteration();
@@ -42,29 +50,47 @@ class PeriodicThread {
                     next_sample_schedule = sample_complete + interval;
                 }
 
-                TimeStamp::SleepUntil(next_sample_schedule);
+                struct timespec next_sample_ts = next_sample_schedule.timespec();
+
+                pthread_mutex_lock(&running_mutex);
+                if (running) {
+                    int ret;
+                    do {
+                        ret = pthread_cond_timedwait(&running_cv, &running_mutex, &next_sample_ts);
+                    } while(running && ret == EINTR);
+                }
+                done = !running;
+                pthread_mutex_unlock(&running_mutex);
             }
         }
 
         virtual void run_iteration() = 0;
 
         void start() {
-            if (running) return;
+            pthread_mutex_lock(&running_mutex);
+            if (!running) {
+                running = true;
 
-            running = true;
-
-            int ret = pthread_create(&pthread, NULL, &thread_entrypoint, this);
-            if (ret != 0) {
-                perror("pthread_create");
-                rb_bug("VERNIER: pthread_create failed");
+                int ret = pthread_create(&pthread, NULL, &thread_entrypoint, this);
+                if (ret != 0) {
+                    perror("pthread_create");
+                    rb_bug("VERNIER: pthread_create failed");
+                }
             }
+            pthread_mutex_unlock(&running_mutex);
         }
 
         void stop() {
-            if (!running) return;
-
-            running = false;
-            pthread_join(pthread, NULL);
+            pthread_mutex_lock(&running_mutex);
+            bool was_running = running;
+            if (running) {
+                running = false;
+                pthread_cond_broadcast(&running_cv);
+            }
+            pthread_mutex_unlock(&running_mutex);
+            if (was_running)
+                pthread_join(pthread, NULL);
+            pthread = 0;
         }
 };
 
