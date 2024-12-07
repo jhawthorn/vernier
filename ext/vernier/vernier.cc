@@ -1641,48 +1641,52 @@ class TimeCollector : public BaseCollector {
         }
     }
 
-    void sample_thread_run() {
+    void run_iteration() {
+        TimeStamp sample_start = TimeStamp::Now();
+
         LiveSample sample;
 
+        threads.mutex.lock();
+        for (auto &threadptr : threads.list) {
+            auto &thread = *threadptr;
+
+            //if (thread.state == Thread::State::RUNNING) {
+            //if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
+            if (thread.state == Thread::State::RUNNING) {
+                //fprintf(stderr, "sampling %p on tid:%i\n", thread.ruby_thread, thread.native_tid);
+                bool signal_sent = GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
+
+                if (!signal_sent) {
+                    // The thread has died. We probably should have caught
+                    // that by the GVL instrumentation, but let's try to get
+                    // it to a consistent state and stop profiling it.
+                    thread.set_state(Thread::State::STOPPED);
+                } else if (sample.sample.empty()) {
+                    // fprintf(stderr, "skipping GC sample\n");
+                } else {
+                    record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
+                }
+            } else if (thread.state == Thread::State::SUSPENDED) {
+                thread.samples.record_sample(
+                        thread.stack_on_suspend_idx,
+                        sample_start,
+                        CATEGORY_IDLE);
+            } else if (thread.state == Thread::State::READY) {
+                thread.samples.record_sample(
+                        thread.stack_on_suspend_idx,
+                        sample_start,
+                        CATEGORY_STALLED);
+            } else {
+            }
+        }
+
+        threads.mutex.unlock();
+        }
+
+    void sample_thread_run() {
         TimeStamp next_sample_schedule = TimeStamp::Now();
         while (running) {
-            TimeStamp sample_start = TimeStamp::Now();
-
-            threads.mutex.lock();
-            for (auto &threadptr : threads.list) {
-                auto &thread = *threadptr;
-
-                //if (thread.state == Thread::State::RUNNING) {
-                //if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
-                if (thread.state == Thread::State::RUNNING) {
-                    //fprintf(stderr, "sampling %p on tid:%i\n", thread.ruby_thread, thread.native_tid);
-                    bool signal_sent = GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
-
-                    if (!signal_sent) {
-                        // The thread has died. We probably should have caught
-                        // that by the GVL instrumentation, but let's try to get
-                        // it to a consistent state and stop profiling it.
-                        thread.set_state(Thread::State::STOPPED);
-                    } else if (sample.sample.empty()) {
-                        // fprintf(stderr, "skipping GC sample\n");
-                    } else {
-                        record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
-                    }
-                } else if (thread.state == Thread::State::SUSPENDED) {
-                    thread.samples.record_sample(
-                            thread.stack_on_suspend_idx,
-                            sample_start,
-                            CATEGORY_IDLE);
-                } else if (thread.state == Thread::State::READY) {
-                    thread.samples.record_sample(
-                            thread.stack_on_suspend_idx,
-                            sample_start,
-                            CATEGORY_STALLED);
-                } else {
-                }
-            }
-
-            threads.mutex.unlock();
+            run_iteration();
 
             TimeStamp sample_complete = TimeStamp::Now();
 
