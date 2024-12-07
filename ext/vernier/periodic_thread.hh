@@ -4,12 +4,12 @@
 #include "timestamp.hh"
 
 class PeriodicThread {
-    std::atomic<bool> running;
+    std::atomic_bool running;
     pthread_t pthread;
     TimeStamp interval;
 
     public:
-        PeriodicThread() : interval(TimeStamp::from_milliseconds(10)) {
+        PeriodicThread(TimeStamp interval) : interval(interval), running(false) {
         }
 
         void set_interval(TimeStamp timestamp) {
@@ -22,6 +22,14 @@ class PeriodicThread {
         }
 
         void run() {
+#if HAVE_PTHREAD_SETNAME_NP
+#ifdef __APPLE__
+        pthread_setname_np("Vernier profiler");
+#else
+        pthread_setname_np(pthread_self(), "Vernier profiler");
+#endif
+#endif
+
             TimeStamp next_sample_schedule = TimeStamp::Now();
             while (running) {
                 TimeStamp sample_complete = TimeStamp::Now();
@@ -56,6 +64,7 @@ class PeriodicThread {
             if (!running) return;
 
             running = false;
+            pthread_join(pthread, NULL);
         }
 };
 

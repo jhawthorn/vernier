@@ -1,6 +1,19 @@
 #ifndef SIGNAL_SAFE_SEMAPHORE_HH
 #define SIGNAL_SAFE_SEMAPHORE_HH
 
+#if defined(__APPLE__)
+/* macOS */
+#include <dispatch/dispatch.h>
+#elif defined(__FreeBSD__)
+/* FreeBSD */
+#include <pthread_np.h>
+#include <semaphore.h>
+#else
+/* Linux */
+#include <semaphore.h>
+#include <sys/syscall.h> /* for SYS_gettid */
+#endif
+
 // A basic semaphore built on sem_wait/sem_post
 // post() is guaranteed to be async-signal-safe
 class SignalSafeSemaphore {

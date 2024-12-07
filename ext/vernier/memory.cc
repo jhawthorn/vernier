@@ -1,4 +1,3 @@
-#include <atomic>
 #include <mutex>
 #include <stdio.h>
 #include <unistd.h>
@@ -69,6 +68,9 @@ class MemoryTracker : public PeriodicThread {
         };
         std::vector<Record> results;
         std::mutex mutex;
+
+        MemoryTracker() : PeriodicThread(TimeStamp::from_milliseconds(10)) {
+        }
 
         void run_iteration() {
             record();

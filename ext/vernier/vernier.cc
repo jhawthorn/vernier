@@ -14,18 +14,6 @@
 
 #include <sys/time.h>
 #include <signal.h>
-#if defined(__APPLE__)
-/* macOS */
-#include <dispatch/dispatch.h>
-#elif defined(__FreeBSD__)
-/* FreeBSD */
-#include <pthread_np.h>
-#include <semaphore.h>
-#else
-/* Linux */
-#include <semaphore.h>
-#include <sys/syscall.h> /* for SYS_gettid */
-#endif
 
 #include "vernier.hh"
 #include "timestamp.hh"
@@ -1514,6 +1502,19 @@ class GlobalSignalHandler {
 LiveSample *GlobalSignalHandler::live_sample;
 
 class TimeCollector : public BaseCollector {
+    class TimeCollectorThread : public PeriodicThread {
+        TimeCollector &time_collector;
+
+        void run_iteration() {
+            time_collector.run_iteration();
+        }
+
+        public:
+
+        TimeCollectorThread(TimeCollector &tc, TimeStamp interval) : PeriodicThread(interval), time_collector(tc) {
+        };
+    };
+
     GCMarkerTable gc_markers;
     ThreadTable threads;
 
@@ -1536,8 +1537,10 @@ class TimeCollector : public BaseCollector {
         collector->record_newobj(obj);
     }
 
+    TimeCollectorThread collector_thread;
+
     public:
-    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_interval) : BaseCollector(stack_table), interval(interval), allocation_interval(allocation_interval), threads(*get_stack_table(stack_table)) {
+    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_interval) : BaseCollector(stack_table), interval(interval), allocation_interval(allocation_interval), threads(*get_stack_table(stack_table)), collector_thread(*this, interval) {
     }
 
     void record_newobj(VALUE obj) {
@@ -1631,39 +1634,6 @@ class TimeCollector : public BaseCollector {
         }
 
         threads.mutex.unlock();
-        }
-
-    void sample_thread_run() {
-        TimeStamp next_sample_schedule = TimeStamp::Now();
-        while (running) {
-            run_iteration();
-
-            TimeStamp sample_complete = TimeStamp::Now();
-
-            next_sample_schedule += interval;
-
-            // If sampling falls behind, restart, and check in another interval
-            if (next_sample_schedule < sample_complete) {
-                next_sample_schedule = sample_complete + interval;
-            }
-
-            TimeStamp::SleepUntil(next_sample_schedule);
-        }
-
-        thread_stopped.post();
-    }
-
-    static void *sample_thread_entry(void *arg) {
-#if HAVE_PTHREAD_SETNAME_NP
-#ifdef __APPLE__
-        pthread_setname_np("Vernier profiler");
-#else
-        pthread_setname_np(pthread_self(), "Vernier profiler");
-#endif
-#endif
-        TimeCollector *collector = static_cast<TimeCollector *>(arg);
-        collector->sample_thread_run();
-        return NULL;
     }
 
     static void internal_thread_event_cb(rb_event_flag_t event, VALUE data, VALUE self, ID mid, VALUE klass) {
@@ -1766,11 +1736,7 @@ class TimeCollector : public BaseCollector {
 
         running = true;
 
-        int ret = pthread_create(&sample_thread, NULL, &sample_thread_entry, this);
-        if (ret != 0) {
-            perror("pthread_create");
-            rb_bug("VERNIER: pthread_create failed");
-        }
+        collector_thread.start();
 
         // Set the state of the current Ruby thread to RUNNING, which we know it
         // is as it must have held the GVL to start the collector. We want to
@@ -1789,8 +1755,7 @@ class TimeCollector : public BaseCollector {
     VALUE stop() {
         BaseCollector::stop();
 
-        running = false;
-        thread_stopped.wait();
+        collector_thread.stop();
 
         GlobalSignalHandler::get_instance()->uninstall();
 
