@@ -257,6 +257,19 @@ class TestTimeCollector < Minitest::Test
     assert_equal "profile not started", error.message
   end
 
+  def test_stops_in_reasonable_time
+    collector = Vernier::Collector.new(:wall, interval: 10_000_000)
+    collector.start
+    sleep 0.2
+    time_before = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    collector.stop
+    time_after = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    time = time_after - time_before
+
+    # Under one second
+    assert_operator time, :<, 1
+  end
+
   def test_includes_options_in_result_meta
     output_file = File.join(__dir__, "../tmp/exception_output.json")
     result = Vernier.profile(
@@ -303,7 +316,7 @@ class TestTimeCollector < Minitest::Test
   SLOW_RUNNER = ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
   DEFAULT_SLEEP_SCALE =
       if SLOW_RUNNER
-        1
+        10
       else
         0.1
       end

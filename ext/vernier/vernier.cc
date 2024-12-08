@@ -14,21 +14,11 @@
 
 #include <sys/time.h>
 #include <signal.h>
-#if defined(__APPLE__)
-/* macOS */
-#include <dispatch/dispatch.h>
-#elif defined(__FreeBSD__)
-/* FreeBSD */
-#include <pthread_np.h>
-#include <semaphore.h>
-#else
-/* Linux */
-#include <semaphore.h>
-#include <sys/syscall.h> /* for SYS_gettid */
-#endif
 
 #include "vernier.hh"
 #include "timestamp.hh"
+#include "periodic_thread.hh"
+#include "signal_safe_semaphore.hh"
 
 #include "ruby/ruby.h"
 #include "ruby/encoding.h"
@@ -147,58 +137,6 @@ namespace std {
         }
     };
 }
-
-// A basic semaphore built on sem_wait/sem_post
-// post() is guaranteed to be async-signal-safe
-class SignalSafeSemaphore {
-#ifdef __APPLE__
-    dispatch_semaphore_t sem;
-#else
-    sem_t sem;
-#endif
-
-    public:
-
-    SignalSafeSemaphore(unsigned int value = 0) {
-#ifdef __APPLE__
-        sem = dispatch_semaphore_create(value);
-#else
-        sem_init(&sem, 0, value);
-#endif
-    };
-
-    ~SignalSafeSemaphore() {
-#ifdef __APPLE__
-        dispatch_release(sem);
-#else
-        sem_destroy(&sem);
-#endif
-    };
-
-    void wait() {
-#ifdef __APPLE__
-        dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
-#else
-        // Use sem_timedwait so that we get a crash instead of a deadlock for
-        // easier debugging
-        auto ts = (TimeStamp::Now() + TimeStamp::from_seconds(5)).timespec();
-
-        int ret;
-        do {
-            ret = sem_wait(&sem);
-        } while (ret && errno == EINTR);
-        assert(ret == 0);
-#endif
-    }
-
-    void post() {
-#ifdef __APPLE__
-        dispatch_semaphore_signal(sem);
-#else
-        sem_post(&sem);
-#endif
-    }
-};
 
 class RawSample {
     public:
@@ -1564,6 +1502,19 @@ class GlobalSignalHandler {
 LiveSample *GlobalSignalHandler::live_sample;
 
 class TimeCollector : public BaseCollector {
+    class TimeCollectorThread : public PeriodicThread {
+        TimeCollector &time_collector;
+
+        void run_iteration() {
+            time_collector.run_iteration();
+        }
+
+        public:
+
+        TimeCollectorThread(TimeCollector &tc, TimeStamp interval) : PeriodicThread(interval), time_collector(tc) {
+        };
+    };
+
     GCMarkerTable gc_markers;
     ThreadTable threads;
 
@@ -1586,8 +1537,10 @@ class TimeCollector : public BaseCollector {
         collector->record_newobj(obj);
     }
 
+    TimeCollectorThread collector_thread;
+
     public:
-    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_interval) : BaseCollector(stack_table), interval(interval), allocation_interval(allocation_interval), threads(*get_stack_table(stack_table)) {
+    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_interval) : BaseCollector(stack_table), interval(interval), allocation_interval(allocation_interval), threads(*get_stack_table(stack_table)), collector_thread(*this, interval) {
     }
 
     void record_newobj(VALUE obj) {
@@ -1641,75 +1594,46 @@ class TimeCollector : public BaseCollector {
         }
     }
 
-    void sample_thread_run() {
+    void run_iteration() {
+        TimeStamp sample_start = TimeStamp::Now();
+
         LiveSample sample;
 
-        TimeStamp next_sample_schedule = TimeStamp::Now();
-        while (running) {
-            TimeStamp sample_start = TimeStamp::Now();
+        threads.mutex.lock();
+        for (auto &threadptr : threads.list) {
+            auto &thread = *threadptr;
 
-            threads.mutex.lock();
-            for (auto &threadptr : threads.list) {
-                auto &thread = *threadptr;
+            //if (thread.state == Thread::State::RUNNING) {
+            //if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
+            if (thread.state == Thread::State::RUNNING) {
+                //fprintf(stderr, "sampling %p on tid:%i\n", thread.ruby_thread, thread.native_tid);
+                bool signal_sent = GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
 
-                //if (thread.state == Thread::State::RUNNING) {
-                //if (thread.state == Thread::State::RUNNING || (thread.state == Thread::State::SUSPENDED && thread.stack_on_suspend_idx < 0)) {
-                if (thread.state == Thread::State::RUNNING) {
-                    //fprintf(stderr, "sampling %p on tid:%i\n", thread.ruby_thread, thread.native_tid);
-                    bool signal_sent = GlobalSignalHandler::get_instance()->record_sample(sample, thread.pthread_id);
-
-                    if (!signal_sent) {
-                        // The thread has died. We probably should have caught
-                        // that by the GVL instrumentation, but let's try to get
-                        // it to a consistent state and stop profiling it.
-                        thread.set_state(Thread::State::STOPPED);
-                    } else if (sample.sample.empty()) {
-                        // fprintf(stderr, "skipping GC sample\n");
-                    } else {
-                        record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
-                    }
-                } else if (thread.state == Thread::State::SUSPENDED) {
-                    thread.samples.record_sample(
-                            thread.stack_on_suspend_idx,
-                            sample_start,
-                            CATEGORY_IDLE);
-                } else if (thread.state == Thread::State::READY) {
-                    thread.samples.record_sample(
-                            thread.stack_on_suspend_idx,
-                            sample_start,
-                            CATEGORY_STALLED);
+                if (!signal_sent) {
+                    // The thread has died. We probably should have caught
+                    // that by the GVL instrumentation, but let's try to get
+                    // it to a consistent state and stop profiling it.
+                    thread.set_state(Thread::State::STOPPED);
+                } else if (sample.sample.empty()) {
+                    // fprintf(stderr, "skipping GC sample\n");
                 } else {
+                    record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
                 }
+            } else if (thread.state == Thread::State::SUSPENDED) {
+                thread.samples.record_sample(
+                        thread.stack_on_suspend_idx,
+                        sample_start,
+                        CATEGORY_IDLE);
+            } else if (thread.state == Thread::State::READY) {
+                thread.samples.record_sample(
+                        thread.stack_on_suspend_idx,
+                        sample_start,
+                        CATEGORY_STALLED);
+            } else {
             }
-
-            threads.mutex.unlock();
-
-            TimeStamp sample_complete = TimeStamp::Now();
-
-            next_sample_schedule += interval;
-
-            // If sampling falls behind, restart, and check in another interval
-            if (next_sample_schedule < sample_complete) {
-                next_sample_schedule = sample_complete + interval;
-            }
-
-            TimeStamp::SleepUntil(next_sample_schedule);
         }
 
-        thread_stopped.post();
-    }
-
-    static void *sample_thread_entry(void *arg) {
-#if HAVE_PTHREAD_SETNAME_NP
-#ifdef __APPLE__
-        pthread_setname_np("Vernier profiler");
-#else
-        pthread_setname_np(pthread_self(), "Vernier profiler");
-#endif
-#endif
-        TimeCollector *collector = static_cast<TimeCollector *>(arg);
-        collector->sample_thread_run();
-        return NULL;
+        threads.mutex.unlock();
     }
 
     static void internal_thread_event_cb(rb_event_flag_t event, VALUE data, VALUE self, ID mid, VALUE klass) {
@@ -1812,11 +1736,7 @@ class TimeCollector : public BaseCollector {
 
         running = true;
 
-        int ret = pthread_create(&sample_thread, NULL, &sample_thread_entry, this);
-        if (ret != 0) {
-            perror("pthread_create");
-            rb_bug("VERNIER: pthread_create failed");
-        }
+        collector_thread.start();
 
         // Set the state of the current Ruby thread to RUNNING, which we know it
         // is as it must have held the GVL to start the collector. We want to
@@ -1835,8 +1755,7 @@ class TimeCollector : public BaseCollector {
     VALUE stop() {
         BaseCollector::stop();
 
-        running = false;
-        thread_stopped.wait();
+        collector_thread.stop();
 
         GlobalSignalHandler::get_instance()->uninstall();
 
