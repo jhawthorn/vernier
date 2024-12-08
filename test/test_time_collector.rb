@@ -316,7 +316,7 @@ class TestTimeCollector < Minitest::Test
   SLOW_RUNNER = ENV["GITHUB_ACTIONS"] && ENV["RUNNER_OS"] == "macOS"
   DEFAULT_SLEEP_SCALE =
       if SLOW_RUNNER
-        1
+        10
       else
         0.1
       end
