@@ -36,7 +36,7 @@ inline void upgrade_thread_priority(pthread_t pthread) {
     }
 }
 #else
-void upgrade_thread_priority(pthread_t pthread) {
+inline void upgrade_thread_priority(pthread_t pthread) {
 }
 #endif
 
