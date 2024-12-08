@@ -34,9 +34,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Testing 123
-      run: |
-        defaults read NSGlobalDomain NSAppSleepDisabled
     - name: Set up Ruby
       uses: ruby/setup-ruby@v1
       with:
