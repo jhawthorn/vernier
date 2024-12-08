@@ -15,7 +15,9 @@ class PeriodicThread {
         PeriodicThread(TimeStamp interval) : interval(interval), running(false) {
             pthread_condattr_t attr;
             pthread_condattr_init(&attr);
+#if HAVE_PTHREAD_CONDATTR_SETCLOCK
             pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
+#endif
             pthread_cond_init(&running_cv, &attr);
         }
 
@@ -50,10 +52,14 @@ class PeriodicThread {
                     next_sample_schedule = sample_complete + interval;
                 }
 
-                struct timespec next_sample_ts = next_sample_schedule.timespec();
-
                 pthread_mutex_lock(&running_mutex);
                 if (running) {
+#if HAVE_PTHREAD_CONDATTR_SETCLOCK
+                    struct timespec next_sample_ts = next_sample_schedule.timespec();
+#else
+                    auto offset = TimeStamp::NowRealtime() - TimeStamp::Now();
+                    struct timespec next_sample_ts = (next_sample_schedule + offset).timespec();
+#endif
                     int ret;
                     do {
                         ret = pthread_cond_timedwait(&running_cv, &running_mutex, &next_sample_ts);
