@@ -44,6 +44,9 @@ class PeriodicThread {
             while (!done) {
                 TimeStamp sample_complete = TimeStamp::Now();
 
+                TimeStamp overshoot = sample_complete - next_sample_schedule;
+                fprintf(stderr, "overshoot: %li (interval: %li)\n", overshoot.nanoseconds(), interval.nanoseconds());
+
                 run_iteration();
 
                 next_sample_schedule += interval;
