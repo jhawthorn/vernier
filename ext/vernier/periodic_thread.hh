@@ -4,15 +4,26 @@
 #include "timestamp.hh"
 
 class PeriodicThread {
-    pthread_t pthread;
-    TimeStamp interval;
+    public:
 
-    pthread_mutex_t running_mutex = PTHREAD_MUTEX_INITIALIZER;
-    pthread_cond_t running_cv;
-    std::atomic_bool running;
+        enum SleepMode {
+            SLEEP_SPIN,
+            SLEEP_SCHEDULER
+        };
+
+    private:
+
+        pthread_t pthread;
+        TimeStamp interval;
+
+        pthread_mutex_t running_mutex = PTHREAD_MUTEX_INITIALIZER;
+        pthread_cond_t running_cv;
+        std::atomic_bool running;
+
+        SleepMode sleep_mode;
 
     public:
-        PeriodicThread(TimeStamp interval) : interval(interval), running(false) {
+        PeriodicThread(TimeStamp interval, SleepMode sleep_mode) : interval(interval), running(false), sleep_mode(sleep_mode) {
             pthread_condattr_t attr;
             pthread_condattr_init(&attr);
 #if HAVE_PTHREAD_CONDATTR_SETCLOCK
@@ -52,21 +63,30 @@ class PeriodicThread {
                     next_sample_schedule = sample_complete + interval;
                 }
 
-                pthread_mutex_lock(&running_mutex);
-                if (running) {
-#if HAVE_PTHREAD_CONDATTR_SETCLOCK
-                    struct timespec next_sample_ts = next_sample_schedule.timespec();
-#else
-                    auto offset = TimeStamp::NowRealtime() - TimeStamp::Now();
-                    struct timespec next_sample_ts = (next_sample_schedule + offset).timespec();
-#endif
-                    int ret;
+                if (sleep_mode == SLEEP_SPIN) {
+                    int res;
                     do {
-                        ret = pthread_cond_timedwait(&running_cv, &running_mutex, &next_sample_ts);
-                    } while(running && ret == EINTR);
+                        // do nothing until it's time :)
+                        sched_yield();
+                    } while (running && next_sample_schedule > TimeStamp::Now());
+                    done = !running;
+                } else {
+                    pthread_mutex_lock(&running_mutex);
+                    if (running) {
+#if HAVE_PTHREAD_CONDATTR_SETCLOCK
+                        struct timespec next_sample_ts = next_sample_schedule.timespec();
+#else
+                        auto offset = TimeStamp::NowRealtime() - TimeStamp::Now();
+                        struct timespec next_sample_ts = (next_sample_schedule + offset).timespec();
+#endif
+                        int ret;
+                        do {
+                            ret = pthread_cond_timedwait(&running_cv, &running_mutex, &next_sample_ts);
+                        } while(running && ret == EINTR);
+                    }
+                    done = !running;
+                    pthread_mutex_unlock(&running_mutex);
                 }
-                done = !running;
-                pthread_mutex_unlock(&running_mutex);
             }
         }
 

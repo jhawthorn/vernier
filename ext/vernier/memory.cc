@@ -69,7 +69,7 @@ class MemoryTracker : public PeriodicThread {
         std::vector<Record> results;
         std::mutex mutex;
 
-        MemoryTracker() : PeriodicThread(TimeStamp::from_milliseconds(10)) {
+        MemoryTracker() : PeriodicThread(TimeStamp::from_milliseconds(10), SLEEP_SCHEDULER) {
         }
 
         void run_iteration() {

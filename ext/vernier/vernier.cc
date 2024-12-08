@@ -1511,7 +1511,7 @@ class TimeCollector : public BaseCollector {
 
         public:
 
-        TimeCollectorThread(TimeCollector &tc, TimeStamp interval) : PeriodicThread(interval), time_collector(tc) {
+        TimeCollectorThread(TimeCollector &tc, TimeStamp interval) : PeriodicThread(interval, SLEEP_SPIN), time_collector(tc) {
         };
     };
 
