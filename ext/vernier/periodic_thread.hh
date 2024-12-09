@@ -3,6 +3,43 @@
 #include <atomic>
 #include "timestamp.hh"
 
+#ifdef __APPLE__
+
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+#include <pthread.h>
+
+// https://developer.apple.com/library/archive/technotes/tn2169/_index.html
+inline void upgrade_thread_priority(pthread_t pthread) {
+    mach_timebase_info_data_t timebase_info;
+    mach_timebase_info(&timebase_info);
+
+    const uint64_t NANOS_PER_MSEC = 1000000ULL;
+    double clock2abs = ((double)timebase_info.denom / (double)timebase_info.numer) * NANOS_PER_MSEC;
+
+    thread_time_constraint_policy_data_t policy;
+    policy.period      = 0;
+
+    // FIXME: I really don't know what these value should be
+    policy.computation = (uint32_t)(5 * clock2abs); // 5 ms of work
+    policy.constraint  = (uint32_t)(10 * clock2abs);
+    policy.preemptible = FALSE;
+
+    int kr = thread_policy_set(pthread_mach_thread_np(pthread_self()),
+                   THREAD_TIME_CONSTRAINT_POLICY,
+                   (thread_policy_t)&policy,
+                   THREAD_TIME_CONSTRAINT_POLICY_COUNT);
+
+    if (kr != KERN_SUCCESS) {
+        mach_error("thread_policy_set:", kr);
+        exit(1);
+    }
+}
+#else
+inline void upgrade_thread_priority(pthread_t pthread) {
+}
+#endif
+
 class PeriodicThread {
     pthread_t pthread;
     TimeStamp interval;
@@ -26,6 +63,8 @@ class PeriodicThread {
         }
 
         static void *thread_entrypoint(void *arg) {
+            upgrade_thread_priority(pthread_self());
+
             static_cast<PeriodicThread *>(arg)->run();
             return NULL;
         }
