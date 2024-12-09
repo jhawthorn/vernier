@@ -49,7 +49,7 @@ class TestAllocations < Minitest::Test
   def test_thread_allocation
     result = Vernier.trace(allocation_interval: 1) do
       Thread.new do
-        100.times do
+        1000.times do
           Object.new
         end
       end.join
@@ -62,6 +62,6 @@ class TestAllocations < Minitest::Test
 
     allocation_samples = other_thread.dig(:allocations, :samples)
 
-    assert_includes 100..130, allocation_samples.count
+    assert_includes 1000..1100, allocation_samples.count
   end
 end
