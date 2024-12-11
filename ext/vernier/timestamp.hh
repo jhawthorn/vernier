@@ -21,6 +21,12 @@ class TimeStamp {
         return TimeStamp(ts.tv_sec * nanoseconds_per_second + ts.tv_nsec);
     }
 
+    static TimeStamp NowRealtime() {
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        return TimeStamp(ts.tv_sec * nanoseconds_per_second + ts.tv_nsec);
+    }
+
     static TimeStamp Zero() {
         return TimeStamp(0);
     }

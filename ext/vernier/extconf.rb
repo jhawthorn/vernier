@@ -12,5 +12,6 @@ have_struct_member("rb_internal_thread_event_data_t", "thread", ["ruby/thread.h"
 have_func("rb_profile_thread_frames", "ruby/debug.h")
 
 have_func("pthread_setname_np")
+have_func("pthread_condattr_setclock")
 
 create_makefile("vernier/vernier")
