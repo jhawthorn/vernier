@@ -1727,10 +1727,6 @@ class TimeCollector : public BaseCollector {
             this->threads.initial(thread);
         }
 
-        GlobalSignalHandler::get_instance()->install();
-
-        collector_thread.start();
-
         // Set the state of the current Ruby thread to RUNNING, which we know it
         // is as it must have held the GVL to start the collector. We want to
         // have at least one thread in our thread list because it's possible
@@ -1738,11 +1734,17 @@ class TimeCollector : public BaseCollector {
         // events and we need at least one
         this->threads.resumed(rb_thread_current());
 
-        install_event_hooks();
+        resume_profiling();
 
         running = true;
 
         return true;
+    }
+
+    void resume_profiling() {
+        collector_thread.start();
+        GlobalSignalHandler::get_instance()->install();
+        install_event_hooks();
     }
 
     void install_event_hooks() {
@@ -1767,14 +1769,16 @@ class TimeCollector : public BaseCollector {
         rb_remove_event_hook(internal_thread_event_cb);
     }
 
+    void pause_profiling() {
+        collector_thread.stop();
+        GlobalSignalHandler::get_instance()->uninstall();
+        uninstall_event_hooks();
+    }
+
     VALUE stop() {
         BaseCollector::stop();
 
-        collector_thread.stop();
-
-        GlobalSignalHandler::get_instance()->uninstall();
-
-        uninstall_event_hooks();
+        pause_profiling();
 
         stack_table->finalize();
 
