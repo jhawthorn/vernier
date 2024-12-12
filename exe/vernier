@@ -1,5 +1,7 @@
 #!/usr/bin/env ruby
 
+$LOAD_PATH.unshift File.expand_path("../../lib", __FILE__)
+
 require "optparse"
 require "vernier/version"
 
@@ -69,37 +71,23 @@ FLAGS:
 
     def self.inverted_tree(top, file)
       # Print the inverted tree from a Vernier profile
-      require "json"
+      require "vernier/parsed_profile"
 
-      is_gzip = File.binread(file, 2) == "\x1F\x8B".b # check for gzip header
-
-      json = if is_gzip
-        require "zlib"
-        Zlib::GzipReader.open(file) { |gz| gz.read }
-      else
-        File.read file
-      end
-
-      info = JSON.load json
-
-      main = info["threads"].find { |thread| thread["isMainThread"] }
+      parsed_profile = Vernier::ParsedProfile.read_file(file)
+      main_thread = parsed_profile.main_thread
+      main = main_thread.data
+      stack_table = main_thread.stack_table
 
       weight_by_frame = Hash.new(0)
 
-      stack_frames = main["stackTable"]["frame"]
-      frame_func_table = main["frameTable"]["func"]
-      func_name_table = main["funcTable"]["name"]
-      string_array = main["stringArray"]
-
       main["samples"]["stack"].zip(main["samples"]["weight"]).each do |stack, weight|
-        top_frame_index = stack_frames[stack]
-        func_index = frame_func_table[top_frame_index]
-        string_index = func_name_table[func_index]
-        str = string_array[string_index]
+        top_frame_index = stack_table.stack_frame_idx(stack)
+        func_index = stack_table.frame_func_idx(top_frame_index)
+        str = stack_table.func_name(func_index)
         weight_by_frame[str] += weight
       end
 
-      total = weight_by_frame.values.inject :+
+      total = weight_by_frame.values.sum
 
       header = ["Samples", "%", ""]
       widths = header.map(&:bytesize)
@@ -120,17 +108,16 @@ FLAGS:
         h[k] = SamplesByLocation.new
       end
 
-      stack_parents = main["stackTable"]["prefix"]
       main["samples"]["stack"].zip(main["samples"]["weight"]).each do |stack_idx, weight|
         # self time
-        top_frame_index = stack_frames[stack_idx]
+        top_frame_index = stack_table.stack_frame_idx(stack_idx)
         self_samples_by_frame[top_frame_index].self += weight
 
         # total time
         while stack_idx
-          frame_idx = stack_frames[stack_idx]
+          frame_idx = stack_table.stack_frame_idx(stack_idx)
           self_samples_by_frame[frame_idx].total += weight
-          stack_idx = stack_parents[stack_idx]
+          stack_idx = stack_table.stack_parent_idx(stack_idx)
         end
       end
 
@@ -143,18 +130,28 @@ FLAGS:
       frame_lines = main["frameTable"]["line"]
       func_filenames = main["funcTable"]["fileName"]
       self_samples_by_frame.each do |frame, samples|
-        line = frame_lines[frame]
-        func_index = frame_func_table[frame]
-        filename = func_filenames[func_index]
-        #string_index = func_name_table[func_index]
+        line = stack_table.frame_line_no(frame)
+        func_index = stack_table.frame_func_idx(frame)
+        filename = stack_table.func_filename_idx(func_index)
 
         samples_by_file[filename][line] += samples
       end
 
-      samples_by_file.transform_keys! { string_array[_1] }
+      samples_by_file.transform_keys! { stack_table.strings[_1] }
 
-      #FIXME
-      print_file("examples/gvl_sleep.rb", samples_by_file)
+      relevant_files = samples_by_file.select do |k, v|
+        next if k.start_with?("gem:")
+        next if k.start_with?("rubylib:")
+        next if k.start_with?("<")
+        v.values.map(&:total).sum > total * 0.01
+      end
+      relevant_files.keys.sort.each do |filename|
+        puts "="*80
+        puts filename
+        puts "-"*80
+        print_file(filename, samples_by_file)
+      end
+      puts "="*80
     end
 
     def self.print_file(filename, all_samples)
