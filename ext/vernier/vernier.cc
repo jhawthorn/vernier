@@ -1168,6 +1168,7 @@ class BaseCollector {
     }
 
     public:
+    VALUE self = Qnil;
     bool running = false;
     StackTable *stack_table;
     VALUE stack_table_value;
@@ -1224,9 +1225,11 @@ class BaseCollector {
     virtual void mark() {
         //frame_list.mark_frames();
         rb_gc_mark(stack_table_value);
+        rb_gc_mark(self);
     };
 
     virtual void compact() {
+        self = rb_gc_location(self);
     };
 };
 
@@ -1930,6 +1933,7 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         rb_raise(rb_eArgError, "invalid mode");
     }
     VALUE obj = TypedData_Wrap_Struct(self, &rb_collector_type, collector);
+    collector->self = obj;
     rb_funcall(obj, rb_intern("initialize"), 2, mode, options);
     return obj;
 }
