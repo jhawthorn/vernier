@@ -6,7 +6,9 @@ module Vernier
       def _fork
         pid = super
         if pid == 0 # We're in the child
-          Vernier.cancel_profile
+          ObjectSpace.each_object(Vernier::Collector) do |collector|
+             Vernier.cancel_profile
+          end
         end
         pid
       end
