@@ -149,17 +149,17 @@ FLAGS:
         puts "="*80
         puts filename
         puts "-"*80
-        print_file(filename, samples_by_file)
+        print_file(filename, samples_by_file, total: total)
       end
       puts "="*80
     end
 
-    def self.print_file(filename, all_samples)
+    def self.print_file(filename, all_samples, total:)
       samples = all_samples[filename]
 
       output = +""
       # file_name, lines, file_wall, file_cpu, file_idle, file_sort
-      output << sprintf("TOTAL |  SELF | SOURCE\n")
+      output << sprintf(" TOTAL |  SELF  | LINE SOURCE\n")
       File.readlines(filename).each_with_index do |line, i|
         lineno = i + 1
         #wall, cpu, calls = lines[i + 1]
@@ -168,9 +168,9 @@ FLAGS:
 
         if calls && calls.total > 0
           #output << sprintf("% 8.1fms (% 5d) | %s", wall, calls, line)
-          output << sprintf("% 5d | % 5d | %s", calls.total, calls.self, line)
+          output << sprintf("%5.1f%% | %5.1f%% | % 4i  %s", 100 * calls.total / total.to_f, 100 * calls.self / total.to_f, lineno, line)
         else
-          output << sprintf("      |       | %s", line)
+          output << sprintf("       |        | % 4i  %s", lineno, line)
         end
       end
       puts output
