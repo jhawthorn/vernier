@@ -1727,14 +1727,7 @@ class TimeCollector : public BaseCollector {
             this->threads.initial(thread);
         }
 
-        if (allocation_interval > 0) {
-            tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
-            rb_tracepoint_enable(tp_newobj);
-        }
-
         GlobalSignalHandler::get_instance()->install();
-
-        running = true;
 
         collector_thread.start();
 
@@ -1745,11 +1738,33 @@ class TimeCollector : public BaseCollector {
         // events and we need at least one
         this->threads.resumed(rb_thread_current());
 
+        install_event_hooks();
+
+        running = true;
+
+        return true;
+    }
+
+    void install_event_hooks() {
+        if (allocation_interval > 0) {
+            tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
+            rb_tracepoint_enable(tp_newobj);
+        }
+
         thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
         rb_add_event_hook(internal_gc_event_cb, RUBY_INTERNAL_EVENTS, PTR2NUM((void *)this));
         rb_add_event_hook(internal_thread_event_cb, RUBY_NORMAL_EVENTS, PTR2NUM((void *)this));
+    }
 
-        return true;
+    void uninstall_event_hooks() {
+        if (RTEST(tp_newobj)) {
+            rb_tracepoint_disable(tp_newobj);
+            tp_newobj = Qnil;
+        }
+
+        rb_internal_thread_remove_event_hook(thread_hook);
+        rb_remove_event_hook(internal_gc_event_cb);
+        rb_remove_event_hook(internal_thread_event_cb);
     }
 
     VALUE stop() {
@@ -1759,14 +1774,7 @@ class TimeCollector : public BaseCollector {
 
         GlobalSignalHandler::get_instance()->uninstall();
 
-        if (RTEST(tp_newobj)) {
-            rb_tracepoint_disable(tp_newobj);
-            tp_newobj = Qnil;
-        }
-
-        rb_internal_thread_remove_event_hook(thread_hook);
-        rb_remove_event_hook(internal_gc_event_cb);
-        rb_remove_event_hook(internal_thread_event_cb);
+        uninstall_event_hooks();
 
         stack_table->finalize();
 
