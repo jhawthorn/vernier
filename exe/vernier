@@ -79,31 +79,13 @@ FLAGS:
       main = main_thread.data
       stack_table = main_thread.stack_table
 
-      weight_by_frame = Hash.new(0)
-
-      main["samples"]["stack"].zip(main["samples"]["weight"]).each do |stack, weight|
-        top_frame_index = stack_table.stack_frame_idx(stack)
-        func_index = stack_table.frame_func_idx(top_frame_index)
-        str = stack_table.func_name(func_index)
-        weight_by_frame[str] += weight
-      end
-
-      total = weight_by_frame.values.sum
-
-      header = ["Samples", "%", ""]
-      widths = header.map(&:bytesize)
-
-      columns = weight_by_frame.sort_by { |k,v| v }.reverse.first(top).map { |k,v|
-        entry = [v.to_s, ((v / total.to_f) * 100).round(1).to_s, k]
-        entry.each_with_index { |str, i| widths[i] = str.bytesize if widths[i] < str.bytesize }
-        entry
-      }
-
       puts Vernier::Output::Top.new(parsed_profile).output
 
       self_samples_by_frame = Hash.new do |h, k|
         h[k] = SamplesByLocation.new
       end
+
+      total = main["samples"]["weight"].sum
 
       main["samples"]["stack"].zip(main["samples"]["weight"]).each do |stack_idx, weight|
         # self time
