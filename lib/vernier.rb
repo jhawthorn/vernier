@@ -3,6 +3,7 @@
 require_relative "vernier/version"
 require_relative "vernier/collector"
 require_relative "vernier/stack_table"
+require_relative "vernier/parsed_profile"
 require_relative "vernier/result"
 require_relative "vernier/hooks"
 require_relative "vernier/vernier"

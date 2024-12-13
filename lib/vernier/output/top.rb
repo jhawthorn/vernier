@@ -8,15 +8,25 @@ module Vernier
       end
 
       def output
+        thread = @profile.main_thread
+        stack_table =
+          if thread.respond_to?(:stack_table)
+            thread.stack_table
+          else
+            @profile._stack_table
+          end
+
         stack_weights = Hash.new(0)
-        @profile.samples.zip(@profile.weights) do |stack_idx, weight|
+        thread[:samples].zip(thread[:weights]) do |stack_idx, weight|
           stack_weights[stack_idx] += weight
         end
 
         top_by_self = Hash.new(0)
         stack_weights.each do |stack_idx, weight|
-          stack = @profile.stack(stack_idx)
-          top_by_self[stack.leaf_frame.name] += weight
+          frame_idx = stack_table.stack_frame_idx(stack_idx)
+          func_idx = stack_table.frame_func_idx(frame_idx)
+          name = stack_table.func_name(func_idx)
+          top_by_self[name] += weight
         end
 
         s = +""

@@ -61,6 +61,19 @@ module Vernier
       def main_thread?
         @data["isMainThread"]
       end
+
+      def samples
+        @data["samples"]["stack"]
+      end
+
+      def weights
+        @data["samples"]["weight"]
+      end
+
+      # Emulate hash
+      def [](name)
+        send(name)
+      end
     end
 
     attr_reader :data

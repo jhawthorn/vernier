@@ -26,6 +26,16 @@ class TestOutputTop < Minitest::Test
     assert_match(/^\d+\tGVLTest\.sleep_without_gvl$/, output)
     assert_match(/^\d+\tGVLTest\.sleep_holding_gvl$/, output)
     assert_match(/^\d+\tKernel#sleep$/, output)
-    assert_match(/^\d+\tProcess.clock_gettime$/, output)
+    assert_match(/^\d+\tProcess\.clock_gettime$/, output)
+  end
+
+  def test_parsed_profile
+    profile = Vernier::ParsedProfile.read_file(fixture_path("gvl_sleep.vernier.json"))
+    output = Vernier::Output::Top.new(profile).output
+    assert_match(/^2010\tGVLTest\.sleep_without_gvl$/, output)
+    assert_match(/^2013\tGVLTest\.sleep_holding_gvl$/, output)
+    assert_match(/^2010\tKernel#sleep$/, output)
+    assert_match(/^1989\tObject#ruby_sleep_gvl$/, output)
+    assert_match(/^10\tProcess\.clock_gettime$/, output)
   end
 end
