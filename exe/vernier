@@ -72,6 +72,7 @@ FLAGS:
     def self.inverted_tree(top, file)
       # Print the inverted tree from a Vernier profile
       require "vernier/parsed_profile"
+      require "vernier/output/top"
 
       parsed_profile = Vernier::ParsedProfile.read_file(file)
       main_thread = parsed_profile.main_thread
@@ -98,11 +99,7 @@ FLAGS:
         entry
       }
 
-      print_separator widths
-      print_row header, widths
-      print_separator widths
-      columns.each { print_row(_1, widths) }
-      print_separator widths
+      puts Vernier::Output::Top.new(parsed_profile).output
 
       self_samples_by_frame = Hash.new do |h, k|
         h[k] = SamplesByLocation.new
@@ -174,14 +171,6 @@ FLAGS:
         end
       end
       puts output
-    end
-
-    def self.print_row(list, widths)
-      puts("|" + list.map.with_index { |str, i| " " + str.ljust(widths[i] + 1) }.join("|") + "|")
-    end
-
-    def self.print_separator(widths)
-      puts("+" + widths.map { |i| "-" * (i + 2) }.join("+") + "+")
     end
   end
 end
