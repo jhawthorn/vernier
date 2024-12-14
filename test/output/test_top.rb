@@ -23,10 +23,10 @@ class TestOutputTop < Minitest::Test
     end
 
     output = Vernier::Output::Top.new(result).output
-    assert_match(/^| \d+ *| \d+\.\d *| GVLTest\.sleep_without_gvl *|$/, output)
-    assert_match(/^| \d+ *| \d+\.\d *| GVLTest\.sleep_holding_gvl *|$/, output)
-    assert_match(/^| \d+ *| \d+\.\d *| Kernel#sleep *|$/, output)
-    assert_match(/^| \d+ *| \d+\.\d *| Process\.clock_gettime *|$/, output)
+    assert_match(/^| \d+ *\| \d+\.\d *\| GVLTest\.sleep_without_gvl *\|$/, output)
+    assert_match(/^| \d+ *\| \d+\.\d *\| GVLTest\.sleep_holding_gvl *\|$/, output)
+    assert_match(/^| \d+ *\| \d+\.\d *\| Kernel#sleep *\|$/, output)
+    assert_match(/^| \d+ *\| \d+\.\d *\| Process\.clock_gettime *\|$/, output)
   end
 
   def test_parsed_profile

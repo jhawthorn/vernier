@@ -9,6 +9,8 @@ require_relative "vernier/hooks"
 require_relative "vernier/vernier"
 require_relative "vernier/output/firefox"
 require_relative "vernier/output/top"
+require_relative "vernier/output/file_listing"
+require_relative "vernier/output/filename_filter"
 
 module Vernier
   class Error < StandardError; end

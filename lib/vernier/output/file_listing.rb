@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "filename_filter"
+
 module Vernier
   module Output
     class FileListing
@@ -25,21 +27,26 @@ module Vernier
         output = +""
 
         thread = @profile.main_thread
-        main = thread.data
-        stack_table =
-          if thread.respond_to?(:stack_table)
-            thread.stack_table
-          else
-            @profile._stack_table
-          end
+        if Hash === thread
+          # live profile
+          stack_table = @profile._stack_table
+          weights = thread[:weights]
+          samples = thread[:samples]
+          filename_filter = FilenameFilter.new
+        else
+          stack_table = thread.stack_table
+          weights = thread.weights
+          samples = thread.samples
+          filename_filter = ->(x) { x }
+        end
 
         self_samples_by_frame = Hash.new do |h, k|
           h[k] = SamplesByLocation.new
         end
 
-        total = main["samples"]["weight"].sum
+        total = weights.sum
 
-        main["samples"]["stack"].zip(main["samples"]["weight"]).each do |stack_idx, weight|
+        samples.zip(weights).each do |stack_idx, weight|
           # self time
           top_frame_index = stack_table.stack_frame_idx(stack_idx)
           self_samples_by_frame[top_frame_index].self += weight
@@ -58,17 +65,17 @@ module Vernier
           end
         end
 
-        frame_lines = main["frameTable"]["line"]
-        func_filenames = main["funcTable"]["fileName"]
         self_samples_by_frame.each do |frame, samples|
           line = stack_table.frame_line_no(frame)
           func_index = stack_table.frame_func_idx(frame)
-          filename = stack_table.func_filename_idx(func_index)
+          filename = stack_table.func_filename(func_index)
 
           samples_by_file[filename][line] += samples
         end
 
-        samples_by_file.transform_keys! { stack_table.strings[_1] }
+        samples_by_file.transform_keys! do |filename|
+          filename_filter.call(filename)
+        end
 
         relevant_files = samples_by_file.select do |k, v|
           next if k.start_with?("gem:")
