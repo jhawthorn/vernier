@@ -99,12 +99,9 @@ module Vernier
         output << sprintf(" TOTAL |  SELF  | LINE SOURCE\n")
         File.readlines(filename).each_with_index do |line, i|
           lineno = i + 1
-          #wall, cpu, calls = lines[i + 1]
-          wall, cpu, calls = 0,0,0
           calls = samples[lineno]
 
           if calls && calls.total > 0
-            #output << sprintf("% 8.1fms (% 5d) | %s", wall, calls, line)
             output << sprintf("%5.1f%% | %5.1f%% | % 4i  %s", 100 * calls.total / total.to_f, 100 * calls.self / total.to_f, lineno, line)
           else
             output << sprintf("       |        | % 4i  %s", lineno, line)
