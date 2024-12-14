@@ -70,11 +70,6 @@ module Vernier
           top_by_self[name] += weight
         end
 
-        s = +""
-        top_by_self.sort_by(&:last).reverse.each do |frame, samples|
-          s << "#{samples}\t#{frame}\n"
-        end
-        s
         Table.new %w[Samples % name] do |t|
           top_by_self.sort_by(&:last).reverse.each do |frame, samples|
             pct = 100.0 * samples / total

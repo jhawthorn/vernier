@@ -21,10 +21,10 @@ class TestOutputFileListing < Minitest::Test
     end
 
     output = Vernier::Output::FileListing.new(result).output
-    assert_match(/\d+\.\d% \| *\d\.\d% \| *\d+ +sleep 0\.01/, output)
-    assert_match(/\d+\.\d% \| *\d\.\d% \| *\d+ +GVLTest\.sleep_without_gvl/, output)
-    assert_match(/\d+\.\d% \| *\d\.\d% \| *\d+ +GVLTest\.sleep_holding_gvl/, output)
-    assert_match(/\d+\.\d% \| *\d\.\d% \| *\d+ +while Process\.clock_gettime/, output)
+    assert_match(/\d+\.\d% \| *\d+\.\d% \| *\d+ +sleep 0\.01/, output)
+    assert_match(/\d+\.\d% \| *\d+\.\d% \| *\d+ +GVLTest\.sleep_without_gvl/, output)
+    assert_match(/\d+\.\d% \| *\d+\.\d% \| *\d+ +GVLTest\.sleep_holding_gvl/, output)
+    assert_match(/\d+\.\d% \| *\d+\.\d% \| *\d+ +while Process\.clock_gettime/, output)
   end
 
   def test_parsed_profile
