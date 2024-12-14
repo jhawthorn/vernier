@@ -3,11 +3,14 @@
 require_relative "vernier/version"
 require_relative "vernier/collector"
 require_relative "vernier/stack_table"
+require_relative "vernier/parsed_profile"
 require_relative "vernier/result"
 require_relative "vernier/hooks"
 require_relative "vernier/vernier"
 require_relative "vernier/output/firefox"
 require_relative "vernier/output/top"
+require_relative "vernier/output/file_listing"
+require_relative "vernier/output/filename_filter"
 
 module Vernier
   class Error < StandardError; end

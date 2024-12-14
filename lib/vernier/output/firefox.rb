@@ -3,6 +3,8 @@
 require "json"
 require "rbconfig"
 
+require_relative "filename_filter"
+
 module Vernier
   module Output
     # https://profiler.firefox.com/
@@ -324,23 +326,9 @@ module Vernier
         end
 
         def filter_filenames(filenames)
-          pwd = "#{Dir.pwd}/"
-          gem_regex = %r{\A#{Regexp.union(Gem.path)}/gems/}
-          gem_match_regex = %r{\A#{Regexp.union(Gem.path)}/gems/([a-zA-Z](?:[a-zA-Z0-9\.\_]|-[a-zA-Z])*)-([0-9][0-9A-Za-z\-_\.]*)/(.*)\z}
-          rubylibdir = "#{RbConfig::CONFIG["rubylibdir"]}/"
-
+          filter = FilenameFilter.new
           filenames.map do |filename|
-            if filename.match?(gem_regex)
-              gem_match_regex =~ filename
-              "gem:#$1-#$2:#$3"
-            elsif filename.start_with?(pwd)
-              filename.delete_prefix(pwd)
-            elsif filename.start_with?(rubylibdir)
-              path = filename.delete_prefix(rubylibdir)
-              "rubylib:#{RUBY_VERSION}:#{path}"
-            else
-              filename
-            end
+            filter.call(filename)
           end
         end
 

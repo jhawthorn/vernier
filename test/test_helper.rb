@@ -11,6 +11,10 @@ require "minitest/autorun"
 class Minitest::Test
   make_my_diffs_pretty!
 
+  def fixture_path(filename)
+    File.expand_path("fixtures/#{filename}", __dir__)
+  end
+
   def assert_valid_result(result)
     assert_equal result.samples.length, result.weights.length
 
