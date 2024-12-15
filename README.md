@@ -22,7 +22,7 @@ Rails benchmark - lobste.rs (time)
 
 ## Installation
 
-Vernier requires Ruby version 3.2.1 or greater.
+Vernier requires Ruby version 3.2.1 or greater and a Unix-like operating system.
 
 ```ruby
 gem "vernier", "~> 1.0"
