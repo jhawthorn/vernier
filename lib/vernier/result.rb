@@ -61,9 +61,9 @@ module Vernier
     end
 
     class BaseType
-      attr_reader :result, :idx
-      def initialize(result, idx)
-        @result = result
+      attr_reader :stack_table, :idx
+      def initialize(stack_table, idx)
+        @stack_table = stack_table
         @idx = idx
       end
 
@@ -78,12 +78,12 @@ module Vernier
 
     class Func < BaseType
       def label
-        result._stack_table.func_name(idx)
+        stack_table.func_name(idx)
       end
       alias name label
 
       def filename
-        result._stack_table.func_filename(idx)
+        stack_table.func_filename(idx)
       end
 
       def to_s
@@ -97,12 +97,12 @@ module Vernier
       alias name label
 
       def func
-        func_idx = result._stack_table.frame_func_idx(idx)
-        Func.new(result, func_idx)
+        func_idx = stack_table.frame_func_idx(idx)
+        Func.new(stack_table, func_idx)
       end
 
       def line
-        result._stack_table.frame_line_no(idx)
+        stack_table.frame_line_no(idx)
       end
 
       def to_s
@@ -116,18 +116,18 @@ module Vernier
 
         stack_idx = idx
         while stack_idx
-          frame_idx = result._stack_table.stack_frame_idx(stack_idx)
-          yield Frame.new(result, frame_idx)
-          stack_idx = result._stack_table.stack_parent_idx(stack_idx)
+          frame_idx = stack_table.stack_frame_idx(stack_idx)
+          yield Frame.new(stack_table, frame_idx)
+          stack_idx = stack_table.stack_parent_idx(stack_idx)
         end
       end
 
       def leaf_frame_idx
-        result._stack_table.stack_frame_idx(idx)
+        stack_table.stack_frame_idx(idx)
       end
 
       def leaf_frame
-        Frame.new(result, leaf_frame_idx)
+        Frame.new(stack_table, leaf_frame_idx)
       end
 
       def frames
@@ -144,7 +144,7 @@ module Vernier
     end
 
     def stack(idx)
-      Stack.new(self, idx)
+      Stack.new(_stack_table, idx)
     end
 
     def total_bytes
