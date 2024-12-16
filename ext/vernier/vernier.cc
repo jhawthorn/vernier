@@ -1201,6 +1201,12 @@ class BaseCollector {
         return Qnil;
     }
 
+    virtual void pause() {
+    }
+
+    virtual void resume() {
+    }
+
     virtual void write_meta(VALUE meta, VALUE result) {
         rb_hash_aset(meta, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
         rb_hash_aset(meta, sym("interval"), Qnil);
@@ -1737,17 +1743,19 @@ class TimeCollector : public BaseCollector {
         // events and we need at least one
         this->threads.resumed(rb_thread_current());
 
-        resume_profiling();
-
-        running = true;
+        resume();
 
         return true;
     }
 
-    void resume_profiling() {
+    void resume() {
+        BaseCollector::resume();
+
         collector_thread.start();
         GlobalSignalHandler::get_instance()->install();
         install_event_hooks();
+
+        running = true;
     }
 
     void install_event_hooks() {
@@ -1772,16 +1780,20 @@ class TimeCollector : public BaseCollector {
         rb_remove_event_hook(internal_thread_event_cb);
     }
 
-    void pause_profiling() {
+    void pause() {
+        BaseCollector::pause();
+
         collector_thread.stop();
         GlobalSignalHandler::get_instance()->uninstall();
         uninstall_event_hooks();
+
+        running = false;
     }
 
     VALUE stop() {
         BaseCollector::stop();
 
-        pause_profiling();
+        pause();
 
         stack_table->finalize();
 
@@ -1879,6 +1891,20 @@ collector_start(VALUE self) {
 }
 
 static VALUE
+collector_pause(VALUE self) {
+    auto *collector = get_collector(self);
+    collector->pause();
+    return self;
+}
+
+static VALUE
+collector_resume(VALUE self) {
+    auto *collector = get_collector(self);
+    collector->resume();
+    return self;
+}
+
+static VALUE
 collector_stop(VALUE self) {
     auto *collector = get_collector(self);
 
@@ -1973,6 +1999,8 @@ Init_vernier(void)
   rb_undef_alloc_func(rb_cVernierCollector);
   rb_define_singleton_method(rb_cVernierCollector, "_new", collector_new, 2);
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
+  rb_define_method(rb_cVernierCollector, "pause", collector_pause, 0);
+  rb_define_method(rb_cVernierCollector, "resume", collector_resume, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
   rb_define_method(rb_cVernierCollector, "stack_table", collector_stack_table, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
