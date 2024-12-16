@@ -1065,10 +1065,6 @@ class Thread {
             return start_thread == ruby_thread;
         }
 
-        bool running() {
-            return state != State::STOPPED;
-        }
-
         void mark() {
         }
 };
@@ -1169,7 +1165,14 @@ class BaseCollector {
 
     public:
     VALUE self = Qnil;
-    bool running = false;
+
+    enum State {
+        STATE_INIT,
+        STATE_PAUSED,
+        STATE_RUNNING
+    };
+    State state = STATE_INIT;
+
     StackTable *stack_table;
     VALUE stack_table_value;
 
@@ -1180,31 +1183,37 @@ class BaseCollector {
     }
     virtual ~BaseCollector() {}
 
+    bool is_running() {
+        return state == STATE_RUNNING;
+    }
+
     virtual bool start() {
-        if (running) {
+        if (is_running()) {
             return false;
         }
 
         start_thread = rb_thread_current();
         started_at = TimeStamp::Now();
 
-        running = true;
+        state = STATE_RUNNING;
         return true;
     }
 
     virtual VALUE stop() {
-        if (!running) {
+        if (!is_running()) {
             rb_raise(rb_eRuntimeError, "collector not running");
         }
-        running = false;
+        state = STATE_PAUSED;
 
         return Qnil;
     }
 
     virtual void pause() {
+        state = STATE_PAUSED;
     }
 
     virtual void resume() {
+        state = STATE_RUNNING;
     }
 
     virtual void write_meta(VALUE meta, VALUE result) {
@@ -1529,7 +1538,6 @@ class TimeCollector : public BaseCollector {
 
     pthread_t sample_thread;
 
-    atomic_bool running;
     SignalSafeSemaphore thread_stopped;
 
     TimeStamp interval;
@@ -1743,19 +1751,23 @@ class TimeCollector : public BaseCollector {
         // events and we need at least one
         this->threads.resumed(rb_thread_current());
 
-        resume();
+        resume_profiling();
 
         return true;
     }
 
-    void resume() {
-        BaseCollector::resume();
-
+    void resume_profiling() {
         collector_thread.start();
         GlobalSignalHandler::get_instance()->install();
         install_event_hooks();
+    }
 
-        running = true;
+    void resume() {
+        if (state != STATE_RUNNING) {
+            BaseCollector::resume();
+
+            resume_profiling();
+        }
     }
 
     void install_event_hooks() {
@@ -1775,25 +1787,35 @@ class TimeCollector : public BaseCollector {
             tp_newobj = Qnil;
         }
 
+        RUBY_ASSERT_ALWAYS(thread_hook);
         rb_internal_thread_remove_event_hook(thread_hook);
+        thread_hook = NULL;
         rb_remove_event_hook(internal_gc_event_cb);
         rb_remove_event_hook(internal_thread_event_cb);
     }
 
-    void pause() {
-        BaseCollector::pause();
-
+    void pause_profiling() {
         collector_thread.stop();
         GlobalSignalHandler::get_instance()->uninstall();
         uninstall_event_hooks();
+    }
 
-        running = false;
+    void pause() {
+        if (is_running()) {
+            BaseCollector::pause();
+
+            pause_profiling();
+
+            state = STATE_PAUSED;
+        } else {
+            cout << "called pause, but state is: " << state << endl;
+        }
     }
 
     VALUE stop() {
         BaseCollector::stop();
 
-        pause();
+        pause_profiling();
 
         stack_table->finalize();
 
