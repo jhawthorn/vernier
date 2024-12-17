@@ -206,6 +206,44 @@ StackTable::stack_table_func_filename(VALUE self, VALUE idxval) {
 }
 
 VALUE
+StackTable::stack_table_func_path(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    auto &table = stack_table->func_info_list;
+    if (idx < 0 || idx >= table.size()) {
+        return Qnil;
+    } else {
+        const auto &func_info = table[idx];
+        std::string filename = func_info.path;
+
+        // Technically filesystems are binary and then Ruby interprets that as
+        // default_external encoding. But to keep things simple for now we are
+        // going to assume UTF-8.
+        return rb_enc_interned_str(filename.c_str(), filename.length(), rb_utf8_encoding());
+    }
+}
+
+VALUE
+StackTable::stack_table_func_absolute_path(VALUE self, VALUE idxval) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    int idx = NUM2INT(idxval);
+    auto &table = stack_table->func_info_list;
+    if (idx < 0 || idx >= table.size()) {
+        return Qnil;
+    } else {
+        const auto &func_info = table[idx];
+        std::string filename = func_info.absolute_path;
+
+        // Technically filesystems are binary and then Ruby interprets that as
+        // default_external encoding. But to keep things simple for now we are
+        // going to assume UTF-8.
+        return rb_enc_interned_str(filename.c_str(), filename.length(), rb_utf8_encoding());
+    }
+}
+
+VALUE
 StackTable::stack_table_func_first_lineno(VALUE self, VALUE idxval) {
     StackTable *stack_table = get_stack_table(self);
     stack_table->finalize();
@@ -234,6 +272,8 @@ void Init_stack_table() {
   rb_define_method(rb_cStackTable, "frame_line_no", StackTable::stack_table_frame_line_no, 1);
   rb_define_method(rb_cStackTable, "frame_func_idx", StackTable::stack_table_frame_func_idx, 1);
   rb_define_method(rb_cStackTable, "func_name", StackTable::stack_table_func_name, 1);
+  rb_define_method(rb_cStackTable, "func_path", StackTable::stack_table_func_path, 1);
+  rb_define_method(rb_cStackTable, "func_absolute_path", StackTable::stack_table_func_absolute_path, 1);
   rb_define_method(rb_cStackTable, "func_filename", StackTable::stack_table_func_filename, 1);
   rb_define_method(rb_cStackTable, "func_first_lineno", StackTable::stack_table_func_first_lineno, 1);
   rb_define_method(rb_cStackTable, "stack_count", StackTable::stack_table_stack_count, 0);
