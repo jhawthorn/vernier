@@ -1,12 +1,7 @@
 module Vernier
   class Result
-    def stack_table=(stack_table)
-      @stack_table = stack_table
-    end
-
-    def _stack_table
-      @stack_table
-    end
+    attr_accessor :stack_table
+    alias _stack_table stack_table
 
     attr_reader :gc_markers
 
