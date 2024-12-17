@@ -1457,6 +1457,7 @@ Init_vernier(void)
   Init_consts(rb_mVernierMarkerPhase);
   Init_memory();
   Init_stack_table();
+  Init_allocation_tracer();
 
   //static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, collector_mark, NULL, &_collector);
   //rb_global_variable(&gc_hook);
