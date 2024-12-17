@@ -1065,10 +1065,6 @@ class Thread {
             return start_thread == ruby_thread;
         }
 
-        bool running() {
-            return state != State::STOPPED;
-        }
-
         void mark() {
         }
 };
@@ -1168,7 +1164,15 @@ class BaseCollector {
     }
 
     public:
-    bool running = false;
+    VALUE self = Qnil;
+
+    enum State {
+        STATE_INIT,
+        STATE_PAUSED,
+        STATE_RUNNING
+    };
+    State state = STATE_INIT;
+
     StackTable *stack_table;
     VALUE stack_table_value;
 
@@ -1179,25 +1183,37 @@ class BaseCollector {
     }
     virtual ~BaseCollector() {}
 
+    bool is_running() {
+        return state == STATE_RUNNING;
+    }
+
     virtual bool start() {
-        if (running) {
+        if (is_running()) {
             return false;
         }
 
         start_thread = rb_thread_current();
         started_at = TimeStamp::Now();
 
-        running = true;
+        state = STATE_RUNNING;
         return true;
     }
 
     virtual VALUE stop() {
-        if (!running) {
+        if (!is_running()) {
             rb_raise(rb_eRuntimeError, "collector not running");
         }
-        running = false;
+        state = STATE_PAUSED;
 
         return Qnil;
+    }
+
+    virtual void pause() {
+        state = STATE_PAUSED;
+    }
+
+    virtual void resume() {
+        state = STATE_RUNNING;
     }
 
     virtual void write_meta(VALUE meta, VALUE result) {
@@ -1224,9 +1240,11 @@ class BaseCollector {
     virtual void mark() {
         //frame_list.mark_frames();
         rb_gc_mark(stack_table_value);
+        rb_gc_mark(self);
     };
 
     virtual void compact() {
+        self = rb_gc_location(self);
     };
 };
 
@@ -1520,7 +1538,6 @@ class TimeCollector : public BaseCollector {
 
     pthread_t sample_thread;
 
-    atomic_bool running;
     SignalSafeSemaphore thread_stopped;
 
     TimeStamp interval;
@@ -1727,17 +1744,6 @@ class TimeCollector : public BaseCollector {
             this->threads.initial(thread);
         }
 
-        if (allocation_interval > 0) {
-            tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
-            rb_tracepoint_enable(tp_newobj);
-        }
-
-        GlobalSignalHandler::get_instance()->install();
-
-        running = true;
-
-        collector_thread.start();
-
         // Set the state of the current Ruby thread to RUNNING, which we know it
         // is as it must have held the GVL to start the collector. We want to
         // have at least one thread in our thread list because it's possible
@@ -1745,28 +1751,71 @@ class TimeCollector : public BaseCollector {
         // events and we need at least one
         this->threads.resumed(rb_thread_current());
 
-        thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
-        rb_add_event_hook(internal_gc_event_cb, RUBY_INTERNAL_EVENTS, PTR2NUM((void *)this));
-        rb_add_event_hook(internal_thread_event_cb, RUBY_NORMAL_EVENTS, PTR2NUM((void *)this));
+        resume_profiling();
 
         return true;
     }
 
-    VALUE stop() {
-        BaseCollector::stop();
+    void resume_profiling() {
+        collector_thread.start();
+        GlobalSignalHandler::get_instance()->install();
+        install_event_hooks();
+    }
 
-        collector_thread.stop();
+    void resume() {
+        if (state != STATE_RUNNING) {
+            BaseCollector::resume();
 
-        GlobalSignalHandler::get_instance()->uninstall();
+            resume_profiling();
+        }
+    }
 
+    void install_event_hooks() {
+        if (allocation_interval > 0) {
+            tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
+            rb_tracepoint_enable(tp_newobj);
+        }
+
+        thread_hook = rb_internal_thread_add_event_hook(internal_thread_event_cb, RUBY_INTERNAL_THREAD_EVENT_MASK, this);
+        rb_add_event_hook(internal_gc_event_cb, RUBY_INTERNAL_EVENTS, PTR2NUM((void *)this));
+        rb_add_event_hook(internal_thread_event_cb, RUBY_NORMAL_EVENTS, PTR2NUM((void *)this));
+    }
+
+    void uninstall_event_hooks() {
         if (RTEST(tp_newobj)) {
             rb_tracepoint_disable(tp_newobj);
             tp_newobj = Qnil;
         }
 
+        RUBY_ASSERT_ALWAYS(thread_hook);
         rb_internal_thread_remove_event_hook(thread_hook);
+        thread_hook = NULL;
         rb_remove_event_hook(internal_gc_event_cb);
         rb_remove_event_hook(internal_thread_event_cb);
+    }
+
+    void pause_profiling() {
+        collector_thread.stop();
+        GlobalSignalHandler::get_instance()->uninstall();
+        uninstall_event_hooks();
+    }
+
+    void pause() {
+        if (is_running()) {
+            BaseCollector::pause();
+
+            pause_profiling();
+
+            state = STATE_PAUSED;
+        } else {
+            cout << "called pause, but state is: " << state << endl;
+        }
+    }
+
+    VALUE stop() {
+        BaseCollector::stop();
+
+        pause_profiling();
 
         stack_table->finalize();
 
@@ -1864,6 +1913,26 @@ collector_start(VALUE self) {
 }
 
 static VALUE
+collector_pause(VALUE self) {
+    auto *collector = get_collector(self);
+    collector->pause();
+    return self;
+}
+
+static VALUE
+collector_resume(VALUE self) {
+    auto *collector = get_collector(self);
+    collector->resume();
+    return self;
+}
+
+static VALUE
+collector_running_p(VALUE self) {
+    auto *collector = get_collector(self);
+    return collector->is_running() ? Qtrue : Qfalse;
+}
+
+static VALUE
 collector_stop(VALUE self) {
     auto *collector = get_collector(self);
 
@@ -1918,6 +1987,7 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         rb_raise(rb_eArgError, "invalid mode");
     }
     VALUE obj = TypedData_Wrap_Struct(self, &rb_collector_type, collector);
+    collector->self = obj;
     rb_funcall(obj, rb_intern("initialize"), 2, mode, options);
     return obj;
 }
@@ -1957,6 +2027,9 @@ Init_vernier(void)
   rb_undef_alloc_func(rb_cVernierCollector);
   rb_define_singleton_method(rb_cVernierCollector, "_new", collector_new, 2);
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
+  rb_define_method(rb_cVernierCollector, "pause", collector_pause, 0);
+  rb_define_method(rb_cVernierCollector, "resume", collector_resume, 0);
+  rb_define_method(rb_cVernierCollector, "running?", collector_running_p, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
   rb_define_method(rb_cVernierCollector, "stack_table", collector_stack_table, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);

@@ -242,6 +242,34 @@ class TestTimeCollector < Minitest::Test
     assert_similar 200, result.weights.sum
   end
 
+  def test_pause_resume
+    expected_lines = []
+    unexpected_lines = []
+    collector = Vernier::Collector.new(:wall, interval: SAMPLE_SCALE_INTERVAL)
+    collector.start
+    slow_method; expected_lines << __LINE__
+    collector.pause
+    slow_method; unexpected_lines << __LINE__
+    collector.resume
+    slow_method; expected_lines << __LINE__
+    result = collector.stop
+    assert_valid_result result
+
+    stack_table = result._stack_table
+    lines = result.samples.map do |sample|
+      stack = result.stack(sample)
+      frame = stack.frames.detect { _1.name.end_with?(__method__.to_s) }
+      frame.line
+    end
+    expected_lines.each do |line|
+      assert_includes lines, line
+    end
+    unexpected_lines.each do |line|
+      refute_includes lines, line
+    end
+  end
+
+
   def test_multiple_starts
     error = assert_raises(RuntimeError) do
       Vernier.start_profile(interval: SAMPLE_SCALE_INTERVAL)

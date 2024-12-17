@@ -13,6 +13,10 @@ module Vernier
       @names[object_id] || "thread obj_id:#{object_id}"
     end
 
+    def cancel
+      @tp.disable
+    end
+
     def finish
       collect_running
       @tp.disable
