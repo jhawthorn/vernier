@@ -55,6 +55,16 @@ starting profiler with interval 100 and allocation interval 10
 written to /tmp/profile20241029-26525-dalmym.vernier.json.gz
 ```
 
+#### Autorun
+
+Vernier can be enabled globally within a Ruby script or application:
+
+```ruby
+require "vernier/autorun
+```
+
+For example, adding this to a Rails application's `config/application.rb` will enable Vernier during boot and output a recording when exited.
+
 #### Block of code
 
 ``` ruby
