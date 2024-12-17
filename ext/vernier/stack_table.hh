@@ -301,6 +301,8 @@ struct StackTable {
     static VALUE stack_table_frame_func_idx(VALUE self, VALUE idxval);
     static VALUE stack_table_func_name(VALUE self, VALUE idxval);
     static VALUE stack_table_func_filename(VALUE self, VALUE idxval);
+    static VALUE stack_table_func_path(VALUE self, VALUE idxval);
+    static VALUE stack_table_func_absolute_path(VALUE self, VALUE idxval);
     static VALUE stack_table_func_first_lineno(VALUE self, VALUE idxval);
 
     friend class SampleTranslator;

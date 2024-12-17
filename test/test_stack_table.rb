@@ -169,7 +169,7 @@ class TestStackTable < Minitest::Test
     expected = caller_locations(0); index = stack_table.current_stack
 
     expected.map! do |location|
-      "#{location.absolute_path}:#{location.lineno}:in '#{location.base_label}'"
+      "#{location.path}:#{location.lineno}:in '#{location.base_label}'"
     end
 
     actual = stack_table.backtrace(index)

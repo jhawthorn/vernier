@@ -23,15 +23,21 @@ module Vernier
     end
 
     def backtrace(stack_idx)
-      full_stack(stack_idx).map do |stack_idx|
+      last_filename = nil
+      last_lineno = nil
+      full_stack(stack_idx).reverse.map do |stack_idx|
         frame_idx = stack_frame_idx(stack_idx)
         func_idx = frame_func_idx(frame_idx)
         line = frame_line_no(frame_idx)
-        name = func_name(func_idx);
-        filename = func_filename(func_idx);
+        line = last_lineno if line == 0
+        last_lineno = line
+        name = func_name(func_idx)
+        filename = func_path(func_idx)
+        filename = last_filename if filename.empty?
+        last_filename = filename
 
         "#{filename}:#{line}:in '#{name}'"
-      end
+      end.reverse
     end
 
     def full_stack(stack_idx)
