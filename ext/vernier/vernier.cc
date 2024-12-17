@@ -55,7 +55,6 @@ VALUE rb_mVernier;
 static VALUE rb_cVernierResult;
 static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
-static VALUE rb_cStackTable;
 
 static VALUE sym_state, sym_gc_by, sym_fiber_id;
 
@@ -1383,7 +1382,7 @@ collector_stack_table(VALUE self) {
 static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
     BaseCollector *collector;
 
-    VALUE stack_table = stack_table_new(rb_cStackTable);
+    VALUE stack_table = StackTable::stack_table_new();
     if (mode == sym("retained")) {
         collector = new RetainedCollector(stack_table);
     } else if (mode == sym("custom")) {
@@ -1455,24 +1454,9 @@ Init_vernier(void)
   rb_define_method(rb_cVernierCollector, "stack_table", collector_stack_table, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
 
-  rb_cStackTable = rb_define_class_under(rb_mVernier, "StackTable", rb_cObject);
-  rb_undef_alloc_func(rb_cStackTable);
-  rb_define_singleton_method(rb_cStackTable, "new", stack_table_new, 0);
-  rb_define_method(rb_cStackTable, "current_stack", stack_table_current_stack, -1);
-  rb_define_method(rb_cStackTable, "convert", StackTable::stack_table_convert, 2);
-  rb_define_method(rb_cStackTable, "stack_parent_idx", stack_table_stack_parent_idx, 1);
-  rb_define_method(rb_cStackTable, "stack_frame_idx", stack_table_stack_frame_idx, 1);
-  rb_define_method(rb_cStackTable, "frame_line_no", StackTable::stack_table_frame_line_no, 1);
-  rb_define_method(rb_cStackTable, "frame_func_idx", StackTable::stack_table_frame_func_idx, 1);
-  rb_define_method(rb_cStackTable, "func_name", StackTable::stack_table_func_name, 1);
-  rb_define_method(rb_cStackTable, "func_filename", StackTable::stack_table_func_filename, 1);
-  rb_define_method(rb_cStackTable, "func_first_lineno", StackTable::stack_table_func_first_lineno, 1);
-  rb_define_method(rb_cStackTable, "stack_count", StackTable::stack_table_stack_count, 0);
-  rb_define_method(rb_cStackTable, "frame_count", StackTable::stack_table_frame_count, 0);
-  rb_define_method(rb_cStackTable, "func_count", StackTable::stack_table_func_count, 0);
-
   Init_consts(rb_mVernierMarkerPhase);
   Init_memory();
+  Init_stack_table();
 
   //static VALUE gc_hook = Data_Wrap_Struct(rb_cObject, collector_mark, NULL, &_collector);
   //rb_global_variable(&gc_hook);
