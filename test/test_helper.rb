@@ -16,8 +16,6 @@ class Minitest::Test
   end
 
   def assert_valid_result(result)
-    assert_equal result.samples.length, result.weights.length
-
     stack_table_size = result._stack_table.stack_count
 
     assert_kind_of Integer, result.pid
@@ -40,6 +38,8 @@ class Minitest::Test
 
       assert_kind_of Array, thread[:samples]
       assert_kind_of Array, thread[:weights]
+      assert_equal thread[:samples].length, thread[:weights].length
+
       unless mode == :retained
         assert_kind_of Array, thread[:timestamps]
         assert_kind_of Array, thread[:sample_categories]
