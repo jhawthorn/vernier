@@ -1927,6 +1927,12 @@ collector_resume(VALUE self) {
 }
 
 static VALUE
+collector_running_p(VALUE self) {
+    auto *collector = get_collector(self);
+    return collector->is_running() ? Qtrue : Qfalse;
+}
+
+static VALUE
 collector_stop(VALUE self) {
     auto *collector = get_collector(self);
 
@@ -2023,6 +2029,7 @@ Init_vernier(void)
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
   rb_define_method(rb_cVernierCollector, "pause", collector_pause, 0);
   rb_define_method(rb_cVernierCollector, "resume", collector_resume, 0);
+  rb_define_method(rb_cVernierCollector, "running?", collector_running_p, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
   rb_define_method(rb_cVernierCollector, "stack_table", collector_stack_table, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
