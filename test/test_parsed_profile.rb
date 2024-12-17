@@ -8,5 +8,8 @@ class TestParsedProfile < Minitest::Test
     path = File.expand_path("../fixtures/gvl_sleep.vernier.json", __FILE__)
     parsed_profile = Vernier::ParsedProfile.read_file(path)
     main_thread = parsed_profile.main_thread
+
+    stack_table = main_thread.stack_table
+    assert_equal "#<Vernier::ParsedProfile::StackTable 742 stacks, 385 frames, 252 funcs>", stack_table.inspect
   end
 end

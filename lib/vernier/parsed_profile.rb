@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require_relative "stack_table_helpers"
 
 module Vernier
   class ParsedProfile
@@ -34,6 +35,10 @@ module Vernier
 
       attr_reader :strings
 
+      def stack_count = @stack_parents.length
+      def frame_count = @frame_funcs.length
+      def func_count = @func_names.length
+
       def stack_parent_idx(idx) = @stack_parents[idx]
       def stack_frame_idx(idx) = @stack_frames[idx]
 
@@ -45,6 +50,8 @@ module Vernier
       def func_name(idx) = @strings[func_name_idx(idx)]
       def func_filename(idx) = @strings[func_filename_idx(idx)]
       def func_first_lineno(idx) = @func_first_lineno[idx]
+
+      include StackTableHelpers
     end
 
     class Thread
