@@ -89,9 +89,14 @@ module Vernier
       def line
         stack_table.frame_line_no(idx)
       end
+      alias lineno line
 
       def to_s
-        "#{func}:#{line}"
+        if (line = self.line) == 0
+          func.to_s
+        else
+          "#{func}:#{line}"
+        end
       end
     end
 

@@ -10,11 +10,14 @@ class TestAllocationTracer < Minitest::Test
       obj1 = Object.new; lines << __LINE__
       obj2 = Object.new; lines << __LINE__
     end
-    stack = allocations.stack(obj1)
-    pp stack
-    binding.irb
-    p stack[1]
-    #file = allocations.sourcefile(obj1)
-    #line = allocations.sourceline(obj2)
+    stack1 = allocations.stack(obj1)
+    stack2 = allocations.stack(obj2)
+
+    assert_equal "Class#new at <cfunc>", stack1[0].to_s
+
+    assert_equal File.expand_path(__FILE__), stack1[1].filename
+    assert_equal lines[0], stack1[1].lineno
+    assert_equal File.expand_path(__FILE__), stack2[1].filename
+    assert_equal lines[1], stack2[1].lineno
   end
 end

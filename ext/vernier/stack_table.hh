@@ -104,9 +104,13 @@ struct FuncInfo {
 
     std::string full_label() const {
         std::string output;
-        output.append(classpath);
-        output.append(is_singleton ? "." : "#");
-        output.append(method_name);
+        if (!method_name.empty()) {
+            output.append(classpath);
+            output.append(is_singleton ? "." : "#");
+            output.append(method_name);
+        } else {
+            output.append(label);
+        }
         return output;
     }
 
