@@ -1,6 +1,8 @@
 #ifndef STACK_TABLE_HH
 #define STACK_TABLE_HH STACK_TABLE_HH
 
+#include <mutex>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <vector>
