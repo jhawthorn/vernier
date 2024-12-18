@@ -23,15 +23,21 @@ module Vernier
     end
 
     def backtrace(stack_idx)
-      full_stack(stack_idx).map do |stack_idx|
+      last_filename = nil
+      last_lineno = nil
+      full_stack(stack_idx).reverse.map do |stack_idx|
         frame_idx = stack_frame_idx(stack_idx)
         func_idx = frame_func_idx(frame_idx)
         line = frame_line_no(frame_idx)
-        name = func_name(func_idx);
-        filename = func_filename(func_idx);
+        line = last_lineno if line == 0
+        last_lineno = line
+        name = func_name(func_idx)
+        filename = func_path(func_idx)
+        filename = last_filename if filename.empty?
+        last_filename = filename
 
         "#{filename}:#{line}:in '#{name}'"
-      end
+      end.reverse
     end
 
     def full_stack(stack_idx)
@@ -83,14 +89,19 @@ module Vernier
       def line
         stack_table.frame_line_no(idx)
       end
+      alias lineno line
 
       def to_s
-        "#{func}:#{line}"
+        if (line = self.line) == 0
+          func.to_s
+        else
+          "#{func}:#{line}"
+        end
       end
     end
 
     class Stack < BaseType
-      def each_frame
+      def each
         return enum_for(__method__) unless block_given?
 
         stack_idx = idx
@@ -98,6 +109,18 @@ module Vernier
           frame_idx = stack_table.stack_frame_idx(stack_idx)
           yield Frame.new(stack_table, frame_idx)
           stack_idx = stack_table.stack_parent_idx(stack_idx)
+        end
+      end
+      alias each_frame each
+
+      def [](offset)
+        stack_idx = idx
+        while stack_idx && offset > 0
+          stack_idx = stack_table.stack_parent_idx(stack_idx)
+          offset -= 1
+        end
+        if stack_idx && offset == 0
+          Frame.new(stack_table, stack_table.stack_frame_idx(stack_idx))
         end
       end
 

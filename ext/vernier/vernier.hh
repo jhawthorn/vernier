@@ -6,5 +6,7 @@
 extern VALUE rb_mVernier;
 
 void Init_memory();
+void Init_stack_table();
+void Init_allocation_tracer();
 
 #endif /* VERNIER_H */
