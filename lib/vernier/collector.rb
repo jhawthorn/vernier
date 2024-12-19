@@ -27,6 +27,8 @@ module Vernier
       end
     end
 
+    attr_reader :stack_table
+
     private def add_hook(hook)
       case hook.to_sym
       when :rails, :activesupport
