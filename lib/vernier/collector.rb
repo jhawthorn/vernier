@@ -5,6 +5,10 @@ require_relative "thread_names"
 
 module Vernier
   class Collector
+    def self.new(mode, options = {})
+      _new(mode, options)
+    end
+
     def initialize(mode, options = {})
       @gc = options.fetch(:gc, true) && (mode == :retained)
       GC.start if @gc
