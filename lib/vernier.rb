@@ -64,10 +64,4 @@ module Vernier
   def self.trace_retained(**profile_options, &block)
     profile(**profile_options.merge(mode: :retained), &block)
   end
-
-  class Collector
-    def self.new(mode, options = {})
-      _new(mode, options)
-    end
-  end
 end
