@@ -1372,13 +1372,6 @@ collector_sample(VALUE self) {
     return Qtrue;
 }
 
-static VALUE
-collector_stack_table(VALUE self) {
-    auto *collector = get_collector(self);
-
-    return collector->stack_table_value;
-}
-
 static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
     BaseCollector *collector;
 
@@ -1411,6 +1404,7 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         rb_raise(rb_eArgError, "invalid mode");
     }
     VALUE obj = TypedData_Wrap_Struct(self, &rb_collector_type, collector);
+    rb_ivar_set(obj, rb_intern("@stack_table"), stack_table);
     rb_funcall(obj, rb_intern("initialize"), 2, mode, options);
     return obj;
 }
@@ -1451,7 +1445,6 @@ Init_vernier(void)
   rb_define_singleton_method(rb_cVernierCollector, "_new", collector_new, 2);
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
   rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
-  rb_define_method(rb_cVernierCollector, "stack_table", collector_stack_table, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
 
   Init_consts(rb_mVernierMarkerPhase);

@@ -30,6 +30,8 @@ module Vernier
       @user_metadata = options[:metadata] || {}
     end
 
+    attr_reader :stack_table
+
     private def add_hook(hook)
       case hook.to_s.to_sym
       when :rails, :activesupport
