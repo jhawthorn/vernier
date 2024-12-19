@@ -174,11 +174,6 @@ class IndexMap {
 struct StackTable {
     private:
 
-    struct FrameWithInfo {
-        Frame frame;
-        FrameInfo info;
-    };
-
     IndexMap<Frame> frame_map;
 
     IndexMap<VALUE> func_map;
