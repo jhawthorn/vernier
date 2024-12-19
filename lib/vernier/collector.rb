@@ -5,8 +5,59 @@ require_relative "thread_names"
 
 module Vernier
   class Collector
+    class CustomCollector < Collector
+      def initialize(mode, options)
+        @stack_table = StackTable.new
+
+        @samples = []
+        @timestamps = []
+
+        # FIXME: is this correct or should it be CLOCK_REALTIME
+        @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
+        super
+      end
+
+      def sample
+        @samples << @stack_table.current_stack
+        @timestamps << Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
+      end
+
+      def start
+      end
+
+      def finish
+        result = Result.new
+        result.instance_variable_set(:@threads, {
+          0 => {
+            tid: 0,
+            name: "custom",
+            started_at: @started_at,
+            samples: @samples,
+            weights: [1] * @samples.size,
+            timestamps: @timestamps,
+            sample_categories: [0] * @samples.size,
+          }
+        })
+        result.instance_variable_set(:@meta, {
+          started_at: @started_at
+        })
+        result
+      end
+    end
+
     def self.new(mode, options = {})
-      _new(mode, options)
+      return super unless Collector.equal?(self)
+
+      case mode
+      when :wall
+        _new(mode, options)
+      when :custom
+        CustomCollector.new(mode, options)
+      when :retained
+        _new(mode, options)
+      else
+        raise ArgumentError, "invalid mode: #{mode.inspect}"
+      end
     end
 
     def initialize(mode, options = {})
