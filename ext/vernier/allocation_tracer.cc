@@ -5,11 +5,13 @@ static VALUE rb_cAllocationTracer;
 
 static void allocation_tracer_mark(void *data);
 static void allocation_tracer_free(void *data);
+static void allocation_tracer_compact(void *data);
 
 static const rb_data_type_t rb_allocation_tracer_type = {
     .wrap_struct_name = "vernier/allocation_tracer",
     .function = {
         //.dmemsize = rb_collector_memsize,
+        .dcompact = allocation_tracer_compact,
         .dmark = allocation_tracer_mark,
         .dfree = allocation_tracer_free,
     },
@@ -117,6 +119,22 @@ class AllocationTracer {
       rb_gc_mark(tp_newobj);
       rb_gc_mark(tp_freeobj);
     }
+
+    void compact() {
+        for (auto& obj: object_list) {
+            VALUE reloc_obj = rb_gc_location(obj);
+
+            const auto search = object_frames.find(obj);
+            if (search != object_frames.end()) {
+                int stack_index = search->second;
+
+                object_frames.erase(search);
+                object_frames.emplace(reloc_obj, stack_index);
+            }
+
+            obj = reloc_obj;
+        }
+    }
 };
 
 static void
@@ -129,6 +147,12 @@ static void
 allocation_tracer_free(void *data) {
     AllocationTracer *allocation_tracer = static_cast<AllocationTracer *>(data);
     delete allocation_tracer;
+}
+
+static void
+allocation_tracer_compact(void *data) {
+    AllocationTracer *allocation_tracer = static_cast<AllocationTracer *>(data);
+    allocation_tracer->compact();
 }
 
 void
