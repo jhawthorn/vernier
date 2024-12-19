@@ -723,51 +723,6 @@ class BaseCollector {
     };
 };
 
-class CustomCollector : public BaseCollector {
-    SampleList samples;
-
-    void sample() {
-        RawSample sample;
-        sample.sample();
-        int stack_index = stack_table->stack_index(sample);
-
-        samples.record_sample(stack_index, TimeStamp::Now(), CATEGORY_NORMAL);
-    }
-
-    VALUE stop() {
-        BaseCollector::stop();
-
-        stack_table->finalize();
-
-        VALUE result = build_collector_result();
-
-        reset();
-
-        return result;
-    }
-
-    VALUE build_collector_result() {
-        VALUE result = BaseCollector::build_collector_result();
-
-        VALUE threads = rb_hash_new();
-        rb_ivar_set(result, rb_intern("@threads"), threads);
-
-        VALUE thread_hash = rb_hash_new();
-        samples.write_result(thread_hash);
-
-        rb_hash_aset(threads, ULL2NUM(0), thread_hash);
-        rb_hash_aset(thread_hash, sym("tid"), ULL2NUM(0));
-        rb_hash_aset(thread_hash, sym("name"), rb_str_new_cstr("custom"));
-        rb_hash_aset(thread_hash, sym("started_at"), ULL2NUM(started_at.nanoseconds()));
-
-        return result;
-    }
-
-    public:
-
-    CustomCollector(VALUE stack_table) : BaseCollector(stack_table) { }
-};
-
 class RetainedCollector : public BaseCollector {
     void reset() {
         object_frames.clear();
@@ -1364,22 +1319,12 @@ collector_stop(VALUE self) {
     return result;
 }
 
-static VALUE
-collector_sample(VALUE self) {
-    auto *collector = get_collector(self);
-
-    collector->sample();
-    return Qtrue;
-}
-
 static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
     BaseCollector *collector;
 
     VALUE stack_table = StackTable::stack_table_new();
     if (mode == sym("retained")) {
         collector = new RetainedCollector(stack_table);
-    } else if (mode == sym("custom")) {
-        collector = new CustomCollector(stack_table);
     } else if (mode == sym("wall")) {
         VALUE intervalv = rb_hash_aref(options, sym("interval"));
         TimeStamp interval;
@@ -1441,10 +1386,9 @@ Init_vernier(void)
   rb_mVernierMarkerType = rb_define_module_under(rb_mVernierMarker, "Type");
 
   rb_cVernierCollector = rb_define_class_under(rb_mVernier, "Collector", rb_cObject);
-  rb_undef_alloc_func(rb_cVernierCollector);
+  //rb_undef_alloc_func(rb_cVernierCollector);
   rb_define_singleton_method(rb_cVernierCollector, "_new", collector_new, 2);
   rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
-  rb_define_method(rb_cVernierCollector, "sample", collector_sample, 0);
   rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
 
   Init_consts(rb_mVernierMarkerPhase);
