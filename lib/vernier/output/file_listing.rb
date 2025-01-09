@@ -23,9 +23,7 @@ module Vernier
         @profile = profile
       end
 
-      def output
-        output = +""
-
+      def samples_by_file
         thread = @profile.main_thread
         if Hash === thread
           # live profile
@@ -76,6 +74,10 @@ module Vernier
         samples_by_file.transform_keys! do |filename|
           filename_filter.call(filename)
         end
+      end
+
+      def output
+        output = +""
 
         relevant_files = samples_by_file.select do |k, v|
           next if k.start_with?("gem:")
@@ -90,6 +92,18 @@ module Vernier
           format_file(output, filename, samples_by_file, total: total)
         end
         output << "="*80 << "\n"
+      end
+
+      def total
+        thread = @profile.main_thread
+        if Hash === thread
+          # live profile
+          weights = thread[:weights]
+        else
+          weights = thread.weights
+        end
+
+        weights.sum
       end
 
       def format_file(output, filename, all_samples, total:)
