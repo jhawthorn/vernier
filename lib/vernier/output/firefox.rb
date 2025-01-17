@@ -12,27 +12,45 @@ module Vernier
     class Firefox
       class Categorizer
         attr_reader :categories
+
+        RAILS_COMPONENTS = %w[ activesupport activemodel activerecord
+              actionview actionpack activejob actionmailer actioncable
+              activestorage actionmailbox actiontext railties ]
+
         def initialize
           @categories = []
           @categories_by_name = {}
 
-          add_category(name: "Ruby", color: "grey") do |c|
-            rails_components = %w[ activesupport activemodel activerecord
-              actionview actionpack activejob actionmailer actioncable
-              activestorage actionmailbox actiontext railties ]
+          add_category(name: "Kernel", color: "brown") do |c| 
             c.add_subcategory(
-              name: "Rails",
-              matcher: gem_path(*rails_components)
+              name: "Kernel",
+              matcher: starts_with("<internal")
             )
+          end  
+
+          add_category(name: "gem", color: "lightblue") do |c|
             c.add_subcategory(
               name: "gem",
               matcher: starts_with(*Gem.path)
             )
+          end
+
+          add_category(name: "Rails", color: "red") do |c|
+            RAILS_COMPONENTS.each do |subcategory|
+              c.add_subcategory(
+                name: subcategory,
+                matcher: gem_path(subcategory)
+              )
+            end
+          end
+
+          add_category(name: "Ruby", color: "purple") do |c|
             c.add_subcategory(
               name: "stdlib",
               matcher: starts_with(RbConfig::CONFIG["rubylibdir"])
             )
           end
+
           add_category(name: "Idle", color: "transparent")
           add_category(name: "Stalled", color: "transparent")
 
@@ -317,16 +335,38 @@ module Vernier
 
           cfunc_category = @categorizer.get_category("cfunc")
           ruby_category = @categorizer.get_category("Ruby")
+          rails_category = @categorizer.get_category("Rails")
+          gem_category = @categorizer.get_category("gem")
+          kernel_category = @categorizer.get_category("Kernel")
           func_categories, func_subcategories = [], []
           filenames.each do |filename|
-            if filename == "<cfunc>"
-              func_categories << cfunc_category
-              func_subcategories << 0
-            else
-              func_categories << ruby_category
-              subcategory = ruby_category.subcategories.detect {|c| c.matches?(filename) }&.idx || 0
+            subcategory = kernel_category.subcategories.detect {|c| c.matches?(filename) }&.idx
+            puts "filename: #{filename}"
+            if subcategory
+              func_categories << kernel_category
               func_subcategories << subcategory
-            end
+            else 
+              if filename == "<cfunc>"
+                func_categories << cfunc_category
+                func_subcategories << 0
+              else
+                subcategory = gem_category.subcategories.detect {|c| c.matches?(filename) }&.idx
+                if subcategory
+                  func_categories << gem_category
+                  func_subcategories << subcategory
+                else
+                  subcategory = rails_category.subcategories.detect {|c| c.matches?(filename) }&.idx
+                  if subcategory
+                    func_categories << rails_category
+                    func_subcategories << subcategory
+                  else
+                    subcategory = ruby_category.subcategories.detect {|c| c.matches?(filename) }&.idx || 0
+                    func_categories << ruby_category
+                    func_subcategories << subcategory
+                  end
+                end
+              end  
+            end  
           end
           @frame_categories = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_categories[func_idx]
