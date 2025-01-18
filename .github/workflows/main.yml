@@ -16,8 +16,8 @@ jobs:
       matrix:
         ruby:
           - '3.2.6'
-          - '3.3.6'
-          - '3.4.0-rc1'
+          - '3.3.7'
+          - '3.4.1'
           - 'head'
         os:
           - ubuntu-latest
@@ -26,7 +26,7 @@ jobs:
 
         include:
           - os: ubuntu-latest
-            ruby: '3.3.6'
+            ruby: '3.4.1'
             mn_threads: 1
           - os: ubuntu-latest
             ruby: 'head'
