@@ -4,8 +4,8 @@ module Vernier
   class AllocationTracer
     attr_reader :stack_table
 
-    def self.new
-      _new(StackTable.new)
+    def self.new(stack_table = StackTable.new)
+      _new(stack_table)
     end
 
     def self.trace(&block)
