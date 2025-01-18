@@ -20,4 +20,21 @@ class TestAllocationTracer < Minitest::Test
     assert_equal File.expand_path(__FILE__), stack2[1].filename
     assert_equal lines[1], stack2[1].lineno
   end
+
+  def test_compaction
+    retained = []
+
+    allocations = Vernier::AllocationTracer.trace do
+      100.times {
+        Object.new
+        retained << Object.new
+      }
+    end
+
+    GC.verify_compaction_references(toward: :empty, expand_heap: true)
+
+    retained.map do |obj|
+      p allocations.stack(obj)[1]
+    end
+  end
 end

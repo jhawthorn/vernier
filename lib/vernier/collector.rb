@@ -45,6 +45,42 @@ module Vernier
       end
     end
 
+    class RetainedCollector < Collector
+      def initialize(mode, options)
+        @stack_table = StackTable.new
+        @allocation_tracer = AllocationTracer.new(@stack_table)
+
+        # FIXME: is this correct or should it be CLOCK_REALTIME
+        @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
+        super
+      end
+
+      def start
+        @allocation_tracer.start
+      end
+
+      def finish
+        @allocation_tracer.pause
+        @allocation_tracer.stop
+        result = Result.new
+        result.instance_variable_set(:@threads, {
+          0 => {
+            tid: 0,
+            name: "retained",
+            started_at: @started_at,
+            samples: @samples,
+            weights: [1] * @samples.size,
+            timestamps: @timestamps,
+            sample_categories: [0] * @samples.size,
+          }
+        })
+        result.instance_variable_set(:@meta, {
+          started_at: @started_at
+        })
+        result
+      end
+    end
+
     def self.new(mode, options = {})
       return super unless Collector.equal?(self)
 
@@ -54,7 +90,7 @@ module Vernier
       when :custom
         CustomCollector.new(mode, options)
       when :retained
-        _new(mode, options)
+        RetainedCollector.new(mode, options)
       else
         raise ArgumentError, "invalid mode: #{mode.inspect}"
       end
