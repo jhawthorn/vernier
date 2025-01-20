@@ -17,7 +17,8 @@ module Vernier
               actionview actionpack activejob actionmailer actioncable
               activestorage actionmailbox actiontext railties ]
 
-        FRAMEWORK_CATEGORIES = %w[ gem Rails Ruby ] # This is the order of preference
+        ORDERED_CATEGORIES = %w[ Kernel Rails gem Ruby ] # This is the order of preference
+        AVAILABLE_COLORS = %w[ lightblue red lightred orange blue green purple yellow brown magenta lightgreen grey darkgrey]
 
         def initialize
           @categories = []
@@ -351,12 +352,9 @@ module Vernier
         end
 
         def categorize_filename(filename)
-          category, subcategory = find_category_and_subcategory(filename, ["Kernel"])
-          return [category, subcategory] if subcategory
-
           return cfunc_category_and_subcategory if filename == "<cfunc>"
 
-          category, subcategory = find_category_and_subcategory(filename, Categorizer::FRAMEWORK_CATEGORIES)
+          category, subcategory = find_category_and_subcategory(filename, Categorizer::ORDERED_CATEGORIES)
           return category, subcategory if subcategory
 
           ruby_category_and_subcategory
