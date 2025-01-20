@@ -61,17 +61,28 @@ module Vernier
 
       def finish
         @allocation_tracer.pause
+
+        GC.start
+
+        stack_table.finalize
+
+        GC.start
+
+        tracer_data = @allocation_tracer.data
         @allocation_tracer.stop
+
+        samples = tracer_data.fetch(:samples)
+        weights = tracer_data.fetch(:weights)
+
         result = Result.new
         result.instance_variable_set(:@threads, {
           0 => {
             tid: 0,
-            name: "retained",
+            name: "retained memory",
             started_at: @started_at,
-            samples: @samples,
-            weights: [1] * @samples.size,
-            timestamps: @timestamps,
-            sample_categories: [0] * @samples.size,
+            samples: samples,
+            weights: weights,
+            sample_categories: [0] * samples.size,
           }
         })
         result.instance_variable_set(:@meta, {

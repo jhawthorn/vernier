@@ -44,11 +44,6 @@
   RUBY_EVENT_FIBER_SWITCH | \
   RUBY_EVENT_THREAD_END
 
-#define sym(name) ID2SYM(rb_intern_const(name))
-
-// HACK: This isn't public, but the objspace ext uses it
-extern "C" size_t rb_obj_memsize_of(VALUE);
-
 using namespace std;
 
 VALUE rb_mVernier;
