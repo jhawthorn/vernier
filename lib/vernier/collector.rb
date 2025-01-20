@@ -97,7 +97,7 @@ module Vernier
 
       case mode
       when :wall
-        _new(mode, options)
+        TimeCollector.new(mode, options)
       when :custom
         CustomCollector.new(mode, options)
       when :retained
