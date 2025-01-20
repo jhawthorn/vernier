@@ -21,6 +21,7 @@ class AllocationTracer {
   public:
     VALUE stack_table_value;
     StackTable *stack_table;
+    size_t objects_freed = 0;
 
     std::unordered_map<VALUE, int> object_frames;
     std::vector<VALUE> object_list;
@@ -56,7 +57,9 @@ class AllocationTracer {
     }
 
     void record_freeobj(VALUE obj) {
-      object_frames.erase(obj);
+      if (object_frames.erase(obj)) {
+        objects_freed++;
+      }
     }
 
     static void newobj_i(VALUE tpval, void *data) {
@@ -92,11 +95,20 @@ class AllocationTracer {
       return self;
     }
 
-    void stop() {
+    void pause() {
       if (RTEST(tp_newobj)) {
         rb_tracepoint_disable(tp_newobj);
         tp_newobj = Qnil;
       }
+    }
+
+    static VALUE pause(VALUE self) {
+      get(self)->pause();
+      return self;
+    }
+
+    void stop() {
+      pause();
       if (RTEST(tp_freeobj)) {
         rb_tracepoint_disable(tp_freeobj);
         tp_freeobj = Qnil;
@@ -111,6 +123,30 @@ class AllocationTracer {
     static VALUE stack_idx(VALUE self, VALUE obj) {
       int stack_index = get(self)->object_frames.at(obj);
       return INT2NUM(stack_index);
+    }
+
+    VALUE data() {
+      // TOOD: should this ensure we are paused or stopped?
+      VALUE hash = rb_hash_new();
+      VALUE samples = rb_ary_new();
+      rb_hash_aset(hash, sym("samples"), samples);
+      VALUE weights = rb_ary_new();
+      rb_hash_aset(hash, sym("weights"), weights);
+
+      for (auto& obj: object_list) {
+        const auto search = object_frames.find(obj);
+        if (search != object_frames.end()) {
+          int stack_index = search->second;
+
+          rb_ary_push(samples, INT2NUM(stack_index));
+          rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
+        }
+      }
+      return hash;
+    }
+
+    static VALUE data(VALUE self) {
+      return get(self)->data();
     }
 
     void mark() {
@@ -159,7 +195,9 @@ void
 Init_allocation_tracer() {
   rb_cAllocationTracer = rb_define_class_under(rb_mVernier, "AllocationTracer", rb_cObject);
   rb_define_method(rb_cAllocationTracer, "start", AllocationTracer::start, 0);
+  rb_define_method(rb_cAllocationTracer, "pause", AllocationTracer::pause, 0);
   rb_define_method(rb_cAllocationTracer, "stop", AllocationTracer::stop, 0);
+  rb_define_method(rb_cAllocationTracer, "data", AllocationTracer::data, 0);
   rb_define_method(rb_cAllocationTracer, "stack_idx", AllocationTracer::stack_idx, 1);
   rb_undef_alloc_func(rb_cAllocationTracer);
   rb_define_singleton_method(rb_cAllocationTracer, "_new", AllocationTracer::rb_new, 1);

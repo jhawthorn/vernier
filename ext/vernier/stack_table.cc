@@ -130,6 +130,13 @@ StackTable::stack_table_func_count(VALUE self) {
     return INT2NUM(count);
 }
 
+static VALUE
+stack_table_finalize(VALUE self) {
+    StackTable *stack_table = get_stack_table(self);
+    stack_table->finalize();
+    return self;
+}
+
 VALUE
 StackTable::stack_table_frame_line_no(VALUE self, VALUE idxval) {
     StackTable *stack_table = get_stack_table(self);
@@ -279,4 +286,5 @@ void Init_stack_table() {
   rb_define_method(rb_cStackTable, "stack_count", StackTable::stack_table_stack_count, 0);
   rb_define_method(rb_cStackTable, "frame_count", StackTable::stack_table_frame_count, 0);
   rb_define_method(rb_cStackTable, "func_count", StackTable::stack_table_func_count, 0);
+  rb_define_method(rb_cStackTable, "finalize", stack_table_finalize, 0);
 }

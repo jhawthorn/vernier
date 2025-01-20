@@ -43,7 +43,7 @@ module Vernier
     end
 
     def inspect
-      "#<#{self.class} #{elapsed_seconds} seconds, #{threads.count} threads, #{samples.count} samples, #{samples.uniq.size} unique>"
+      "#<#{self.class} #{elapsed_seconds rescue "?"} seconds, #{threads.count} threads, #{samples.count} samples, #{samples.uniq.size} unique>"
     end
 
     def each_sample
