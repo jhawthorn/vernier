@@ -24,6 +24,7 @@ class TestAllocationTracer < Minitest::Test
   def test_compaction
     retained = []
 
+    expected_line = __LINE__ + 4
     allocations = Vernier::AllocationTracer.trace do
       100.times {
         Object.new
@@ -33,8 +34,12 @@ class TestAllocationTracer < Minitest::Test
 
     GC.verify_compaction_references(toward: :empty, expand_heap: true)
 
-    retained.map do |obj|
-      p allocations.stack(obj)[1]
-    end
+    result = retained.map do |obj|
+      allocations.stack(obj)[1].to_s
+    end.tally
+    assert_equal 1, result.size
+    expected_file = File.expand_path(__FILE__)
+    expected_source = "TestAllocationTracer#test_compaction at #{expected_file}:#{expected_line}"
+    assert_equal expected_source, result.keys[0]
   end
 end
