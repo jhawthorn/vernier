@@ -24,7 +24,7 @@ module Vernier
           @categories = []
           @categories_by_name = {}
 
-          add_category(name: "Kernel", color: "brown") do |c| 
+          add_category(name: "Kernel", color: "magenta") do |c|
             c.add_subcategory(
               name: "Kernel",
               matcher: starts_with("<internal")
