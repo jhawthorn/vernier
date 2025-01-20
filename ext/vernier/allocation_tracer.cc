@@ -21,7 +21,9 @@ class AllocationTracer {
   public:
     VALUE stack_table_value;
     StackTable *stack_table;
-    size_t objects_freed = 0;
+
+    unsigned long long objects_freed = 0;
+    unsigned long long objects_allocated = 0;
 
     std::unordered_map<VALUE, int> object_frames;
     std::vector<VALUE> object_list;
@@ -42,6 +44,8 @@ class AllocationTracer {
     }
 
     void record_newobj(VALUE obj) {
+      objects_allocated++;
+
       RawSample sample;
       sample.sample();
       if (sample.empty()) {
@@ -149,6 +153,14 @@ class AllocationTracer {
       return get(self)->data();
     }
 
+    static VALUE allocated_objects(VALUE self) {
+      return ULL2NUM(get(self)->objects_allocated);
+    }
+
+    static VALUE freed_objects(VALUE self) {
+      return ULL2NUM(get(self)->objects_freed);
+    }
+
     void mark() {
       rb_gc_mark(stack_table_value);
 
@@ -201,4 +213,7 @@ Init_allocation_tracer() {
   rb_define_method(rb_cAllocationTracer, "stack_idx", AllocationTracer::stack_idx, 1);
   rb_undef_alloc_func(rb_cAllocationTracer);
   rb_define_singleton_method(rb_cAllocationTracer, "_new", AllocationTracer::rb_new, 1);
+
+  rb_define_method(rb_cAllocationTracer, "allocated_objects", AllocationTracer::allocated_objects, 0);
+  rb_define_method(rb_cAllocationTracer, "freed_objects", AllocationTracer::freed_objects, 0);
 }

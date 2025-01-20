@@ -21,6 +21,20 @@ class TestAllocationTracer < Minitest::Test
     assert_equal lines[1], stack2[1].lineno
   end
 
+  def test_gc
+    retained = []
+    allocations = Vernier::AllocationTracer.trace do
+      1000.times {
+        Object.new
+        retained << Object.new
+      }
+      GC.start
+    end
+
+    assert_in_delta 2000, allocations.allocated_objects, 50
+    assert_in_delta 1000, allocations.freed_objects, 50
+  end
+
   def test_compaction
     retained = []
 
