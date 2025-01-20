@@ -50,6 +50,7 @@ VALUE rb_mVernier;
 static VALUE rb_cVernierResult;
 static VALUE rb_mVernierMarkerType;
 static VALUE rb_cVernierCollector;
+static VALUE rb_cTimeCollector;
 
 static VALUE sym_state, sym_gc_by, sym_fiber_id;
 
@@ -1221,10 +1222,11 @@ Init_vernier(void)
   rb_mVernierMarkerType = rb_define_module_under(rb_mVernierMarker, "Type");
 
   rb_cVernierCollector = rb_define_class_under(rb_mVernier, "Collector", rb_cObject);
-  //rb_undef_alloc_func(rb_cVernierCollector);
-  rb_define_singleton_method(rb_cVernierCollector, "_new", collector_new, 2);
-  rb_define_method(rb_cVernierCollector, "start", collector_start, 0);
-  rb_define_private_method(rb_cVernierCollector, "finish",  collector_stop, 0);
+  rb_cTimeCollector = rb_define_class_under(rb_cVernierCollector, "TimeCollector", rb_cVernierCollector);
+  rb_undef_alloc_func(rb_cTimeCollector);
+  rb_define_singleton_method(rb_cTimeCollector, "new", collector_new, 2);
+  rb_define_method(rb_cTimeCollector, "start", collector_start, 0);
+  rb_define_private_method(rb_cTimeCollector, "finish",  collector_stop, 0);
 
   Init_consts(rb_mVernierMarkerPhase);
   Init_memory();
