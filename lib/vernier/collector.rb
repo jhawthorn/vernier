@@ -12,7 +12,6 @@ module Vernier
         @samples = []
         @timestamps = []
 
-        # FIXME: is this correct or should it be CLOCK_REALTIME
         @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
         super
       end
@@ -50,7 +49,6 @@ module Vernier
         @stack_table = StackTable.new
         @allocation_tracer = AllocationTracer.new(@stack_table)
 
-        # FIXME: is this correct or should it be CLOCK_REALTIME
         @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
         super
       end
