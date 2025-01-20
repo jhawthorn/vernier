@@ -96,11 +96,10 @@ class TestRetainedMemory < Minitest::Test
     ]
     assert_equal expected_labels, labels.grep(/#alloc_[abc]\z/)
 
-    expected_inspects = [
-      "#{self.class.name}#alloc_a at #{method(:alloc_a).source_location.first(2).join(":")}",
-      "#{self.class.name}#alloc_b at #{method(:alloc_b).source_location.first(2).join(":")}",
-      "#{self.class.name}#alloc_c at #{method(:alloc_c).source_location.first(2).join(":")}"
-    ]
+    expected_inspects = [:alloc_a, :alloc_b, :alloc_c].map do |mid|
+      location = method(mid).source_location.first(2).join(":")
+      "#{self.class.name}##{mid} at #{location}"
+    end
     assert_equal expected_inspects, inspects.grep(/#alloc_[abc]/)
   end
 
