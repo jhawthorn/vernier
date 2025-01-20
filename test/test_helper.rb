@@ -23,6 +23,9 @@ class Minitest::Test
     assert_kind_of Integer, result.end_time
     assert_kind_of Integer, result.started_at
 
+    assert_in_delta Process.clock_gettime(Process::CLOCK_REALTIME, :nanosecond), result.started_at, 300 * 1_000_000_000
+    assert_in_delta Process.clock_gettime(Process::CLOCK_REALTIME, :nanosecond), result.end_time, 300 * 1_000_000_000
+
     meta = result.meta
     assert_kind_of Hash, meta
     mode = meta[:mode]
