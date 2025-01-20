@@ -21,6 +21,10 @@ module Vernier
       _new(stack_table)
     end
 
+    def inspect
+      "#<#{self.class} allocated_objects=#{allocated_objects} freed_objects=#{freed_objects} stack_table=#{stack_table.inspect}>"
+    end
+
     def self.trace(&block)
       tracer = new
       tracer.trace(&block)
