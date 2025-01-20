@@ -17,6 +17,8 @@ module Vernier
               actionview actionpack activejob actionmailer actioncable
               activestorage actionmailbox actiontext railties ]
 
+        FRAMEWORK_CATEGORIES = %w[ gem Rails Ruby ] # This is the order of preference
+
         def initialize
           @categories = []
           @categories_by_name = {}
@@ -333,47 +335,48 @@ module Vernier
             func_implementations[func_idx]
           end
 
-          cfunc_category = @categorizer.get_category("cfunc")
-          ruby_category = @categorizer.get_category("Ruby")
-          rails_category = @categorizer.get_category("Rails")
-          gem_category = @categorizer.get_category("gem")
-          kernel_category = @categorizer.get_category("Kernel")
           func_categories, func_subcategories = [], []
           filenames.each do |filename|
-            subcategory = kernel_category.subcategories.detect {|c| c.matches?(filename) }&.idx
-            puts "filename: #{filename}"
-            if subcategory
-              func_categories << kernel_category
-              func_subcategories << subcategory
-            else 
-              if filename == "<cfunc>"
-                func_categories << cfunc_category
-                func_subcategories << 0
-              else
-                subcategory = gem_category.subcategories.detect {|c| c.matches?(filename) }&.idx
-                if subcategory
-                  func_categories << gem_category
-                  func_subcategories << subcategory
-                else
-                  subcategory = rails_category.subcategories.detect {|c| c.matches?(filename) }&.idx
-                  if subcategory
-                    func_categories << rails_category
-                    func_subcategories << subcategory
-                  else
-                    subcategory = ruby_category.subcategories.detect {|c| c.matches?(filename) }&.idx || 0
-                    func_categories << ruby_category
-                    func_subcategories << subcategory
-                  end
-                end
-              end  
-            end  
+            category, subcategory = categorize_filename(filename)
+            func_categories << category
+            func_subcategories << subcategory
           end
+
           @frame_categories = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_categories[func_idx]
           end
           @frame_subcategories = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_subcategories[func_idx]
           end
+        end
+
+        def categorize_filename(filename)
+          category, subcategory = find_category_and_subcategory(filename, ["Kernel"])
+          return [category, subcategory] if subcategory
+
+          return cfunc_category_and_subcategory if filename == "<cfunc>"
+
+          category, subcategory = find_category_and_subcategory(filename, Categorizer::FRAMEWORK_CATEGORIES)
+          return category, subcategory if subcategory
+
+          ruby_category_and_subcategory
+        end
+
+        def cfunc_category_and_subcategory
+          [@categorizer.get_category("cfunc"), 0]
+        end
+
+        def ruby_category_and_subcategory
+          [@categorizer.get_category("Ruby"), 0]
+        end
+
+        def find_category_and_subcategory(filename, categories)
+          categories.each do |category_name|
+            category = @categorizer.get_category(category_name)
+            subcategory = category.subcategories.detect {|c| c.matches?(filename) }&.idx
+            return category, subcategory if subcategory
+          end
+          [nil, nil]
         end
 
         def filter_filenames(filenames)
