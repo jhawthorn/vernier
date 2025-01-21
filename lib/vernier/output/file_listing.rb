@@ -28,15 +28,14 @@ module Vernier
         if Hash === thread
           # live profile
           stack_table = @profile._stack_table
-          weights = thread[:weights]
-          samples = thread[:samples]
           filename_filter = FilenameFilter.new
         else
           stack_table = thread.stack_table
-          weights = thread.weights
-          samples = thread.samples
           filename_filter = ->(x) { x }
         end
+
+        weights = thread[:weights]
+        samples = thread[:samples]
 
         self_samples_by_frame = Hash.new do |h, k|
           h[k] = SamplesByLocation.new
@@ -96,14 +95,7 @@ module Vernier
 
       def total
         thread = @profile.main_thread
-        if Hash === thread
-          # live profile
-          weights = thread[:weights]
-        else
-          weights = thread.weights
-        end
-
-        weights.sum
+        thread[:weights].sum
       end
 
       def format_file(output, filename, all_samples, total:)
