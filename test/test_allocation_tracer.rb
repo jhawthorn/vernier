@@ -21,6 +21,22 @@ class TestAllocationTracer < Minitest::Test
     assert_equal lines[1], stack2[1].lineno
   end
 
+  def test_untraced_object_while_running
+    obj = Object.new
+    allocations = Vernier::AllocationTracer.trace do |trace|
+      1000.times { Object.new }
+      assert_nil trace.stack_idx(obj)
+    end
+  end
+
+  def test_untraced_object_after_running
+    obj = Object.new
+    allocations = Vernier::AllocationTracer.trace do
+      1000.times { Object.new }
+    end
+    assert_nil allocations.stack_idx(obj)
+  end
+
   def test_gc
     retained = []
     allocations = Vernier::AllocationTracer.trace do
