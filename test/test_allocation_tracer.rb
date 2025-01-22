@@ -22,19 +22,21 @@ class TestAllocationTracer < Minitest::Test
   end
 
   def test_untraced_object_while_running
-    obj = Object.new
+    allocated_before = Object.new
     allocations = Vernier::AllocationTracer.trace do |trace|
       1000.times { Object.new }
-      assert_nil trace.stack_idx(obj)
+      assert_nil trace.stack_idx(allocated_before)
     end
   end
 
   def test_untraced_object_after_running
-    obj = Object.new
+    allocated_before = Object.new
     allocations = Vernier::AllocationTracer.trace do
       1000.times { Object.new }
     end
-    assert_nil allocations.stack_idx(obj)
+    allocated_after = Object.new
+    assert_nil allocations.stack_idx(allocated_before)
+    assert_nil allocations.stack_idx(allocated_after)
   end
 
   def test_gc

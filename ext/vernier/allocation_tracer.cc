@@ -25,8 +25,9 @@ class AllocationTracer {
     unsigned long long objects_freed = 0;
     unsigned long long objects_allocated = 0;
 
-    std::unordered_map<VALUE, int> object_frames;
+    std::unordered_map<VALUE, int> object_index;
     std::vector<VALUE> object_list;
+    std::vector<int> frame_list;
 
     static VALUE rb_new(VALUE self, VALUE stack_table_value) {
       AllocationTracer *allocation_tracer = new AllocationTracer();
@@ -56,13 +57,22 @@ class AllocationTracer {
       }
       int stack_index = stack_table->stack_index(sample);
 
+      int idx = object_list.size();
       object_list.push_back(obj);
-      object_frames.emplace(obj, stack_index);
+      frame_list.push_back(stack_index);
+      object_index.emplace(obj, idx);
+
+      assert(objects_allocated == frame_list.size());
+      assert(objects_allocated == object_list.size());
     }
 
     void record_freeobj(VALUE obj) {
-      if (object_frames.erase(obj)) {
+      auto it = object_index.find(obj);
+      if (it != object_index.end()) {
+        int index = it->second;
+        object_list[index] = Qfalse;
         objects_freed++;
+        object_index.erase(it);
       }
     }
 
@@ -82,6 +92,7 @@ class AllocationTracer {
         tracer->record_freeobj(obj);
     }
 
+    bool stopped = false;
     VALUE tp_newobj = Qnil;
     VALUE tp_freeobj = Qnil;
 
@@ -117,6 +128,7 @@ class AllocationTracer {
         rb_tracepoint_disable(tp_freeobj);
         tp_freeobj = Qnil;
       }
+      stopped = true;
     }
 
     static VALUE stop(VALUE self) {
@@ -126,11 +138,12 @@ class AllocationTracer {
 
     static VALUE stack_idx(VALUE self, VALUE obj) {
       auto tracer = get(self);
-      auto iter = tracer->object_frames.find(obj);
-      if (iter == tracer->object_frames.end()) {
+      auto iter = tracer->object_index.find(obj);
+      if (iter == tracer->object_index.end()) {
         return Qnil;
       } else {
-        return INT2NUM(iter->second);
+        int index = iter->second;
+        return INT2NUM(tracer->frame_list[index]);
       }
     }
 
@@ -142,14 +155,13 @@ class AllocationTracer {
       VALUE weights = rb_ary_new();
       rb_hash_aset(hash, sym("weights"), weights);
 
-      for (auto& obj: object_list) {
-        const auto search = object_frames.find(obj);
-        if (search != object_frames.end()) {
-          int stack_index = search->second;
+      for (int i = 0; i < object_list.size(); i++) {
+        VALUE obj = object_list[i];
+        VALUE stack_index = frame_list[i];
+        if (obj == Qfalse) continue;
 
-          rb_ary_push(samples, INT2NUM(stack_index));
-          rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
-        }
+        rb_ary_push(samples, INT2NUM(stack_index));
+        rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
       }
       return hash;
     }
@@ -171,22 +183,23 @@ class AllocationTracer {
 
       rb_gc_mark(tp_newobj);
       rb_gc_mark(tp_freeobj);
+
+      if (stopped) {
+        for (auto obj: object_list) {
+          rb_gc_mark_movable(obj);
+        }
+      }
     }
 
     void compact() {
-        for (auto& obj: object_list) {
-            VALUE reloc_obj = rb_gc_location(obj);
+      object_index.clear();
+      for (int i = 0; i < object_list.size(); i++) {
+        VALUE obj = object_list[i];
+        VALUE reloc_obj = rb_gc_location(obj);
 
-            const auto search = object_frames.find(obj);
-            if (search != object_frames.end()) {
-                int stack_index = search->second;
-
-                object_frames.erase(search);
-                object_frames.emplace(reloc_obj, stack_index);
-            }
-
-            obj = reloc_obj;
-        }
+        object_list[i] = reloc_obj;
+        object_index.emplace(reloc_obj, i);
+      }
     }
 };
 
