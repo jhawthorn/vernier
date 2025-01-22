@@ -10,10 +10,10 @@ static void allocation_tracer_compact(void *data);
 static const rb_data_type_t rb_allocation_tracer_type = {
     .wrap_struct_name = "vernier/allocation_tracer",
     .function = {
-        //.dmemsize = rb_collector_memsize,
-        .dcompact = allocation_tracer_compact,
         .dmark = allocation_tracer_mark,
         .dfree = allocation_tracer_free,
+        .dsize = nullptr,
+        .dcompact = allocation_tracer_compact,
     },
 };
 

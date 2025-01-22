@@ -1124,10 +1124,9 @@ collector_compact(void *data) {
 static const rb_data_type_t rb_collector_type = {
     .wrap_struct_name = "vernier/collector",
     .function = {
-        //.dmemsize = rb_collector_memsize,
         .dmark = collector_mark,
         .dfree = collector_free,
-        .dsize = NULL,
+        .dsize = nullptr,
         .dcompact = collector_compact,
     },
 };

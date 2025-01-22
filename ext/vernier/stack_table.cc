@@ -18,9 +18,9 @@ stack_table_free(void *data) {
 static const rb_data_type_t rb_stack_table_type = {
     .wrap_struct_name = "vernier/stack_table",
     .function = {
-        //.dmemsize = rb_collector_memsize,
         .dmark = stack_table_mark,
         .dfree = stack_table_free,
+        .dsize = nullptr,
     },
 };
 
