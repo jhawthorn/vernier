@@ -40,6 +40,7 @@ module Vernier
 
     def stack(obj)
       idx = stack_idx(obj)
+      return nil unless idx
       stack_table.stack(idx)
     end
   end

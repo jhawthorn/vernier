@@ -125,8 +125,13 @@ class AllocationTracer {
     }
 
     static VALUE stack_idx(VALUE self, VALUE obj) {
-      int stack_index = get(self)->object_frames.at(obj);
-      return INT2NUM(stack_index);
+      auto tracer = get(self);
+      auto iter = tracer->object_frames.find(obj);
+      if (iter == tracer->object_frames.end()) {
+        return Qnil;
+      } else {
+        return INT2NUM(iter->second);
+      }
     }
 
     VALUE data() {

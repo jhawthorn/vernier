@@ -146,6 +146,7 @@ module Vernier
     end
 
     def stack(idx)
+      raise ArgumentError, "invalid index" unless idx
       Stack.new(self, idx)
     end
   end
