@@ -11,14 +11,14 @@ module Vernier
     # https://github.com/firefox-devtools/profiler/blob/main/src/types/profile.js
     class Firefox
       class Categorizer
-        attr_reader :categories
-
         RAILS_COMPONENTS = %w[ activesupport activemodel activerecord
               actionview actionpack activejob actionmailer actioncable
               activestorage actionmailbox actiontext railties ]
 
         ORDERED_CATEGORIES = %w[ Kernel Rails gem Ruby ] # This is the order of preference
         AVAILABLE_COLORS = %w[ lightblue red lightred orange blue green purple yellow brown magenta lightgreen grey darkgrey]
+
+        attr_reader :categories
 
         def initialize
           @categories = []
