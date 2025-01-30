@@ -1220,7 +1220,6 @@ Init_vernier(void)
   VALUE rb_mVernierMarkerPhase = rb_define_module_under(rb_mVernierMarker, "Phase");
   rb_mVernierMarkerType = rb_define_module_under(rb_mVernierMarker, "Type");
 
-  rb_cVernierResult = rb_define_class_under(rb_mVernier, "Result", rb_cObject);
   rb_cVernierCollector = rb_define_class_under(rb_mVernier, "Collector", rb_cObject);
   rb_cTimeCollector = rb_define_class_under(rb_cVernierCollector, "TimeCollector", rb_cVernierCollector);
   rb_undef_alloc_func(rb_cTimeCollector);
