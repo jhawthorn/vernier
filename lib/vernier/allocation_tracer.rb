@@ -11,7 +11,7 @@ module Vernier
   #    * Watching for freed objects
   #  * Stopped
   #    * Ignoring new objects
-  #    * Ignoring for freed objects
+  #    * Ignoring freed objects
   #    * Marking all existing objects (not yet implemented)
   #    * N.B. This prevents any objects which the tracer has seen from being GC'd
   class AllocationTracer
