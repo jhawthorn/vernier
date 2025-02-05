@@ -30,9 +30,26 @@ class TestOutputFileListing < Minitest::Test
       assert_match(/\d+\.\d% \| *\d+\.\d% \| *\d+ +while Process\.clock_gettime/, output)
     end
 
-    def test_html_output
+    def test_complex_profile_html_output
       output = Vernier::Output::FileListing.new(@result).output(template: "html")
       assert_match(/<details style=\"display:inline-block;vertical-align:top;\"><summary>.+#{Regexp.escape(File.basename(__FILE__))}<\/summary>/, output)
+    end
+
+    def test_complex_profile_default_exclude_irrelevant_files
+      file_listing = Vernier::Output::FileListing.new(@result)
+      output = file_listing.output
+      assert_includes(file_listing.samples_by_file.keys.join, "gem:")
+      refute_match(/^gem:/, output)
+    end
+
+    def test_complex_profile_customize_relevant_files
+      custom_relevant_files_filter = ->(filename) { filename == "lib/vernier.rb" }
+      file_listing = Vernier::Output::FileListing.new(@result, relevant_files_filter: custom_relevant_files_filter)
+      output = file_listing.output
+
+      assert_includes(file_listing.samples_by_file.keys.join, File.basename(__FILE__))
+      refute_match(File.basename(__FILE__), output)
+      assert_match("lib/vernier.rb", output)
     end
   end
 
@@ -51,10 +68,26 @@ class TestOutputFileListing < Minitest::Test
 TEXT
     end
 
-    def test_html_output
+    def test_parsed_profile_html_output
       output = Vernier::Output::FileListing.new(@profile).output(template: "html")
       assert_includes output,
         " 24.5%   <details style=\"display:inline-block;vertical-align:top;\"><summary>examples/gvl_sleep.rb</summary>\n"
+    end
+
+    def test_parsed_profile_default_exclude_irrelevant_files
+      file_listing = Vernier::Output::FileListing.new(@profile)
+      output = file_listing.output
+      assert_includes(file_listing.samples_by_file.keys.join, "gem:")
+      refute_match(/^gem:/, output)
+    end
+
+    def test_parsed_profile_customize_relevant_files
+      custom_relevant_files_filter = ->(filename) { filename != "examples/gvl_sleep.rb" }
+      file_listing = Vernier::Output::FileListing.new(@profile, relevant_files_filter: custom_relevant_files_filter)
+      output = file_listing.output
+
+      assert_includes(file_listing.samples_by_file.keys.join, "examples/gvl_sleep.rb")
+      refute_match("examples/gvl_sleep.rb", output)
     end
   end
 end

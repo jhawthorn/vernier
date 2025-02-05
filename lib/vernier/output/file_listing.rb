@@ -121,7 +121,7 @@ module Vernier
           else
             output << sprintf("       |        | % 4i  %s", lineno, line)
           end
-        end
+        end if File.exist?(filename)
       end
 
       def html_output(output, relevant_files)
@@ -150,7 +150,7 @@ module Vernier
           else
             output << sprintf("       |        | % 4i  %s", lineno, CGI::escapeHTML(line))
           end
-        end
+        end if File.exist?(filename)
       end
     end
   end
