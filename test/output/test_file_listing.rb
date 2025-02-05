@@ -32,7 +32,7 @@ class TestOutputFileListing < Minitest::Test
 
     def test_html_output
       output = Vernier::Output::FileListing.new(@result).output(template: "html")
-      assert_match(/<details style=\"display:inline-block;\"><summary>.+#{Regexp.escape(File.basename(__FILE__))}<\/summary>/, output)
+      assert_match(/<details style=\"display:inline-block;vertical-align:top;\"><summary>.+#{Regexp.escape(File.basename(__FILE__))}<\/summary>/, output)
     end
   end
 
@@ -54,7 +54,7 @@ TEXT
     def test_html_output
       output = Vernier::Output::FileListing.new(@profile).output(template: "html")
       assert_includes output,
-        " 24.5%   <details style=\"display:inline-block;\"><summary>examples/gvl_sleep.rb</summary>\n"
+        " 24.5%   <details style=\"display:inline-block;vertical-align:top;\"><summary>examples/gvl_sleep.rb</summary>\n"
     end
   end
 end

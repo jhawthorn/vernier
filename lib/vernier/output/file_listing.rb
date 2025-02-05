@@ -122,7 +122,7 @@ module Vernier
       def html_output(output, relevant_files)
         output << "  SELF     FILE\n"
         relevant_files.sort_by {|k, v| -v.values.map(&:self).sum }.each do |filename, file_contents|
-          tmpl = "<details style=\"display:inline-block;\"><summary>%s</summary>"
+          tmpl = "<details style=\"display:inline-block;vertical-align:top;\"><summary>%s</summary>"
           output << sprintf("% 5.1f%%   #{tmpl}\n", file_contents.values.map(&:self).sum * 100 / total.to_f, filename)
           format_file_html(output, filename, relevant_files)
           output << "</details>\n"
