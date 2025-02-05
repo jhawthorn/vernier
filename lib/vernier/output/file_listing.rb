@@ -74,7 +74,7 @@ module Vernier
         end
       end
 
-      def output(template: "html")
+      def output(template: nil)
         output = +""
 
         relevant_files = samples_by_file.select do |k, v|
