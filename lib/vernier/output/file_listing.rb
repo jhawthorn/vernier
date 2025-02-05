@@ -120,6 +120,7 @@ module Vernier
       end
 
       def html_output(output, relevant_files)
+        output << "<pre>"
         output << "  SELF     FILE\n"
         relevant_files.sort_by {|k, v| -v.values.map(&:self).sum }.each do |filename, file_contents|
           tmpl = "<details style=\"display:inline-block;vertical-align:top;\"><summary>%s</summary>"
@@ -127,7 +128,7 @@ module Vernier
           format_file_html(output, filename, relevant_files)
           output << "</details>\n"
         end
-        output
+        output << "</pre>"
       end
 
       def format_file_html(output, filename, relevant_files)
