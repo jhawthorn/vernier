@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "filename_filter"
+require "cgi/util"
 
 module Vernier
   module Output
@@ -41,8 +42,6 @@ module Vernier
           h[k] = SamplesByLocation.new
         end
 
-        total = weights.sum
-
         samples.zip(weights).each do |stack_idx, weight|
           # self time
           top_frame_index = stack_table.stack_frame_idx(stack_idx)
@@ -75,7 +74,7 @@ module Vernier
         end
       end
 
-      def output
+      def output(template: "html")
         output = +""
 
         relevant_files = samples_by_file.select do |k, v|
@@ -84,13 +83,18 @@ module Vernier
           next if k.start_with?("<")
           v.values.map(&:total).sum > total * 0.01
         end
-        relevant_files.keys.sort.each do |filename|
+
+        if template == "html"
+          html_output(output, relevant_files)
+        else
+          relevant_files.keys.sort.each do |filename|
+            output << "="*80 << "\n"
+            output << filename << "\n"
+            output << "-"*80 << "\n"
+            format_file(output, filename, samples_by_file, total: total)
+          end
           output << "="*80 << "\n"
-          output << filename << "\n"
-          output << "-"*80 << "\n"
-          format_file(output, filename, samples_by_file, total: total)
         end
-        output << "="*80 << "\n"
       end
 
       def total
@@ -111,6 +115,34 @@ module Vernier
             output << sprintf("%5.1f%% | %5.1f%% | % 4i  %s", 100 * calls.total / total.to_f, 100 * calls.self / total.to_f, lineno, line)
           else
             output << sprintf("       |        | % 4i  %s", lineno, line)
+          end
+        end
+      end
+
+      def html_output(output, relevant_files)
+        output << "  SELF     FILE\n"
+        relevant_files.sort_by {|k, v| -v.values.map(&:self).sum }.each do |filename, file_contents|
+          tmpl = "<details style=\"display:inline-block;\"><summary>%s</summary>"
+          output << sprintf("% 5.1f%%   #{tmpl}\n", file_contents.values.map(&:self).sum * 100 / total.to_f, filename)
+          format_file_html(output, filename, relevant_files)
+          output << "</details>\n"
+        end
+        output
+      end
+
+      def format_file_html(output, filename, relevant_files)
+        samples = relevant_files[filename]
+
+        # file_name, lines, file_wall, file_cpu, file_idle, file_sort
+        output << sprintf(" TOTAL |  SELF  | LINE SOURCE\n")
+        File.readlines(filename).each_with_index do |line, i|
+          lineno = i + 1
+          calls = samples[lineno]
+
+          if calls && calls.total > 0
+            output << sprintf("%5.1f%% | %5.1f%% | % 4i  %s", 100 * calls.total / total.to_f, 100 * calls.self / total.to_f, lineno, CGI::escapeHTML(line))
+          else
+            output << sprintf("       |        | % 4i  %s", lineno, CGI::escapeHTML(line))
           end
         end
       end
