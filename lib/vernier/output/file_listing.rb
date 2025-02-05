@@ -20,8 +20,9 @@ module Vernier
         end
       end
 
-      def initialize(profile)
+      def initialize(profile, relevant_files_filter: method(:default_relevant_files_filter))
         @profile = profile
+        @relevant_files_filter = relevant_files_filter
       end
 
       def samples_by_file
@@ -77,11 +78,9 @@ module Vernier
       def output(template: nil)
         output = +""
 
-        relevant_files = samples_by_file.select do |k, v|
-          next if k.start_with?("gem:")
-          next if k.start_with?("rubylib:")
-          next if k.start_with?("<")
-          v.values.map(&:total).sum > total * 0.01
+        relevant_files = samples_by_file.select do |filename, v|
+          @relevant_files_filter.call(filename) &&
+            v.values.map(&:total).sum > total * 0.01
         end
 
         if template == "html"
@@ -95,6 +94,12 @@ module Vernier
           end
           output << "="*80 << "\n"
         end
+      end
+
+      def default_relevant_files_filter(filename)
+        !filename.start_with?("gem:") &&
+          !filename.start_with?("rubylib:") &&
+          !filename.start_with?("<")
       end
 
       def total
