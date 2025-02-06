@@ -20,9 +20,9 @@ module Vernier
         end
       end
 
-      def initialize(profile, relevant_files_filter: method(:default_relevant_files_filter))
+      def initialize(profile, relevant_files_filter: nil)
         @profile = profile
-        @relevant_files_filter = relevant_files_filter
+        @relevant_files_filter ||= -> (*) { default_relevant_files_filter(*) }
       end
 
       def samples_by_file
