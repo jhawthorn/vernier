@@ -3,6 +3,7 @@
 require_relative "vernier/version"
 require_relative "vernier/collector"
 require_relative "vernier/stack_table"
+require_relative "vernier/allocation_tracer"
 require_relative "vernier/parsed_profile"
 require_relative "vernier/result"
 require_relative "vernier/hooks"
@@ -61,11 +62,5 @@ module Vernier
 
   def self.trace_retained(**profile_options, &block)
     profile(**profile_options.merge(mode: :retained), &block)
-  end
-
-  class Collector
-    def self.new(mode, options = {})
-      _new(mode, options)
-    end
   end
 end
