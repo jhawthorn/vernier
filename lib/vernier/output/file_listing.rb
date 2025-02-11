@@ -22,7 +22,7 @@ module Vernier
 
       def initialize(profile, relevant_files_filter: nil)
         @profile = profile
-        @relevant_files_filter ||= -> (*) { default_relevant_files_filter(*) }
+        @relevant_files_filter ||= -> (filename) { default_relevant_files_filter(filename) }
       end
 
       def samples_by_file
