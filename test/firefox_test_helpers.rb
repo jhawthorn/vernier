@@ -62,6 +62,7 @@ module FirefoxTestHelpers
       assert_equal frame_length, thread["frameTable"]["innerWindowID"].length
       assert_equal frame_length, thread["frameTable"]["func"].length
       assert_equal frame_length, thread["frameTable"]["category"].length
+      assert_equal frame_length, thread["frameTable"]["subcategory"].length
       assert_equal frame_length, thread["frameTable"]["inlineDepth"].length
       assert_equal frame_length, thread["frameTable"]["address"].length
 

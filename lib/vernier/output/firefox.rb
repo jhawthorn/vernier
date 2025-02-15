@@ -487,17 +487,21 @@ module Vernier
         def frame_table
           funcs = @stack_table_hash[:frame_table].fetch(:func)
           lines = @stack_table_hash[:frame_table].fetch(:line)
-          size = funcs.length
-          none = [nil] * size
-          categories = @frame_categories.map(&:idx)
-
           raise unless lines.size == funcs.size
 
+          size = funcs.size
+          none = [nil] * size
+          default = [0] * size
+          unidentified = [-1] * size
+
+          categories = @frame_categories.map(&:idx)
+          subcategories = @frame_subcategories
+
           {
-            address: [-1] * size,
-            inlineDepth: [0] * size,
+            address: unidentified,
+            inlineDepth: default,
             category: categories,
-            subcategory: nil,
+            subcategory: subcategories,
             func: funcs,
             nativeSymbol: none,
             innerWindowID: none,
