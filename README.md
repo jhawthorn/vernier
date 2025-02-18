@@ -105,7 +105,7 @@ If you're using Rails, you can add the middleware to your `config/application.rb
 config.middleware.use Vernier::Middleware, permit: ->(env) { env["PATH_INFO"].start_with?("/api") }
 ```
 
-You can then enable profiliing and tune the interval and allocation interval with query parameters:
+You can then enable profiling and configure options with query parameters:
 
 ```sh
 curl http://localhost:3000?vernier=true&vernier_interval=100&vernier_allocation_interval=10
@@ -126,13 +126,13 @@ ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "i
 
 ### Options
 
-Option | Description
-:- | :-
-`mode` | The sampling mode to use. One of `:wall`, `:retained` or `:custom`. Default is `:wall`.
-`out` | The file to write the profile to.
-`interval` | The sampling interval in microseconds. Default is `500`. Only available in `:wall` mode.
-`allocation_interval` | The allocation sampling interval in number of allocations. Default is `0` (disabled). Only available in `:wall` mode.
-`gc` | Initiate a full and immediate garbage collection cycle before profiling. Default is `true`. Only available in `:retained` mode.
+Option | Middleware Param | Description | Default | Middleware Default
+:- | :- | :- | :- | :-
+`mode` | N/A | The sampling mode to use. One of `:wall`, `:retained` or `:custom`. | `:wall` | `:wall`
+`out` | N/A | The file to write the profile to. | N/A | Automatically generated
+`interval` | `vernier_interval` | The sampling interval in microseconds. Only available in `:wall` mode. | `500` | `200`
+`allocation_interval` | `vernier_allocation_interval` | The allocation sampling interval in number of allocations. Only available in `:wall` mode. | `0` (disabled) | `200`
+`gc` | N/A | Initiate a full and immediate garbage collection cycle before profiling. Only available in `:retained` mode. | `true` | N/A
 
 ## Development
 
