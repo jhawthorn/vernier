@@ -1,6 +1,6 @@
 module Vernier
   class Middleware
-    def initialize(app, permit: ->(_) { true })
+    def initialize(app, permit: ->(_env) { true })
       @app = app
       @permit = permit
     end
