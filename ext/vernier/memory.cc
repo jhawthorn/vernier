@@ -85,9 +85,9 @@ class MemoryTracker : public PeriodicThread {
 static const rb_data_type_t rb_memory_tracker_type = {
     .wrap_struct_name = "vernier/memory_tracker",
     .function = {
-        //.dmemsize = memory_tracker_memsize,
         //.dmark = memory_tracker_mark,
         //.dfree = memory_tracker_free,
+        //.dsize = memory_tracker_memsize,
     },
 };
 
