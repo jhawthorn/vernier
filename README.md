@@ -30,7 +30,7 @@ gem "vernier", "~> 1.0"
 
 ## Usage
 
-The output can be viewed in the web app at https://vernier.prof, locally using the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (both lightly customized versions of the firefox profiler frontend, which profiles are also compatible with) or by using the `vernier view` command in the CLI.
+The output can be viewed in the web app at https://vernier.prof, locally using the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (both lightly customized versions of the firefox profiler frontend which profiles are compatible with), or by using the `vernier view` command in the CLI.
 
 - **Flame Graph**: Shows proportionally how much time is spent within particular stack frames. Frames are grouped together, which means that x-axis / left-to-right order is not meaningful.
 - **Stack Chart**: Shows the stack at each sample with the x-axis representing time and can be read left-to-right.
@@ -41,14 +41,14 @@ The output can be viewed in the web app at https://vernier.prof, locally using t
 
 The easiest way to record a program or script is via the CLI:
 
-```
+```sh
 $ vernier run -- ruby -e 'sleep 1'
 starting profiler with interval 500 and allocation interval 0
 #<Vernier::Result 1.001589 seconds, 1 threads, 1 samples, 1 unique>
 written to /tmp/profile20240328-82441-gkzffc.vernier.json.gz
 ```
 
-```
+```sh
 $ vernier run --interval 100 --allocation-interval 10 -- ruby -e '10.times { Object.new }'
 starting profiler with interval 100 and allocation interval 10
 #<Vernier::Result 0.00067 seconds, 1 threads, 1 samples, 1 unique>
@@ -85,13 +85,39 @@ some_other_slow_method
 Vernier.stop_profile
 ```
 
+#### Rack middleware
+
+You can also use `Vernier::Middleware` to profile a Rack application:
+
+```ruby
+# config.ru
+
+require "vernier"
+
+use Vernier::Middleware
+
+run ->(env) { [200, { "Content-Type" => "text/plain" }, ["Hello, Profiling World!"]] }
+```
+
+If you're using Rails, you can add the middleware to your `config/application.rb`:
+
+```ruby
+config.middleware.use Vernier::Middleware, permit: ->(env) { env["PATH_INFO"].start_with?("/api") }
+```
+
+You can then enable profiling and configure options with query parameters:
+
+```sh
+curl http://localhost:3000?vernier=true&vernier_interval=100&vernier_allocation_interval=10
+```
+
 ### Retained memory
 
 #### Block of code
 
 Record a flamegraph of all **retained** allocations from loading `irb`:
 
-```
+```sh
 ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "irb" }'
 ```
 
@@ -100,13 +126,13 @@ ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "i
 
 ### Options
 
-Option | Description
-:- | :-
-`mode` | The sampling mode to use. One of `:wall`, `:retained` or `:custom`. Default is `:wall`.
-`out` | The file to write the profile to.
-`interval` | The sampling interval in microseconds. Default is `500`. Only available in `:wall` mode.
-`allocation_interval` | The allocation sampling interval in number of allocations. Default is `0` (disabled). Only available in `:wall` mode.
-`gc` | Initiate a full and immediate garbage collection cycle before profiling. Default is `true`. Only available in `:retained` mode.
+Option \| Middleware Param | Description | Default \| Middleware Default
+:- | :- | :-
+`mode` \| N/A | The sampling mode to use. One of `:wall`, `:retained` or `:custom`. | `:wall` \| `:wall`
+`out` \| N/A | The file to write the profile to. | N/A \| Automatically generated
+`interval` \| `vernier_interval` | The sampling interval in microseconds. Only available in `:wall` mode. | `500` \| `200`
+`allocation_interval` \| `vernier_allocation_interval` | The allocation sampling interval in number of allocations. Only available in `:wall` mode. | `0` (disabled) \| `200`
+`gc` \| N/A | Initiate a full and immediate garbage collection cycle before profiling. Only available in `:retained` mode. | `true` \| N/A
 
 ## Development
 
