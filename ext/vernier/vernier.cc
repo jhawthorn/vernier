@@ -78,6 +78,9 @@ static const char *gvl_event_name(rb_event_flag_t event) {
 struct FrameInfo {
     static const char *label_cstr(VALUE frame) {
         VALUE label = rb_profile_frame_full_label(frame);
+        // Currently (2025-03-22, Ruby 3.4.2) this occurs when an iseq method
+        // entry is replaced with a refinement
+        if (NIL_P(label)) return "(nil)";
         return StringValueCStr(label);
     }
 
@@ -86,7 +89,7 @@ struct FrameInfo {
         if (NIL_P(file))
             file = rb_profile_frame_path(frame);
         if (NIL_P(file)) {
-            return "";
+            return "(nil)";
         } else {
             return StringValueCStr(file);
         }
