@@ -89,46 +89,48 @@ class RawSample {
 
 // TODO: Rename FuncInfo
 struct FrameInfo {
-    static const char *label_cstr(VALUE frame) {
-        VALUE label = rb_profile_frame_full_label(frame);
-        // Currently (2025-03-22, Ruby 3.4.2) this occurs when an iseq method
-        // entry is replaced with a refinement
-        if (NIL_P(label)) return "(nil)";
-        return StringValueCStr(label);
-    }
-
-    static const char *file_cstr(VALUE frame) {
-        VALUE file = rb_profile_frame_absolute_path(frame);
-        if (NIL_P(file))
-            file = rb_profile_frame_path(frame);
-        if (NIL_P(file)) {
-            return "(nil)";
-        } else {
-            return StringValueCStr(file);
-        }
-    }
-
     static int first_lineno_int(VALUE frame) {
         VALUE first_lineno = rb_profile_frame_first_lineno(frame);
         return NIL_P(first_lineno) ? 0 : FIX2INT(first_lineno);
     }
 
+    static std::string convert_rstring(VALUE rstring) {
+        if (NIL_P(rstring)) {
+            return "(nil)";
+        } else {
+            const char *cstring = StringValueCStr(rstring);
+            return cstring;
+        }
+    }
+
+    std::string full_label() const {
+        std::string output;
+        output.append(classpath);
+        output.append(is_singleton ? "." : "#");
+        output.append(method_name);
+        return output;
+    }
+
     FrameInfo(VALUE frame) :
-        label(label_cstr(frame)),
-        file(file_cstr(frame)),
-        first_lineno(first_lineno_int(frame)) { }
+        label(convert_rstring(rb_profile_frame_label(frame))),
+        base_label(convert_rstring(rb_profile_frame_base_label(frame))),
+        classpath(convert_rstring(rb_profile_frame_classpath(frame))),
+        absolute_path(convert_rstring(rb_profile_frame_absolute_path(frame))),
+        method_name(convert_rstring(rb_profile_frame_method_name(frame))),
+        path(convert_rstring(rb_profile_frame_path(frame))),
+        first_lineno(first_lineno_int(frame)),
+        is_singleton(RTEST(rb_profile_frame_singleton_method_p(frame)))
+    { }
 
     std::string label;
-    std::string file;
+    std::string base_label;
+    std::string classpath;
+    std::string path;
+    std::string absolute_path;
+    std::string method_name;
     int first_lineno;
+    bool is_singleton;
 };
-
-inline bool operator==(const FrameInfo& lhs, const FrameInfo& rhs) noexcept {
-    return
-        lhs.label == rhs.label &&
-        lhs.file == rhs.file &&
-        lhs.first_lineno == rhs.first_lineno;
-}
 
 template <typename K>
 class IndexMap {

@@ -167,7 +167,7 @@ StackTable::stack_table_func_name(VALUE self, VALUE idxval) {
         return Qnil;
     } else {
         const auto &func_info = table[idx];
-        const std::string &label = func_info.label;
+        std::string label = func_info.full_label();
 
         // Ruby constants are in an arbitrary (ASCII compatible) encoding and
         // method names are in an arbitrary (ASCII compatible) encoding. These
@@ -195,7 +195,8 @@ StackTable::stack_table_func_filename(VALUE self, VALUE idxval) {
         return Qnil;
     } else {
         const auto &func_info = table[idx];
-        const std::string &filename = func_info.file;
+        std::string filename = func_info.absolute_path;
+        if (filename.empty()) filename = func_info.path;
 
         // Technically filesystems are binary and then Ruby interprets that as
         // default_external encoding. But to keep things simple for now we are
