@@ -161,12 +161,12 @@ class TestStackTable < Minitest::Test
     end
 
     # Replace cfunc with previous frame as caller_locations does
-    prev = "<cfunc>:0"
+    prev = nil
     actual.reverse_each do |line|
-      if line.start_with?("<cfunc>:0")
+      if prev && line.start_with?("<cfunc>:0")
         line.gsub!(/\A<cfunc>:0/, prev)
-      elsif line.start_with?("<internal:")
-        line.gsub!(/\A<internal:[^>]*>/, "")
+      elsif prev && line.start_with?("<internal:")
+        line.gsub!(/\A<internal:[^>]*>:\d+/, prev)
       else
         prev = line[/\A(.*):in '/, 1]
       end
