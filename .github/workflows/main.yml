@@ -10,7 +10,7 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
-    name: Ruby ${{ matrix.ruby }}${{ matrix.mn_threads == 1 && ' +MN' || '' }} ${{ matrix.os }}
+    name: Ruby ${{ matrix.ruby }}${{ matrix.yjit == 1 && ' +YJIT' || '' }}${{ matrix.mn_threads == 1 && ' +MN' || '' }} ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
@@ -19,9 +19,12 @@ jobs:
           - "3.3.7"
           - "3.4.2"
           - "head"
+
         os:
           - ubuntu-latest
           - macos-latest
+
+        yjit: [0]
         mn_threads: [0]
 
         include:
@@ -31,6 +34,13 @@ jobs:
           - os: ubuntu-latest
             ruby: "head"
             mn_threads: 1
+
+          - os: ubuntu-latest
+            ruby: "3.4.2"
+            yjit: 1
+          - os: ubuntu-latest
+            ruby: "head"
+            yjit: 1
 
     steps:
       - uses: actions/checkout@v2
@@ -42,4 +52,5 @@ jobs:
       - name: Run the default task
         run: bundle exec rake
         env:
+          RUBY_YJIT_ENABLE: ${{ matrix.yjit }}
           RUBY_MN_THREADS: ${{ matrix.mn_threads }}
