@@ -90,7 +90,7 @@ module Vernier
     end
 
     class Stack < BaseType
-      def each_frame
+      def each
         return enum_for(__method__) unless block_given?
 
         stack_idx = idx
@@ -99,6 +99,17 @@ module Vernier
           yield Frame.new(stack_table, frame_idx)
           stack_idx = stack_table.stack_parent_idx(stack_idx)
         end
+      end
+      alias each_frame each
+
+      def [](n)
+        raise RangeError if n < 0
+        stack_idx = idx
+        while n > 0
+          stack_idx = stack_table.stack_parent_idx(stack_idx)
+          n -= 1
+        end
+        Frame.new(stack_table, stack_table.stack_frame_idx(stack_idx))
       end
 
       def leaf_frame_idx

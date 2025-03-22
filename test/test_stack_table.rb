@@ -144,6 +144,26 @@ class TestStackTable < Minitest::Test
     assert_equal expected, actual
   end
 
+  def test_replacing_with_a_refinement
+    klass = Class.new do
+      def foo
+        stack_table = Vernier::StackTable.new
+        stack_table.stack(stack_table.current_stack)
+      end
+    end
+
+    stack = klass.new.foo
+
+    Module.new do
+      refine klass do
+        def foo
+        end
+      end
+    end
+
+    assert_includes stack[0].to_s, "(nil) at (nil)"
+  end
+
   def test_backtrace
     stack_table = Vernier::StackTable.new
     expected = caller_locations(0); index = stack_table.current_stack
