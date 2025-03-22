@@ -108,14 +108,16 @@ module Vernier
       end
       alias each_frame each
 
-      def [](n)
-        raise RangeError if n < 0
+      def [](offset)
+        raise RangeError if offset < 0
         stack_idx = idx
-        while n > 0
+        while stack_idx && offset > 0
           stack_idx = stack_table.stack_parent_idx(stack_idx)
-          n -= 1
+          offset -= 1
         end
-        Frame.new(stack_table, stack_table.stack_frame_idx(stack_idx))
+        if stack_idx && offset == 0
+          Frame.new(stack_table, stack_table.stack_frame_idx(stack_idx))
+        end
       end
 
       def leaf_frame_idx
