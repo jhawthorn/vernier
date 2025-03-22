@@ -23,7 +23,7 @@ class TestAllocationTracer < Minitest::Test
 
   def test_untraced_object_while_running
     allocated_before = Object.new
-    allocations = Vernier::AllocationTracer.trace do |trace|
+    Vernier::AllocationTracer.trace do |trace|
       1000.times { Object.new }
       assert_nil trace.stack_idx(allocated_before)
     end
