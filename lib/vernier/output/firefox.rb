@@ -145,7 +145,8 @@ module Vernier
             end,
             sourceCodeIsNotOnSearchfox: true,
             initialVisibleThreads: threads.each_index.to_a,
-            initialSelectedThreads: Array(threads.find_index(&:is_start))
+            initialSelectedThreads: Array(threads.find_index(&:is_start)),
+            userMetadata: profile.meta[:user_metadata]
           },
           counters: counter_data,
           libs: [],

@@ -7,6 +7,15 @@ require "vernier/version"
 
 module Vernier
   module CLI
+    class Metadata < Array
+      require 'json'
+      require 'base64'
+
+      def to_s
+        Base64.encode64(to_json)
+      end
+    end
+
     def self.run(options)
       banner = <<-END
 Usage: vernier run [FLAGS] -- COMMAND
@@ -37,6 +46,11 @@ FLAGS:
         end
         o.on('--hooks [HOOKS]', String, "enable instrumentation hooks, currently supported: rails") do |s|
           options[:hooks] = s
+        end
+        o.on("--metadata KEY=VALUE", String, "Set metadata key-value pairs (can be specified multiple times)") do |kv|
+          key, value = kv.split('=')
+          options[:metadata] ||= Metadata.new
+          options[:metadata] << { key: key, value: value }
         end
       end
     end
