@@ -74,7 +74,34 @@ static const char *gvl_event_name(rb_event_flag_t event) {
     return "no-event";
 }
 
-// TODO: Rename FuncInfo
+struct Frame {
+    VALUE frame;
+    VALUE file;
+    int line;
+    
+    Frame() : frame(Qnil), file(Qnil), line(0) { } // root frame
+    
+    Frame(VALUE frame, int line) :
+        frame(frame), 
+        file(frame == 0 ? Qnil : get_frame_file(frame)), 
+        line(line) { }
+    
+    private:
+        static VALUE get_frame_file(VALUE frame) {
+            VALUE file = rb_profile_frame_absolute_path(frame);
+            if (NIL_P(file)) file = rb_profile_frame_path(frame);
+            return file;
+        }
+};
+
+bool operator==(const Frame& lhs, const Frame& rhs) noexcept {
+    return lhs.frame == rhs.frame && lhs.file == rhs.file && lhs.line == rhs.line;
+}
+
+bool operator!=(const Frame& lhs, const Frame& rhs) noexcept {
+    return !(lhs == rhs);
+}
+
 struct FrameInfo {
     static const char *label_cstr(VALUE frame) {
         VALUE label = rb_profile_frame_full_label(frame);
@@ -84,10 +111,7 @@ struct FrameInfo {
         return StringValueCStr(label);
     }
 
-    static const char *file_cstr(VALUE frame) {
-        VALUE file = rb_profile_frame_absolute_path(frame);
-        if (NIL_P(file))
-            file = rb_profile_frame_path(frame);
+    static const char *file_cstr(VALUE file) {
         if (NIL_P(file)) {
             return "(nil)";
         } else {
@@ -100,10 +124,10 @@ struct FrameInfo {
         return NIL_P(first_lineno) ? 0 : FIX2INT(first_lineno);
     }
 
-    FrameInfo(VALUE frame) :
-        label(label_cstr(frame)),
-        file(file_cstr(frame)),
-        first_lineno(first_lineno_int(frame)) { }
+    FrameInfo(Frame frame) :
+        label(label_cstr(frame.frame)),
+        file(file_cstr(frame.file)),
+        first_lineno(first_lineno_int(frame.frame)) { }
 
     std::string label;
     std::string file;
@@ -117,16 +141,7 @@ bool operator==(const FrameInfo& lhs, const FrameInfo& rhs) noexcept {
         lhs.first_lineno == rhs.first_lineno;
 }
 
-struct Frame {
-    VALUE frame;
-    int line;
-};
-
-bool operator==(const Frame& lhs, const Frame& rhs) noexcept {
-    return lhs.frame == rhs.frame && lhs.line == rhs.line;
-}
-
-bool operator!=(const Frame& lhs, const Frame& rhs) noexcept {
+bool operator!=(const FrameInfo& lhs, const FrameInfo& rhs) noexcept {
     return !(lhs == rhs);
 }
 
@@ -360,10 +375,10 @@ struct StackTable {
             }
         }
 
-        for (int i = func_info_list.size(); i < func_map.size(); i++) {
-            const auto &func = func_map[i];
+        for (int i = func_info_list.size(); i < frame_map.size(); i++) {
+            const auto &frame = frame_map[i];
             // must not hold a mutex here
-            func_info_list.push_back(FrameInfo(func));
+            func_info_list.push_back(FrameInfo(frame));
         }
     }
 
