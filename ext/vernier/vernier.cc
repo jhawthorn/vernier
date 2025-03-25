@@ -83,10 +83,7 @@ struct FuncInfo {
         return StringValueCStr(label);
     }
 
-    static const char *file_cstr(VALUE frame) {
-        VALUE file = rb_profile_frame_absolute_path(frame);
-        if (NIL_P(file))
-            file = rb_profile_frame_path(frame);
+    static const char *file_cstr(VALUE file) {
         if (NIL_P(file)) {
             return "(nil)";
         } else {
@@ -99,9 +96,9 @@ struct FuncInfo {
         return NIL_P(first_lineno) ? 0 : FIX2INT(first_lineno);
     }
 
-    FuncInfo(VALUE frame) :
+    FuncInfo(VALUE frame, VALUE file) :
         label(label_cstr(frame)),
-        file(file_cstr(frame)),
+        file(file_cstr(file)),
         first_lineno(first_lineno_int(frame)) { }
 
     std::string label;
@@ -116,13 +113,32 @@ bool operator==(const FuncInfo& lhs, const FuncInfo& rhs) noexcept {
         lhs.first_lineno == rhs.first_lineno;
 }
 
+bool operator!=(const FuncInfo& lhs, const FuncInfo& rhs) noexcept {
+    return !(lhs == rhs);
+}
+
 struct Frame {
     VALUE frame;
+    VALUE file;
     int line;
+
+    Frame() : frame(Qnil), file(Qnil), line(-1) { }
+
+    Frame(VALUE frame, int line) :
+        frame(frame),
+        file(frame == 0 ? Qnil : get_frame_file(frame)),
+        line(line) { }
+
+    private:
+        static VALUE get_frame_file(VALUE frame) {
+            VALUE file = rb_profile_frame_absolute_path(frame);
+            if (NIL_P(file)) file = rb_profile_frame_path(frame);
+            return file;
+        }
 };
 
 bool operator==(const Frame& lhs, const Frame& rhs) noexcept {
-    return lhs.frame == rhs.frame && lhs.line == rhs.line;
+    return lhs.frame == rhs.frame && lhs.file == rhs.file && lhs.line == rhs.line;
 }
 
 bool operator!=(const Frame& lhs, const Frame& rhs) noexcept {
@@ -135,7 +151,7 @@ namespace std {
     {
         std::size_t operator()(Frame const& s) const noexcept
         {
-            return s.frame ^ s.line;
+            return s.frame ^ s.file ^ s.line;
         }
     };
 }
@@ -164,7 +180,7 @@ class RawSample {
     Frame frame(int i) const {
         int idx = len - i - 1;
         if (idx < 0) throw std::out_of_range("VERNIER BUG: index out of range");
-        const Frame frame = {frames[idx], lines[idx]};
+        const Frame frame = Frame(frames[idx], lines[idx]);
         return frame;
     }
 
@@ -279,10 +295,10 @@ struct StackTable {
         int parent;
         int index;
 
-        StackNode(Frame frame, int index, int parent) : frame(frame), index(index), parent(parent) {}
+        StackNode(Frame frame, int index, int parent) : frame(frame), index(index), parent(parent) { }
 
         // root
-        StackNode() : frame(Frame{0, 0}), index(-1), parent(-1) {}
+        StackNode() : frame(Frame(0, 0)), index(-1), parent(-1) { }
     };
 
     // This mutex guards the StackNodes only. The rest of the maps and vectors
@@ -349,20 +365,24 @@ struct StackTable {
     // Converts Frames from stacks other tables. "Symbolicates" the frames
     // which allocates.
     void finalize() {
+        std::unordered_map<VALUE, Frame> frames_by_func;
+
         {
             const std::lock_guard<std::mutex> lock(stack_mutex);
             for (int i = stack_node_list_finalized_idx; i < stack_node_list.size(); i++) {
                 const auto &stack_node = stack_node_list[i];
                 frame_map.index(stack_node.frame);
                 func_map.index(stack_node.frame.frame);
+                frames_by_func.emplace(stack_node.frame.frame, stack_node.frame);
                 stack_node_list_finalized_idx = i;
             }
         }
 
         for (int i = func_info_list.size(); i < func_map.size(); i++) {
             const auto &func = func_map[i];
+            const auto &frame = frames_by_func[func];
             // must not hold a mutex here
-            func_info_list.push_back(FuncInfo(func));
+            func_info_list.push_back(FuncInfo(frame.frame, frame.file));
         }
     }
 
@@ -371,6 +391,7 @@ struct StackTable {
 
         for (auto stack_node: stack_node_list) {
             rb_gc_mark(stack_node.frame.frame);
+            rb_gc_mark(stack_node.frame.file);
         }
     }
 
@@ -1177,9 +1198,10 @@ class BaseCollector {
     VALUE start_thread;
     TimeStamp started_at;
 
-    BaseCollector(VALUE stack_table_value) : stack_table_value(stack_table_value), stack_table(get_stack_table(stack_table_value)) {
-    }
-    virtual ~BaseCollector() {}
+    BaseCollector(VALUE stack_table_value) :
+        stack_table_value(stack_table_value),
+        stack_table(get_stack_table(stack_table_value)) { }
+    virtual ~BaseCollector() { }
 
     virtual bool start() {
         if (running) {
@@ -1421,15 +1443,15 @@ class RetainedCollector : public BaseCollector {
         RetainedCollector *collector = this;
         for (auto& obj: collector->object_list) {
             VALUE reloc_obj = rb_gc_location(obj);
-            
+
             const auto search = collector->object_frames.find(obj);
             if (search != collector->object_frames.end()) {
                 int stack_index = search->second;
-                
+
                 collector->object_frames.erase(search);
                 collector->object_frames.emplace(reloc_obj, stack_index);
             }
-            
+
             obj = reloc_obj;
         }
     }
