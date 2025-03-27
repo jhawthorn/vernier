@@ -146,7 +146,17 @@ module Vernier
             sourceCodeIsNotOnSearchfox: true,
             initialVisibleThreads: threads.each_index.to_a,
             initialSelectedThreads: Array(threads.find_index(&:is_start)),
-            userMetadata: profile.meta[:user_metadata]
+            vernierUserMetadata: profile.meta[:user_metadata],
+            extra: [
+              label: "User-Supplied Metadata",
+              entries: profile.meta[:user_metadata]&.map do |k, v|
+                {
+                  label: k,
+                  format: "string",
+                  value: v
+                }
+              end
+            ]
           },
           counters: counter_data,
           libs: [],
