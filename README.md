@@ -4,9 +4,11 @@ Next-generation Ruby 3.2.1+ sampling profiler. Tracks multiple threads, GVL acti
 
 <img width="500" alt="Screenshot 2024-02-29 at 22 47 43" src="https://github.com/jhawthorn/vernier/assets/131752/aa995a41-d74f-405f-8ada-2522dd72c2c8">
 
-## Examples
+## Demos and Examples
 
-[Livestreamed demo: Pairin' with Aaron (YouTube)](https://www.youtube.com/watch?v=9nvX3OHykGQ#t=27m43)
+[Livestreamed demo: Pairin' with Aaron (YouTube)](https://www.youtube.com/watch?v=9nvX3OHykGQ#t=27m40)
+
+[Overview at RubyKaigi 2024 (YouTube)](https://youtu.be/QSjN-H4hGsM)
 
 Sidekiq jobs from Mastodon (time, threaded)
 : https://share.firefox.dev/44jZRf3
