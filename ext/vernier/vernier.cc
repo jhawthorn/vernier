@@ -74,8 +74,7 @@ static const char *gvl_event_name(rb_event_flag_t event) {
     return "no-event";
 }
 
-// TODO: Rename FuncInfo
-struct FrameInfo {
+struct FuncInfo {
     static const char *label_cstr(VALUE frame) {
         VALUE label = rb_profile_frame_full_label(frame);
         // Currently (2025-03-22, Ruby 3.4.2) this occurs when an iseq method
@@ -100,7 +99,7 @@ struct FrameInfo {
         return NIL_P(first_lineno) ? 0 : FIX2INT(first_lineno);
     }
 
-    FrameInfo(VALUE frame) :
+    FuncInfo(VALUE frame) :
         label(label_cstr(frame)),
         file(file_cstr(frame)),
         first_lineno(first_lineno_int(frame)) { }
@@ -110,7 +109,7 @@ struct FrameInfo {
     int first_lineno;
 };
 
-bool operator==(const FrameInfo& lhs, const FrameInfo& rhs) noexcept {
+bool operator==(const FuncInfo& lhs, const FuncInfo& rhs) noexcept {
     return
         lhs.label == rhs.label &&
         lhs.file == rhs.file &&
@@ -266,13 +265,13 @@ struct StackTable {
 
     struct FrameWithInfo {
         Frame frame;
-        FrameInfo info;
+        FuncInfo info;
     };
 
     IndexMap<Frame> frame_map;
 
     IndexMap<VALUE> func_map;
-    std::vector<FrameInfo> func_info_list;
+    std::vector<FuncInfo> func_info_list;
 
     struct StackNode {
         std::unordered_map<Frame, int> children;
@@ -363,7 +362,7 @@ struct StackTable {
         for (int i = func_info_list.size(); i < func_map.size(); i++) {
             const auto &func = func_map[i];
             // must not hold a mutex here
-            func_info_list.push_back(FrameInfo(func));
+            func_info_list.push_back(FuncInfo(func));
         }
     }
 
