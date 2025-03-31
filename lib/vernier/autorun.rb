@@ -16,8 +16,8 @@ module Vernier
       key.sub(/\AVERNIER_/, "").downcase.to_sym
     end
     if @options[:metadata]
-      @options[:user_metadata] = JSON.parse(Base64.decode64(@options[:metadata])).each_with_object({}) do |hash, result|
-        result[hash["key"].to_sym] = hash["value"]
+      @options[:user_metadata] = JSON.parse(Base64.decode64(@options[:metadata])).to_h do |k, v|
+        [k.to_sym, v]
       end
     end
     @options.freeze

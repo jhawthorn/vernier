@@ -50,7 +50,7 @@ FLAGS:
         o.on("--metadata KEY=VALUE", String, "Set metadata key-value pairs (can be specified multiple times)") do |kv|
           key, value = kv.split('=')
           options[:metadata] ||= Metadata.new
-          options[:metadata] << { key: key, value: value }
+          options[:metadata] << [key, value]
         end
       end
     end
