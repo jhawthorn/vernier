@@ -1,5 +1,7 @@
 require "tempfile"
 require "vernier"
+require "base64"
+require "json"
 
 module Vernier
   module Autorun
@@ -12,6 +14,11 @@ module Vernier
     @options = ENV.to_h.select { |k,v| k.start_with?("VERNIER_") }
     @options.transform_keys! do |key|
       key.sub(/\AVERNIER_/, "").downcase.to_sym
+    end
+    if @options[:metadata]
+      @options[:user_metadata] = JSON.parse(Base64.decode64(@options[:metadata])).to_h do |k, v|
+        [k.to_sym, v]
+      end
     end
     @options.freeze
 
@@ -30,6 +37,7 @@ module Vernier
       result = @collector.stop
       @collector = nil
 
+      result.meta[:user_metadata] = options[:user_metadata]
       output_path = options[:output]
       unless output_path
         output_dir = options[:output_dir]
