@@ -149,7 +149,7 @@ module Vernier
             vernierUserMetadata: profile.meta[:user_metadata],
             extra: [
               label: "User-Supplied Metadata",
-              entries: profile.meta[:user_metadata]&.map do |k, v|
+              entries: profile.meta[:user_metadata].map do |k, v|
                 {
                   label: k,
                   format: "string",
