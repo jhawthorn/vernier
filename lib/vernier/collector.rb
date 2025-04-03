@@ -25,6 +25,8 @@ module Vernier
       @hooks.each do |hook|
         hook.enable
       end
+
+      @user_metadata = options[:metadata] || {}
     end
 
     private def add_hook(hook)
@@ -79,6 +81,7 @@ module Vernier
       result.meta[:mode] = @mode
       result.meta[:out] = @out
       result.meta[:gc] = @gc
+      result.meta[:user_metadata] = @user_metadata
 
       result.stack_table = stack_table
       @thread_names.finish

@@ -15,21 +15,21 @@ module Vernier
     @options.transform_keys! do |key|
       key.sub(/\AVERNIER_/, "").downcase.to_sym
     end
-    if @options[:metadata]
-      @options[:user_metadata] = JSON.parse(Base64.decode64(@options[:metadata])).to_h do |k, v|
-        [k.to_sym, v]
-      end
-    end
     @options.freeze
 
     def self.start
       interval = options.fetch(:interval, 500).to_i
       allocation_interval = options.fetch(:allocation_interval, 0).to_i
       hooks = options.fetch(:hooks, "").split(",")
+      metadata = if options[:metadata]
+        JSON.parse(Base64.decode64(@options[:metadata])).to_h { |k, v| [k.to_sym, v] }
+      else
+        {}
+      end
 
       STDERR.puts("starting profiler with interval #{interval} and allocation interval #{allocation_interval}")
 
-      @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, hooks:)
+      @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, hooks:, metadata:)
       @collector.start
     end
 
@@ -37,7 +37,6 @@ module Vernier
       result = @collector.stop
       @collector = nil
 
-      result.meta[:user_metadata] = options[:user_metadata]
       output_path = options[:output]
       unless output_path
         output_dir = options[:output_dir]

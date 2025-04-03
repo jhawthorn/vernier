@@ -133,8 +133,9 @@ ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "i
 | `mode`                | N/A                           | Sampling mode: `:wall`, `:retained`, or `:custom`.            | `:wall` (`:wall`)            |
 | `out`                 | N/A                           | File to write the profile to.                                 | N/A (Auto-generated)         |
 | `interval`            | `vernier_interval`            | Sampling interval (µs). Only in `:wall` mode.                 | `500` (`200`)                |
-| `allocation_interval` | `vernier_allocation_interval` | Allocation sampling interval. Only in `:wall` mode.           | `0` (disabled) (`200`)       |
+| `allocation_interval` | `vernier_allocation_interval` | Allocation sampling interval. Only in `:wall` mode.           | `0`/disabled (`200`)       |
 | `gc`                  | N/A                           | Run full GC cycle before profiling. Only in `:retained` mode. | `true` (N/A)                 |
+| `metadata`            | N/A                           | Metadata key-value pairs to include in the profile.           | `{}` (N/A)                   |
 
 ## Development
 
