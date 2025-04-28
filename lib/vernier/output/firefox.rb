@@ -93,7 +93,7 @@ module Vernier
       end
 
       def output(gzip: false)
-        result = ::JSON.fast_generate(data)
+        result = ::JSON.generate(data)
         if gzip
           require "zlib"
           result = Zlib.gzip(result)
