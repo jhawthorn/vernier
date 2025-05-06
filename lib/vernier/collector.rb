@@ -75,6 +75,15 @@ module Vernier
       )
     end
 
+    def cancel
+      finish
+      @thread_names.cancel
+      @hooks.each do |hook|
+        hook.disable
+      end
+      nil
+    end
+
     def stop
       result = finish
 
