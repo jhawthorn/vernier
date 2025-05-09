@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "filename_filter"
-require "cgi/util"
+require "cgi/escape"
 
 module Vernier
   module Output
