@@ -32,7 +32,7 @@ gem "vernier", "~> 1.0"
 
 ## Usage
 
-The output can be viewed in the web app at https://vernier.prof, locally using the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (both lightly customized versions of the firefox profiler frontend which profiles are compatible with), or by using the `vernier view` command in the CLI.
+The output can be viewed in the web app at https://vernier.prof, locally using the [`profile-viewer` gem](https://github.com/tenderlove/profiler/tree/ruby) (both lightly customized versions of the Firefox profiler frontend which profiles are compatible with), or by using the `vernier view` command in the CLI.
 
 - **Flame Graph**: Shows proportionally how much time is spent within particular stack frames. Frames are grouped together, which means that x-axis / left-to-right order is not meaningful.
 - **Stack Chart**: Shows the stack at each sample with the x-axis representing time and can be read left-to-right.
@@ -133,9 +133,25 @@ ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "i
 | `mode`                | N/A                           | Sampling mode: `:wall`, `:retained`, or `:custom`.            | `:wall` (`:wall`)            |
 | `out`                 | N/A                           | File to write the profile to.                                 | N/A (Auto-generated)         |
 | `interval`            | `vernier_interval`            | Sampling interval (µs). Only in `:wall` mode.                 | `500` (`200`)                |
-| `allocation_interval` | `vernier_allocation_interval` | Allocation sampling interval. Only in `:wall` mode.           | `0`/disabled (`200`)       |
+| `allocation_interval` | `vernier_allocation_interval` | Allocation sampling interval. Only in `:wall` mode.           | `0` i.e. disabled (`200`)    |
 | `gc`                  | N/A                           | Run full GC cycle before profiling. Only in `:retained` mode. | `true` (N/A)                 |
 | `metadata`            | N/A                           | Metadata key-value pairs to include in the profile.           | `{}` (N/A)                   |
+
+#### Hook options
+
+Vernier offers some optional hooks:
+
+- `:rails` / `:activesupport` - Adds selected Active Support event markers to the Firefox output
+
+- `:memory_usage` - Adds a memory usage counter to the Firefox output
+
+Usage example:
+
+```ruby
+Vernier.profile(out: "time_profile.json", hooks: [:rails, :memory_usage]) do
+  # ...
+end
+```
 
 ## Development
 
