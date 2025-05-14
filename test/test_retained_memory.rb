@@ -45,8 +45,14 @@ class TestRetainedMemory < Minitest::Test
     top_stack_tally = result.samples.tally.max_by(&:last)
     top_stack = result.stack(top_stack_tally.first)
 
-    assert_equal "Class#new", top_stack.frames[0].label
-    assert_equal "#{self.class}##{__method__}", top_stack.frames[1].label
+    # https://bugs.ruby-lang.org/issues/21254
+    if Gem::Version.new(RUBY_VERSION) >= Gem::Version.new("3.5.0")
+      assert_equal "#{self.class}##{__method__}", top_stack.frames[0].label
+      assert_equal "Integer#times", top_stack.frames[1].label
+    else
+      assert_equal "Class#new", top_stack.frames[0].label
+      assert_equal "#{self.class}##{__method__}", top_stack.frames[1].label
+    end
   end
 
   def test_empty_block
