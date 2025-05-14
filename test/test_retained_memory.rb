@@ -26,10 +26,6 @@ class ReportReader
 end
 
 class TestRetainedMemory < Minitest::Test
-  def test_that_it_has_a_version_number
-    refute_nil ::Vernier::VERSION
-  end
-
   def test_tracing_retained_objects
     retained = []
 
