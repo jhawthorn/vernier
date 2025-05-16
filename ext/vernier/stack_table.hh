@@ -97,7 +97,7 @@ struct FuncInfo {
 
     static std::string convert_rstring(VALUE rstring) {
         if (NIL_P(rstring)) {
-            return "(nil)";
+            return "";
         } else {
             const char *cstring = StringValueCStr(rstring);
             return cstring;

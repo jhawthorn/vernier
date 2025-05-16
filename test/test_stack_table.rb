@@ -161,7 +161,7 @@ class TestStackTable < Minitest::Test
       end
     end
 
-    assert_includes stack[0].to_s, "(nil) at (nil)"
+    assert_includes stack[0].to_s, " at "
   end
 
   def test_backtrace
