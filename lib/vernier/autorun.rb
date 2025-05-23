@@ -1,6 +1,5 @@
 require "tempfile"
 require "vernier"
-require "base64"
 require "json"
 
 module Vernier
@@ -22,7 +21,7 @@ module Vernier
       allocation_interval = options.fetch(:allocation_interval, 0).to_i
       hooks = options.fetch(:hooks, "").split(",")
       metadata = if options[:metadata]
-        JSON.parse(Base64.decode64(@options[:metadata])).to_h { |k, v| [k.to_sym, v] }
+        JSON.parse(@options[:metadata].unpack1("m")).to_h { |k, v| [k.to_sym, v] }
       else
         {}
       end
