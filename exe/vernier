@@ -9,10 +9,9 @@ module Vernier
   module CLI
     class Metadata < Array
       require 'json'
-      require 'base64'
 
       def to_s
-        Base64.encode64(to_json)
+        [to_json].pack("m")
       end
     end
 
