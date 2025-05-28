@@ -28,6 +28,9 @@ FLAGS:
         o.on('--output [FILENAME]', String, "output filename") do |s|
           options[:output] = s
         end
+        o.on('--format [FORMAT]', String, "output format, currently supported: firefox (default), top, file_listing") do |f|
+          options[:format] = f
+        end
         o.on('--output-dir [DIRECTORY]', String, "output directory (default .)") do |s|
           options[:output_dir] = s
         end

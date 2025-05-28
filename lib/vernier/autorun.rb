@@ -26,6 +26,11 @@ module Vernier
         {}
       end
 
+      unless output_format
+        STDERR.puts "invalid format specified: #{options[:format]}"
+        return
+      end
+
       STDERR.puts("starting profiler with interval #{interval} and allocation interval #{allocation_interval}")
 
       @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, hooks:, metadata:)
@@ -34,26 +39,13 @@ module Vernier
 
     def self.stop
       result = @collector.stop
-      @collector = nil
+      @collector = nil      
 
-      output_path = options[:output]
-      unless output_path
-        output_dir = options[:output_dir]
-        unless output_dir
-          if File.writable?(".")
-            output_dir = "."
-          else
-            output_dir = Dir.tmpdir
-          end
-        end
-        prefix = "profile-"
-        timestamp = Time.now.strftime("%Y%m%d-%H%M%S")
-        suffix = ".vernier.json.gz"
+      formatter = output_format.new(result)
 
-        output_path = File.expand_path("#{output_dir}/#{prefix}#{timestamp}-#{$$}#{suffix}")
-      end
+      output_path = options[:output] || OutputPathBuilder.new(formatter:).build
 
-      result.write(out: output_path)
+      formatter.output(out: output_path)
 
       STDERR.puts(result.inspect)
       STDERR.puts("written to #{output_path}")
@@ -69,6 +61,19 @@ module Vernier
 
     def self.toggle
       running? ? stop : start
+    end
+
+    def self.output_format
+      case options.fetch(:format, "firefox")
+      when "firefox"
+        Output::Firefox
+      when "top"
+        Output::Top
+      when "file_listing"
+        Output::FileListing
+      else
+        nil
+      end
     end
   end
 end

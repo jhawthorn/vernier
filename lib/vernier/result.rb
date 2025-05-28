@@ -34,9 +34,14 @@ module Vernier
     end
     alias_method :to_gecko, :to_firefox
 
-    def write(out:)
-      gzip = out.end_with?(".gz")
-      File.binwrite(out, to_firefox(gzip:))
+    def write(out:, format: "firefox")
+      case format
+      when "firefox"
+        gzip = out.end_with?(".gz")
+        File.binwrite(out, to_firefox(gzip:))
+      else
+        raise ArgumentError, "Unsupported format: #{format}"
+      end
     end
 
     def elapsed_seconds

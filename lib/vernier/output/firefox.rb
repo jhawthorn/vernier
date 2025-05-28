@@ -92,6 +92,10 @@ module Vernier
         @categorizer = Categorizer.new
       end
 
+      def suffix
+        "json.gz"
+      end
+
       def output(gzip: false)
         result = ::JSON.generate(data)
         if gzip
