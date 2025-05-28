@@ -7,6 +7,7 @@ Rake::TestTask.new(:test) do |t|
   t.libs << "test"
   t.libs << "lib"
   t.test_files = FileList["test/**/test_*.rb"]
+  t.deps << :compile
 end
 
 task :console => :compile do
