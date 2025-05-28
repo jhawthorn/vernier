@@ -53,7 +53,7 @@ module Vernier
         output_path = File.expand_path("#{output_dir}/#{prefix}#{timestamp}-#{$$}#{suffix}")
       end
 
-      result.write(out: output_path)
+      result.write(out: output_path, format: options[:format] || "firefox")
 
       STDERR.puts(result.inspect)
       STDERR.puts("written to #{output_path}")

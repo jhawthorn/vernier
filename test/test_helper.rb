@@ -4,6 +4,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "vernier"
 require "gvltest"
 require "firefox_test_helpers"
+require "cpuprofile_test_helpers"
 
 ENV["MT_CPU"] = "0"
 require "minitest/autorun"
@@ -51,6 +52,24 @@ class Minitest::Test
         assert_operator stack_idx, :>=, 0
       end
     end
+  end
+
+  def encoded_method(encoding, name: "文字化け")
+    obj = Object.new
+    code = <<~RUBY
+      def #{name}
+        yield
+      end
+    RUBY
+    if encoding == "BINARY"
+      code = code.b
+      name = name.b
+    else
+      code = code.encode(encoding)
+      name = name.encode(encoding)
+    end
+    obj.instance_eval(code)
+    return obj.method(name)
   end
 end
 

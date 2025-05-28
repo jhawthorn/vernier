@@ -34,6 +34,10 @@ module Vernier
     end
     alias_method :to_gecko, :to_firefox
 
+    def to_cpuprofile
+      Output::CpuProfile.new(self).output
+    end
+
     def write(out:)
       gzip = out.end_with?(".gz")
       File.binwrite(out, to_firefox(gzip:))
