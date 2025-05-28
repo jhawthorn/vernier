@@ -18,7 +18,7 @@ module Vernier
       result = Vernier.trace(interval:, allocation_interval:, hooks: [:rails]) do
         @app.call(env)
       end
-      body = result.to_gecko(gzip: true)
+      body = result.to_firefox(gzip: true)
       filename = "#{request.path.gsub("/", "_")}_#{DateTime.now.strftime("%Y-%m-%d-%H-%M-%S")}.vernier.json.gz"
       headers = {
         "Content-Type" => "application/octet-stream",
