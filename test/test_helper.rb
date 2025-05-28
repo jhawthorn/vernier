@@ -52,6 +52,24 @@ class Minitest::Test
       end
     end
   end
+
+  def encoded_method(encoding, name: "文字化け")
+    obj = Object.new
+    code = <<~RUBY
+      def #{name}
+        yield
+      end
+    RUBY
+    if encoding == "BINARY"
+      code = code.b
+      name = name.b
+    else
+      code = code.encode(encoding)
+      name = name.encode(encoding)
+    end
+    obj.instance_eval(code)
+    obj.method(name)
+  end
 end
 
 GC.auto_compact = true
