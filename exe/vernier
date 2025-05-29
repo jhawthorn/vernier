@@ -87,6 +87,8 @@ run = Vernier::CLI.run(options)
 view = Vernier::CLI.view(options)
 
 case ARGV.shift
+when "-v", "--version"
+  puts Vernier::VERSION
 when "run"
   run.parse!
   run.abort(run.help) if ARGV.empty?
