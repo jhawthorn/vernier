@@ -35,12 +35,19 @@ module Vernier
     alias_method :to_gecko, :to_firefox
 
     def to_cpuprofile
-      Output::CpuProfile.new(self).output
+      Output::Cpuprofile.new(self).output
     end
 
-    def write(out:)
-      gzip = out.end_with?(".gz")
-      File.binwrite(out, to_firefox(gzip:))
+    def write(out:, format: "firefox")
+      case format
+      when "cpuprofile"
+        File.binwrite(out, to_cpuprofile)
+      when nil, "firefox"
+        gzip = out.end_with?(".gz")
+        File.binwrite(out, to_firefox(gzip:))
+      else
+        raise ArgumentError, "unknown format: #{format}"
+      end
     end
 
     def elapsed_seconds

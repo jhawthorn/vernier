@@ -31,7 +31,6 @@ module Vernier
         sample_node_ids = samples.map { |stack_idx| stack_to_node_id(stack_idx) }
         time_deltas = calculate_time_deltas(timestamps)
 
-        binding.break
         {
           nodes: nodes,
           startTime: ns_to_us(profile.started_at),

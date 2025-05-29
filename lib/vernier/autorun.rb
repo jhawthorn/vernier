@@ -48,7 +48,11 @@ module Vernier
         end
         prefix = "profile-"
         timestamp = Time.now.strftime("%Y%m%d-%H%M%S")
-        suffix = ".vernier.json.gz"
+        suffix = if options[:format] == "cpuprofile"
+          ".vernier.cpuprofile"
+        else
+          ".vernier.json.gz"
+        end
 
         output_path = File.expand_path("#{output_dir}/#{prefix}#{timestamp}-#{$$}#{suffix}")
       end
