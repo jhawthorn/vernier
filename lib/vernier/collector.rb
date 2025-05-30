@@ -11,6 +11,7 @@ module Vernier
 
       @mode = mode
       @out = options[:out]
+      @format = options[:format]
 
       @markers = []
       @hooks = []
@@ -142,7 +143,7 @@ module Vernier
       #result.instance_variable_set(:@markers, markers)
 
       if @out
-        result.write(out: @out)
+        result.write(out: @out, format: @format)
       end
 
       result

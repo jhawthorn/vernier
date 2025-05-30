@@ -250,24 +250,6 @@ class TestOutputFirefox < Minitest::Test
 
   private
 
-  def encoded_method(encoding, name: "文字化け")
-    obj = Object.new
-    code = <<~RUBY
-      def #{name}
-        yield
-      end
-    RUBY
-    if encoding == "BINARY"
-      code = code.b
-      name = name.b
-    else
-      code = code.encode(encoding)
-      name = name.encode(encoding)
-    end
-    obj.instance_eval(code)
-    return obj.method(name)
-  end
-
   def file_lineno
     caller_locations(1, 1).first.yield_self{|loc| "#{loc.path}:#{loc.lineno}"}
   end
