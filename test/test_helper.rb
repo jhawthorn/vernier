@@ -4,6 +4,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "vernier"
 require "gvltest"
 require "firefox_test_helpers"
+require "cpuprofile_test_helpers"
 
 ENV["MT_CPU"] = "0"
 require "minitest/autorun"
