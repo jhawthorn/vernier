@@ -11,28 +11,49 @@ module Vernier
     # https://github.com/firefox-devtools/profiler/blob/main/src/types/profile.js
     class Firefox
       class Categorizer
+        RAILS_COMPONENTS = %w[ activesupport activemodel activerecord
+              actionview actionpack activejob actionmailer actioncable
+              activestorage actionmailbox actiontext railties ]
+
+        ORDERED_CATEGORIES = %w[ Kernel Rails gem Ruby ] # This is the order of preference
+        AVAILABLE_COLORS = %w[ lightblue red lightred orange blue green purple yellow brown magenta lightgreen grey darkgrey]
+
         attr_reader :categories
+
         def initialize
           @categories = []
           @categories_by_name = {}
 
-          add_category(name: "Ruby", color: "grey") do |c|
-            rails_components = %w[ activesupport activemodel activerecord
-              actionview actionpack activejob actionmailer actioncable
-              activestorage actionmailbox actiontext railties ]
+          add_category(name: "Kernel", color: "magenta") do |c|
             c.add_subcategory(
-              name: "Rails",
-              matcher: gem_path(*rails_components)
+              name: "Kernel",
+              matcher: starts_with("<internal")
             )
+          end  
+
+          add_category(name: "gem", color: "lightblue") do |c|
             c.add_subcategory(
               name: "gem",
               matcher: starts_with(*Gem.path)
             )
+          end
+
+          add_category(name: "Rails", color: "red") do |c|
+            RAILS_COMPONENTS.each do |subcategory|
+              c.add_subcategory(
+                name: subcategory,
+                matcher: gem_path(subcategory)
+              )
+            end
+          end
+
+          add_category(name: "Ruby", color: "purple") do |c|
             c.add_subcategory(
               name: "stdlib",
               matcher: starts_with(RbConfig::CONFIG["rubylibdir"])
             )
           end
+
           add_category(name: "Idle", color: "transparent")
           add_category(name: "Stalled", color: "transparent")
 
@@ -315,25 +336,45 @@ module Vernier
             func_implementations[func_idx]
           end
 
-          cfunc_category = @categorizer.get_category("cfunc")
-          ruby_category = @categorizer.get_category("Ruby")
           func_categories, func_subcategories = [], []
           filenames.each do |filename|
-            if filename == "<cfunc>"
-              func_categories << cfunc_category
-              func_subcategories << 0
-            else
-              func_categories << ruby_category
-              subcategory = ruby_category.subcategories.detect {|c| c.matches?(filename) }&.idx || 0
-              func_subcategories << subcategory
-            end
+            category, subcategory = categorize_filename(filename)
+            func_categories << category
+            func_subcategories << subcategory
           end
+
           @frame_categories = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_categories[func_idx]
           end
           @frame_subcategories = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_subcategories[func_idx]
           end
+        end
+
+        def categorize_filename(filename)
+          return cfunc_category_and_subcategory if filename == "<cfunc>"
+
+          category, subcategory = find_category_and_subcategory(filename, Categorizer::ORDERED_CATEGORIES)
+          return category, subcategory if subcategory
+
+          ruby_category_and_subcategory
+        end
+
+        def cfunc_category_and_subcategory
+          [@categorizer.get_category("cfunc"), 0]
+        end
+
+        def ruby_category_and_subcategory
+          [@categorizer.get_category("Ruby"), 0]
+        end
+
+        def find_category_and_subcategory(filename, categories)
+          categories.each do |category_name|
+            category = @categorizer.get_category(category_name)
+            subcategory = category.subcategories.detect {|c| c.matches?(filename) }&.idx
+            return category, subcategory if subcategory
+          end
+          [nil, nil]
         end
 
         def filter_filenames(filenames)
