@@ -15,9 +15,9 @@ jobs:
       fail-fast: false
       matrix:
         ruby:
-          - "3.2.8"
-          - "3.3.8"
-          - "3.4.5"
+          - "3.2.9"
+          - "3.3.9"
+          - "3.4.6"
           - "head"
 
         os:
@@ -29,14 +29,14 @@ jobs:
 
         include:
           - os: ubuntu-latest
-            ruby: "3.4.2"
+            ruby: "3.4.6"
             mn_threads: 1
           - os: ubuntu-latest
             ruby: "head"
             mn_threads: 1
 
           - os: ubuntu-latest
-            ruby: "3.4.2"
+            ruby: "3.4.6"
             yjit: 1
           - os: ubuntu-latest
             ruby: "head"
