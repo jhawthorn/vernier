@@ -3,14 +3,16 @@
 module Vernier
   module Output
     class Top
-      def initialize(profile)
+      def initialize(profile, row_limit)
         @profile = profile
+        @row_limit = row_limit
       end
 
       class Table
-        def initialize(header)
+        def initialize(header, row_limit)
           @header = header
           @rows = []
+          @row_limit = row_limit
           yield self
         end
 
@@ -24,7 +26,7 @@ module Vernier
               row_separator,
               format_row(@header),
               row_separator
-            ] + @rows.map do |row|
+            ] + @rows.first(@row_limit).map do |row|
               format_row(row)
             end + [row_separator]
           ).join("\n")
@@ -70,7 +72,7 @@ module Vernier
           top_by_self[name] += weight
         end
 
-        Table.new %w[Samples % name] do |t|
+        Table.new %w[Samples % name], @row_limit do |t|
           top_by_self.sort_by(&:last).reverse.each do |frame, samples|
             pct = 100.0 * samples / total
             t << [samples.to_s, pct.round(1).to_s, frame]
