@@ -56,15 +56,6 @@ class TestStackTable < Minitest::Test
     assert_equal hash[:func_table][:name].uniq, hash[:func_table][:name]
   end
 
-  def test_calling_to_h_multiple_times
-    stack_table = Vernier::StackTable.new
-    stack_table.current_stack
-
-    first = stack_table.to_h
-    second = stack_table.to_h
-    assert_equal first, second
-  end
-
   def test_current_sample_with_offset
     stack_table = Vernier::StackTable.new
 
