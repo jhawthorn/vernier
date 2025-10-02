@@ -8,15 +8,17 @@ require_relative "filename_filter"
 module Vernier
   module Output
     # https://profiler.firefox.com/
-    # https://github.com/firefox-devtools/profiler/blob/main/src/types/profile.js
+    # https://github.com/firefox-devtools/profiler/blob/main/src/types/profile.ts
     class Firefox
       class Categorizer
-        RAILS_COMPONENTS = %w[ activesupport activemodel activerecord
-              actionview actionpack activejob actionmailer actioncable
-              activestorage actionmailbox actiontext railties ]
+        RAILS_COMPONENTS = %w[ activesupport activemodel activerecord actionview
+                               actionpack activejob actionmailer actioncable
+                               activestorage actionmailbox actiontext railties ]
 
-        ORDERED_CATEGORIES = %w[ Kernel Rails gem Ruby ] # This is the order of preference
-        AVAILABLE_COLORS = %w[ lightblue red lightred orange blue green purple yellow brown magenta lightgreen grey darkgrey]
+        AVAILABLE_COLORS = %w[ transparent purple green orange yellow lightblue
+                               blue brown magenta red lightred darkgrey grey ]
+
+        ORDERED_CATEGORIES = %w[ Kernel Rails gem Ruby ] # This is in the order of preference
 
         attr_reader :categories
 
@@ -29,7 +31,7 @@ module Vernier
               name: "Kernel",
               matcher: starts_with("<internal")
             )
-          end  
+          end
 
           add_category(name: "gem", color: "lightblue") do |c|
             c.add_subcategory(
@@ -58,6 +60,7 @@ module Vernier
           add_category(name: "Stalled", color: "transparent")
 
           add_category(name: "GC", color: "red")
+
           add_category(name: "cfunc", color: "yellow", matcher: "<cfunc>")
 
           add_category(name: "Thread", color: "grey")
@@ -90,7 +93,10 @@ module Vernier
 
         class Category
           attr_reader :idx, :name, :color, :matcher, :subcategories
+
           def initialize(idx, name:, color:, matcher: nil)
+            raise ArgumentError, "invalid color: #{color}" if color && AVAILABLE_COLORS.none?(color)
+
             @idx = idx
             @name = name
             @color = color
