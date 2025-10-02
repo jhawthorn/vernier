@@ -22,7 +22,7 @@ class TestOutputTop < Minitest::Test
       end
     end
 
-    output = Vernier::Output::Top.new(result).output
+    output = Vernier::Output::Top.new(result, 20).output
     assert_match(/^| \d+ *\| \d+\.\d *\| GVLTest\.sleep_without_gvl *\|$/, output)
     assert_match(/^| \d+ *\| \d+\.\d *\| GVLTest\.sleep_holding_gvl *\|$/, output)
     assert_match(/^| \d+ *\| \d+\.\d *\| Kernel#sleep *\|$/, output)
@@ -31,7 +31,7 @@ class TestOutputTop < Minitest::Test
 
   def test_parsed_profile
     profile = Vernier::ParsedProfile.read_file(fixture_path("gvl_sleep.vernier.json"))
-    output = Vernier::Output::Top.new(profile).output
+    output = Vernier::Output::Top.new(profile, 20).output
     assert_includes output, "| 2013    | 24.8 | GVLTest.sleep_holding_gvl"
     assert_includes output, "| 2010    | 24.7 | Kernel#sleep"
     assert_includes output, "| 2010    | 24.7 | GVLTest.sleep_without_gvl"

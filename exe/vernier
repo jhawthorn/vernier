@@ -79,7 +79,7 @@ FLAGS:
 
       parsed_profile = Vernier::ParsedProfile.read_file(file)
 
-      puts Vernier::Output::Top.new(parsed_profile).output
+      puts Vernier::Output::Top.new(parsed_profile, top).output
       puts Vernier::Output::FileListing.new(parsed_profile).output
     end
   end
