@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Vernier
   class Result
     attr_accessor :stack_table
@@ -41,10 +43,17 @@ module Vernier
     def write(out:, format: "firefox")
       case format
       when "cpuprofile"
-        File.binwrite(out, to_cpuprofile)
-      when nil, "firefox"
-        gzip = out.end_with?(".gz")
-        File.binwrite(out, to_firefox(gzip:))
+        if out.respond_to?(:write)
+          out.write(to_cpuprofile)
+        else
+          File.binwrite(out, to_cpuprofile)
+        end
+      when "firefox", nil
+        if out.respond_to?(:write)
+          out.write(to_firefox)
+        else
+          File.binwrite(out, to_firefox(gzip: out.end_with?(".gz")))
+        end
       else
         raise ArgumentError, "unknown format: #{format}"
       end
