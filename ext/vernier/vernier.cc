@@ -1421,15 +1421,15 @@ class RetainedCollector : public BaseCollector {
         RetainedCollector *collector = this;
         for (auto& obj: collector->object_list) {
             VALUE reloc_obj = rb_gc_location(obj);
-            
+
             const auto search = collector->object_frames.find(obj);
             if (search != collector->object_frames.end()) {
                 int stack_index = search->second;
-                
+
                 collector->object_frames.erase(search);
                 collector->object_frames.emplace(reloc_obj, stack_index);
             }
-            
+
             obj = reloc_obj;
         }
     }
@@ -1782,10 +1782,10 @@ class TimeCollector : public BaseCollector {
     VALUE build_collector_result() {
         VALUE result = BaseCollector::build_collector_result();
 
-        rb_ivar_set(result, rb_intern("@gc_markers"), this->gc_markers.to_array());
-
         VALUE threads = rb_hash_new();
         rb_ivar_set(result, rb_intern("@threads"), threads);
+
+        rb_ivar_set(result, rb_intern("@gc_markers"), this->gc_markers.to_array());
 
         for (const auto& thread: this->threads.list) {
             VALUE hash = rb_hash_new();
