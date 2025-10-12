@@ -17,7 +17,7 @@ jobs:
         ruby:
           - "3.2.9"
           - "3.3.9"
-          - "3.4.6"
+          - "3.4.7"
           - "head"
 
         os:
@@ -29,14 +29,14 @@ jobs:
 
         include:
           - os: ubuntu-latest
-            ruby: "3.4.6"
+            ruby: "3.4.7"
             mn_threads: 1
           - os: ubuntu-latest
             ruby: "head"
             mn_threads: 1
 
           - os: ubuntu-latest
-            ruby: "3.4.6"
+            ruby: "3.4.7"
             yjit: 1
           - os: ubuntu-latest
             ruby: "head"
