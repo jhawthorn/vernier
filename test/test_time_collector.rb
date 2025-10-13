@@ -23,9 +23,11 @@ class TestTimeCollector < Minitest::Test
     result = collector.stop
 
     assert_valid_result result
-    assert_similar 200, result.weights.sum
+    assert_similar 200, result.total_weights
 
-    samples_by_stack = result.samples.zip(result.weights).group_by(&:first).transform_values do |samples|
+    samples_by_stack = result.threads.values.flat_map do |thread|
+      thread[:samples].zip(thread[:weights])
+    end.group_by(&:first).transform_values do |samples|
       samples.map(&:last).sum
     end
     significant_stacks = samples_by_stack.select { |k,v| v > 10 }
@@ -160,8 +162,8 @@ class TestTimeCollector < Minitest::Test
       slow_method
     end
 
-    assert_similar 100, inner_result.weights.sum
-    assert_similar 200, outer_result.weights.sum
+    assert_similar 100, inner_result.total_weights
+    assert_similar 200, outer_result.total_weights
   end
 
   ExpectedError = Class.new(StandardError)
@@ -239,7 +241,7 @@ class TestTimeCollector < Minitest::Test
     two_slow_methods
     result = Vernier.stop_profile
     assert_valid_result result
-    assert_similar 200, result.weights.sum
+    assert_similar 200, result.total_weights
   end
 
   def test_multiple_starts

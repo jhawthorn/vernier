@@ -2,29 +2,6 @@
 
 require "test_helper"
 
-class ReportReader
-  attr_reader :result
-  def initialize(result)
-    @result = result
-  end
-
-  def profile_hash
-    @profile_hash ||= @data["profiles"][0]
-  end
-
-  def frames_array
-    @frames_array ||= @data["shared"]["frames"]
-  end
-
-  def weights
-    result.weights
-  end
-
-  def total_bytes
-    weights.sum
-  end
-end
-
 class TestRetainedMemory < Minitest::Test
   def test_tracing_retained_objects
     retained = []
@@ -37,12 +14,10 @@ class TestRetainedMemory < Minitest::Test
       }
     end
 
-    #reader = ReportReader.new(result)
-
     assert_operator result.total_bytes, :>, 40 * 100
     assert_operator result.total_bytes, :<, 40 * 200
 
-    top_stack_tally = result.samples.tally.max_by(&:last)
+    top_stack_tally = result.threads.values.flat_map { _1[:samples] }.tally.max_by(&:last)
     top_stack = result.stack(top_stack_tally.first)
 
     # https://bugs.ruby-lang.org/issues/21254
@@ -59,7 +34,6 @@ class TestRetainedMemory < Minitest::Test
     result = Vernier.trace_retained do
     end
 
-    result = ReportReader.new(result)
     assert result.total_bytes < 40 * 8
   end
 
@@ -73,8 +47,8 @@ class TestRetainedMemory < Minitest::Test
     end
 
     assert retained
-    assert_operator result2.samples.size, :>, 0
-    assert_operator result1.samples.size, :>, result2.samples.size
+    assert_operator result2.total_samples, :>, 0
+    assert_operator result1.total_samples, :>, result2.total_samples
   end
 
   def test_thread_allocation
@@ -91,7 +65,6 @@ class TestRetainedMemory < Minitest::Test
       }
     end
 
-    result = ReportReader.new(result)
     assert_operator result.total_bytes, :<, 40 * 8
   end
 
@@ -102,7 +75,6 @@ class TestRetainedMemory < Minitest::Test
       }
     end
 
-    result = ReportReader.new(result)
     assert_operator result.total_bytes, :<, 40 * 8
   end
 
@@ -147,7 +119,7 @@ class TestRetainedMemory < Minitest::Test
       }
     end
 
-    assert_operator result.samples.size, :>, 200
+    assert_operator result.total_samples, :>, 200
   end
 
   def test_nothing_retained_in_module_eval
@@ -165,8 +137,6 @@ class TestRetainedMemory < Minitest::Test
       # Do some other object allocations
       10_000.times { Object.new }
     end
-
-    result = ReportReader.new(result)
 
     # Ideally this would be lower around 320, but in many cases it does seem to
     # use more memory

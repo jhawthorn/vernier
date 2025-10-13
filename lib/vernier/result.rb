@@ -5,23 +5,13 @@ module Vernier
     attr_accessor :stack_table
     alias _stack_table stack_table
 
-    attr_reader :gc_markers
+    attr_accessor :hooks, :pid, :end_time
 
-    attr_accessor :hooks
-
-    attr_accessor :pid, :end_time
-    attr_accessor :threads
-    attr_accessor :meta
-    attr_accessor :mode
+    attr_reader :meta, :threads, :gc_markers
 
     def main_thread
       threads.values.detect {|x| x[:is_main] }
     end
-
-    # TODO: remove these
-    def weights; threads.values.flat_map { _1[:weights] }; end
-    def samples; threads.values.flat_map { _1[:samples] }; end
-    def sample_categories; threads.values.flat_map { _1[:sample_categories] }; end
 
     # Realtime in nanoseconds since the unix epoch
     def started_at
@@ -64,15 +54,15 @@ module Vernier
     end
 
     def inspect
-      "#<#{self.class} #{elapsed_seconds} seconds, #{threads.count} threads, #{samples.count} samples, #{samples.uniq.size} unique>"
+      "#<#{self.class} #{elapsed_seconds} seconds, #{threads.count} threads, #{total_samples} samples, #{total_unique_samples} unique>"
     end
 
     def each_sample
       return enum_for(__method__) unless block_given?
-      samples.size.times do |sample_idx|
-        weight = weights[sample_idx]
-        stack_idx = samples[sample_idx]
-        yield stack(stack_idx), weight
+      threads.values.each do |thread|
+        thread[:samples].zip(thread[:weights]) do |stack_idx, weight|
+          yield stack(stack_idx), weight
+        end
       end
     end
 
@@ -80,8 +70,24 @@ module Vernier
       stack_table.stack(idx)
     end
 
+    def total_weights
+      threads.values.sum { _1[:weights].sum }
+    end
+
     def total_bytes
-      weights.sum
+      unless meta[:mode] == :retained
+        raise NotImplementedError, "total_bytes is only implemented for retained mode"
+      end
+
+      total_weights
+    end
+
+    def total_samples
+      threads.values.sum { _1[:samples].count }
+    end
+
+    def total_unique_samples
+      threads.values.flat_map { _1[:samples] }.uniq.count
     end
   end
 end
