@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "firefox_test_helpers"
 
 require "rack"
 
