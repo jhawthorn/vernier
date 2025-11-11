@@ -12,6 +12,6 @@ extern VALUE rb_mVernier;
 
 void Init_memory();
 void Init_stack_table();
-void Init_allocation_tracer();
+void Init_heap_tracker();
 
 #endif /* VERNIER_H */

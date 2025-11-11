@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Vernier
-  # Plan: The allocation tracer can be in a few states:
+  # Plan: The heap tracker can be in a few states:
   #  * Idle
   #  * Started
   #    * Watching for new objects
@@ -13,8 +13,8 @@ module Vernier
   #    * Ignoring new objects
   #    * Ignoring freed objects
   #    * Marking all existing objects (not yet implemented)
-  #    * N.B. This prevents any objects which the tracer has seen from being GC'd
-  class AllocationTracer
+  #    * N.B. This prevents any objects which the tracker has seen from being GC'd
+  class HeapTracker
     attr_reader :stack_table
 
     def self.new(stack_table = StackTable.new)

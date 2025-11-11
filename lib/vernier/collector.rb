@@ -47,18 +47,18 @@ module Vernier
     class RetainedCollector < Collector
       def initialize(mode, options)
         @stack_table = StackTable.new
-        @allocation_tracer = AllocationTracer.new(@stack_table)
+        @heap_tracker = HeapTracker.new(@stack_table)
 
         @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
         super
       end
 
       def start
-        @allocation_tracer.start
+        @heap_tracker.start
       end
 
       def finish
-        @allocation_tracer.pause
+        @heap_tracker.pause
 
         GC.start
 
@@ -66,11 +66,11 @@ module Vernier
 
         GC.start
 
-        tracer_data = @allocation_tracer.data
-        @allocation_tracer.stop
+        tracker_data = @heap_tracker.data
+        @heap_tracker.stop
 
-        samples = tracer_data.fetch(:samples)
-        weights = tracer_data.fetch(:weights)
+        samples = tracker_data.fetch(:samples)
+        weights = tracker_data.fetch(:weights)
 
         result = Result.new
         result.instance_variable_set(:@threads, {

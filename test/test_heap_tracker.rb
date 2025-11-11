@@ -2,11 +2,11 @@
 
 require "test_helper"
 
-class TestAllocationTracer < Minitest::Test
+class TestHeapTracker < Minitest::Test
   def test_trace_allocations
     obj1 = obj2 = nil
     lines = []
-    allocations = Vernier::AllocationTracer.trace do
+    allocations = Vernier::HeapTracker.trace do
       obj1 = Object.new; lines << __LINE__
       obj2 = Object.new; lines << __LINE__
     end
@@ -24,7 +24,7 @@ class TestAllocationTracer < Minitest::Test
 
   def test_untraced_object_while_running
     allocated_before = Object.new
-    Vernier::AllocationTracer.trace do |trace|
+    Vernier::HeapTracker.trace do |trace|
       1000.times { Object.new }
       assert_nil trace.stack_idx(allocated_before)
     end
@@ -32,7 +32,7 @@ class TestAllocationTracer < Minitest::Test
 
   def test_untraced_object_after_running
     allocated_before = Object.new
-    allocations = Vernier::AllocationTracer.trace do
+    allocations = Vernier::HeapTracker.trace do
       1000.times { Object.new }
     end
     allocated_after = Object.new
@@ -42,7 +42,7 @@ class TestAllocationTracer < Minitest::Test
 
   def test_gc
     retained = []
-    allocations = Vernier::AllocationTracer.trace do
+    allocations = Vernier::HeapTracker.trace do
       1000.times {
         Object.new
         retained << Object.new
@@ -58,7 +58,7 @@ class TestAllocationTracer < Minitest::Test
     retained = []
 
     expected_line = __LINE__ + 4
-    allocations = Vernier::AllocationTracer.trace do
+    allocations = Vernier::HeapTracker.trace do
       100.times {
         Object.new
         retained << Object.new
@@ -72,7 +72,7 @@ class TestAllocationTracer < Minitest::Test
     end.tally
     assert_equal 1, result.size
     expected_file = File.expand_path(__FILE__)
-    expected_source = "TestAllocationTracer#test_compaction at #{expected_file}:#{expected_line}"
+    expected_source = "TestHeapTracker#test_compaction at #{expected_file}:#{expected_line}"
     assert_equal expected_source, result.keys[0]
   end
 

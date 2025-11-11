@@ -1,23 +1,23 @@
 #include "vernier.hh"
 #include "stack_table.hh"
 
-static VALUE rb_cAllocationTracer;
+static VALUE rb_cHeapTracker;
 
-static void allocation_tracer_mark(void *data);
-static void allocation_tracer_free(void *data);
-static void allocation_tracer_compact(void *data);
+static void heap_tracker_mark(void *data);
+static void heap_tracker_free(void *data);
+static void heap_tracker_compact(void *data);
 
-static const rb_data_type_t rb_allocation_tracer_type = {
-    .wrap_struct_name = "vernier/allocation_tracer",
+static const rb_data_type_t rb_heap_tracker_type = {
+    .wrap_struct_name = "vernier/heap_tracker",
     .function = {
-        .dmark = allocation_tracer_mark,
-        .dfree = allocation_tracer_free,
+        .dmark = heap_tracker_mark,
+        .dfree = heap_tracker_free,
         .dsize = nullptr,
-        .dcompact = allocation_tracer_compact,
+        .dcompact = heap_tracker_compact,
     },
 };
 
-class AllocationTracer {
+class HeapTracker {
   public:
     VALUE stack_table_value;
     StackTable *stack_table;
@@ -30,18 +30,18 @@ class AllocationTracer {
     std::vector<int> frame_list;
 
     static VALUE rb_new(VALUE self, VALUE stack_table_value) {
-      AllocationTracer *allocation_tracer = new AllocationTracer();
-      allocation_tracer->stack_table_value = stack_table_value;
-      allocation_tracer->stack_table = get_stack_table(stack_table_value);
-      VALUE obj = TypedData_Wrap_Struct(rb_cAllocationTracer, &rb_allocation_tracer_type, allocation_tracer);
+      HeapTracker *heap_tracker = new HeapTracker();
+      heap_tracker->stack_table_value = stack_table_value;
+      heap_tracker->stack_table = get_stack_table(stack_table_value);
+      VALUE obj = TypedData_Wrap_Struct(rb_cHeapTracker, &rb_heap_tracker_type, heap_tracker);
       rb_ivar_set(obj, rb_intern("@stack_table"), stack_table_value);
       return obj;
     }
 
-    static AllocationTracer *get(VALUE obj) {
-      AllocationTracer *allocation_tracer;
-      TypedData_Get_Struct(obj, AllocationTracer, &rb_allocation_tracer_type, allocation_tracer);
-      return allocation_tracer;
+    static HeapTracker *get(VALUE obj) {
+      HeapTracker *heap_tracker;
+      TypedData_Get_Struct(obj, HeapTracker, &rb_heap_tracker_type, heap_tracker);
+      return heap_tracker;
     }
 
     void record_newobj(VALUE obj) {
@@ -77,7 +77,7 @@ class AllocationTracer {
     }
 
     static void newobj_i(VALUE tpval, void *data) {
-        AllocationTracer *tracer = static_cast<AllocationTracer *>(data);
+        HeapTracker *tracer = static_cast<HeapTracker *>(data);
         rb_trace_arg_t *tparg = rb_tracearg_from_tracepoint(tpval);
         VALUE obj = rb_tracearg_object(tparg);
 
@@ -85,7 +85,7 @@ class AllocationTracer {
     }
 
     static void freeobj_i(VALUE tpval, void *data) {
-        AllocationTracer *tracer = static_cast<AllocationTracer *>(data);
+        HeapTracker *tracer = static_cast<HeapTracker *>(data);
         rb_trace_arg_t *tparg = rb_tracearg_from_tracepoint(tpval);
         VALUE obj = rb_tracearg_object(tparg);
 
@@ -204,34 +204,34 @@ class AllocationTracer {
 };
 
 static void
-allocation_tracer_mark(void *data) {
-    AllocationTracer *allocation_tracer = static_cast<AllocationTracer *>(data);
-    allocation_tracer->mark();
+heap_tracker_mark(void *data) {
+    HeapTracker *heap_tracker = static_cast<HeapTracker *>(data);
+    heap_tracker->mark();
 }
 
 static void
-allocation_tracer_free(void *data) {
-    AllocationTracer *allocation_tracer = static_cast<AllocationTracer *>(data);
-    delete allocation_tracer;
+heap_tracker_free(void *data) {
+    HeapTracker *heap_tracker = static_cast<HeapTracker *>(data);
+    delete heap_tracker;
 }
 
 static void
-allocation_tracer_compact(void *data) {
-    AllocationTracer *allocation_tracer = static_cast<AllocationTracer *>(data);
-    allocation_tracer->compact();
+heap_tracker_compact(void *data) {
+    HeapTracker *heap_tracker = static_cast<HeapTracker *>(data);
+    heap_tracker->compact();
 }
 
 void
-Init_allocation_tracer() {
-  rb_cAllocationTracer = rb_define_class_under(rb_mVernier, "AllocationTracer", rb_cObject);
-  rb_define_method(rb_cAllocationTracer, "start", AllocationTracer::start, 0);
-  rb_define_method(rb_cAllocationTracer, "pause", AllocationTracer::pause, 0);
-  rb_define_method(rb_cAllocationTracer, "stop", AllocationTracer::stop, 0);
-  rb_define_method(rb_cAllocationTracer, "data", AllocationTracer::data, 0);
-  rb_define_method(rb_cAllocationTracer, "stack_idx", AllocationTracer::stack_idx, 1);
-  rb_undef_alloc_func(rb_cAllocationTracer);
-  rb_define_singleton_method(rb_cAllocationTracer, "_new", AllocationTracer::rb_new, 1);
+Init_heap_tracker() {
+  rb_cHeapTracker = rb_define_class_under(rb_mVernier, "HeapTracker", rb_cObject);
+  rb_define_method(rb_cHeapTracker, "start", HeapTracker::start, 0);
+  rb_define_method(rb_cHeapTracker, "pause", HeapTracker::pause, 0);
+  rb_define_method(rb_cHeapTracker, "stop", HeapTracker::stop, 0);
+  rb_define_method(rb_cHeapTracker, "data", HeapTracker::data, 0);
+  rb_define_method(rb_cHeapTracker, "stack_idx", HeapTracker::stack_idx, 1);
+  rb_undef_alloc_func(rb_cHeapTracker);
+  rb_define_singleton_method(rb_cHeapTracker, "_new", HeapTracker::rb_new, 1);
 
-  rb_define_method(rb_cAllocationTracer, "allocated_objects", AllocationTracer::allocated_objects, 0);
-  rb_define_method(rb_cAllocationTracer, "freed_objects", AllocationTracer::freed_objects, 0);
+  rb_define_method(rb_cHeapTracker, "allocated_objects", HeapTracker::allocated_objects, 0);
+  rb_define_method(rb_cHeapTracker, "freed_objects", HeapTracker::freed_objects, 0);
 }
