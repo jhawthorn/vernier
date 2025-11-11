@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "objspace"
 
 class TestHeapTracker < Minitest::Test
   def test_trace_allocations
@@ -74,6 +75,15 @@ class TestHeapTracker < Minitest::Test
     expected_file = File.expand_path(__FILE__)
     expected_source = "TestHeapTracker#test_compaction at #{expected_file}:#{expected_line}"
     assert_equal expected_source, result.keys[0]
+  end
+
+  def test_memsize
+    retained = []
+    allocations = Vernier::HeapTracker.track do
+      1000.times { retained << Object.new }
+    end
+
+    assert_operator ObjectSpace.memsize_of(allocations), :>, 1000
   end
 
   private

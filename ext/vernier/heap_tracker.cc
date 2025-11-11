@@ -5,6 +5,7 @@ static VALUE rb_cHeapTracker;
 
 static void heap_tracker_mark(void *data);
 static void heap_tracker_free(void *data);
+static size_t heap_tracker_memsize(const void *data);
 static void heap_tracker_compact(void *data);
 
 static const rb_data_type_t rb_heap_tracker_type = {
@@ -12,7 +13,7 @@ static const rb_data_type_t rb_heap_tracker_type = {
     .function = {
         .dmark = heap_tracker_mark,
         .dfree = heap_tracker_free,
-        .dsize = nullptr,
+        .dsize = heap_tracker_memsize,
         .dcompact = heap_tracker_compact,
     },
 };
@@ -213,6 +214,20 @@ static void
 heap_tracker_free(void *data) {
     HeapTracker *heap_tracker = static_cast<HeapTracker *>(data);
     delete heap_tracker;
+}
+
+static size_t
+heap_tracker_memsize(const void *data) {
+    const HeapTracker *heap_tracker = static_cast<const HeapTracker *>(data);
+    size_t size = sizeof(HeapTracker);
+
+    size += heap_tracker->object_index.bucket_count() * sizeof(void*);
+    size += heap_tracker->object_index.size() * (sizeof(VALUE) + sizeof(int) + sizeof(void*));
+
+    size += heap_tracker->object_list.capacity() * sizeof(VALUE);
+    size += heap_tracker->frame_list.capacity() * sizeof(int);
+
+    return size;
 }
 
 static void
