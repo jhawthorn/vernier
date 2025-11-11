@@ -25,6 +25,7 @@ class HeapTracker {
 
     unsigned long long objects_freed = 0;
     unsigned long long objects_allocated = 0;
+    unsigned long long tombstones = 0;
 
     std::unordered_map<VALUE, int> object_index;
     std::vector<VALUE> object_list;
@@ -67,13 +68,37 @@ class HeapTracker {
       assert(objects_allocated == object_list.size());
     }
 
+    void rebuild() {
+      object_index.clear();
+
+      size_t j = 0;
+      for (size_t i = 0; i < object_list.size(); i++) {
+        VALUE obj = object_list[i];
+        if (obj != Qfalse) {
+          object_list[j] = obj;
+          frame_list[j] = frame_list[i];
+          object_index.emplace(obj, j);
+          j++;
+        }
+      }
+
+      object_list.resize(j);
+      frame_list.resize(j);
+      tombstones = 0;
+    }
+
     void record_freeobj(VALUE obj) {
       auto it = object_index.find(obj);
       if (it != object_index.end()) {
         int index = it->second;
         object_list[index] = Qfalse;
         objects_freed++;
+        tombstones++;
         object_index.erase(it);
+
+        if (tombstones * 2 > object_list.size()) {
+          rebuild();
+        }
       }
     }
 
