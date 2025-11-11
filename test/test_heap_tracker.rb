@@ -6,7 +6,7 @@ class TestHeapTracker < Minitest::Test
   def test_trace_allocations
     obj1 = obj2 = nil
     lines = []
-    allocations = Vernier::HeapTracker.trace do
+    allocations = Vernier::HeapTracker.track do
       obj1 = Object.new; lines << __LINE__
       obj2 = Object.new; lines << __LINE__
     end
@@ -24,15 +24,15 @@ class TestHeapTracker < Minitest::Test
 
   def test_untraced_object_while_running
     allocated_before = Object.new
-    Vernier::HeapTracker.trace do |trace|
+    Vernier::HeapTracker.track do |tracker|
       1000.times { Object.new }
-      assert_nil trace.stack_idx(allocated_before)
+      assert_nil tracker.stack_idx(allocated_before)
     end
   end
 
   def test_untraced_object_after_running
     allocated_before = Object.new
-    allocations = Vernier::HeapTracker.trace do
+    allocations = Vernier::HeapTracker.track do
       1000.times { Object.new }
     end
     allocated_after = Object.new
@@ -42,7 +42,7 @@ class TestHeapTracker < Minitest::Test
 
   def test_gc
     retained = []
-    allocations = Vernier::HeapTracker.trace do
+    allocations = Vernier::HeapTracker.track do
       1000.times {
         Object.new
         retained << Object.new
@@ -58,7 +58,7 @@ class TestHeapTracker < Minitest::Test
     retained = []
 
     expected_line = __LINE__ + 4
-    allocations = Vernier::HeapTracker.trace do
+    allocations = Vernier::HeapTracker.track do
       100.times {
         Object.new
         retained << Object.new

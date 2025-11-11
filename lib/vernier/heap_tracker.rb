@@ -25,13 +25,13 @@ module Vernier
       "#<#{self.class} allocated_objects=#{allocated_objects} freed_objects=#{freed_objects} stack_table=#{stack_table.inspect}>"
     end
 
-    def self.trace(&block)
-      tracer = new
-      tracer.trace(&block)
-      tracer
+    def self.track(&block)
+      tracker = new
+      tracker.track(&block)
+      tracker
     end
 
-    def trace
+    def track
       start
       yield self
     ensure
