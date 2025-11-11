@@ -126,6 +126,71 @@ ruby -r vernier -e 'Vernier.trace_retained(out: "irb_profile.json") { require "i
 > [!NOTE]
 > Retained-memory flamegraphs must be interpreted a little differently than a typical profiling flamegraph. In a retained-memory flamegraph, the x-axis represents a proportion of memory in bytes,  _not time or samples_ The topmost boxes on the y-axis represent the retained objects, with their stacktrace below; their width represents the percentage of overall retained memory each object occupies.
 
+### Hooks
+
+Hooks automatically add markers to profiles based on application events:
+
+```ruby
+Vernier.profile(hooks: [:activesupport, MyHook]) do
+  # code to profile
+end
+```
+
+#### Built-in hooks
+
+- `:activesupport` (`:rails`) - ActiveSupport notifications
+- `:memory_usage` - Memory usage tracking
+
+#### Custom hooks
+
+Define a class with `initialize(collector)`, `enable`, and `disable` methods:
+
+```ruby
+class MyHook
+  def initialize(collector)
+    @collector = collector
+  end
+
+  def enable
+    # Set up event listeners
+  end
+
+  def disable
+    # Clean up
+  end
+end
+```
+
+For Firefox profiler integration, add `firefox_marker_schema` or `firefox_counters` methods (see [Firefox profiler docs](https://profiler.firefox.com/docs/#/) for format details):
+
+```ruby
+def firefox_marker_schema
+  [{
+    name: "my_event",
+    display: ["marker-chart", "marker-table"],
+    tooltipLabel: "{marker.data.name}",
+    data: [
+      { key: "name", format: "string" }
+    ]
+  }]
+end
+
+def firefox_counters
+  {
+    name: "my_counter",
+    category: "Custom",
+    description: "My custom counter",
+    samples: {
+      time: [0, 1000, 2000],
+      count: [10, 20, 30],
+      length: 3
+    }
+  }
+end
+```
+
+See [`examples/custom_hook.rb`](examples/custom_hook.rb) for a complete example.
+
 ### Options
 
 | Option                | Middleware Param              | Description                                                   | Default (Middleware Default) |

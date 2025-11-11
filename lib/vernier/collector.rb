@@ -31,13 +31,17 @@ module Vernier
     end
 
     private def add_hook(hook)
-      case hook.to_sym
+      case hook.to_s.to_sym
       when :rails, :activesupport
         @hooks << Vernier::Hooks::ActiveSupport.new(self)
       when :memory_usage
         @hooks << Vernier::Hooks::MemoryUsage.new(self)
       else
-        warn "unknown hook: #{hook.inspect}"
+        if hook.respond_to?(:new)
+          @hooks << hook.new(self)
+        else
+          warn "unknown hook: #{hook.inspect}"
+        end
       end
     end
 
