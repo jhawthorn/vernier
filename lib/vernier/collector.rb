@@ -54,11 +54,11 @@ module Vernier
       end
 
       def start
-        @heap_tracker.start
+        @heap_tracker.collect
       end
 
       def finish
-        @heap_tracker.pause
+        @heap_tracker.drain
 
         GC.start
 
@@ -67,7 +67,7 @@ module Vernier
         GC.start
 
         tracker_data = @heap_tracker.data
-        @heap_tracker.stop
+        @heap_tracker.lock
 
         samples = tracker_data.fetch(:samples)
         weights = tracker_data.fetch(:weights)

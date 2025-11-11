@@ -96,7 +96,7 @@ class HeapTracker {
     VALUE tp_newobj = Qnil;
     VALUE tp_freeobj = Qnil;
 
-    void start() {
+    void collect() {
       if (!RTEST(tp_newobj)) {
         tp_newobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_NEWOBJ, newobj_i, this);
         tp_freeobj = rb_tracepoint_new(0, RUBY_INTERNAL_EVENT_FREEOBJ, freeobj_i, this);
@@ -105,25 +105,25 @@ class HeapTracker {
         rb_tracepoint_enable(tp_freeobj);
       }
     }
-    static VALUE start(VALUE self) {
-      get(self)->start();
+    static VALUE collect(VALUE self) {
+      get(self)->collect();
       return self;
     }
 
-    void pause() {
+    void drain() {
       if (RTEST(tp_newobj)) {
         rb_tracepoint_disable(tp_newobj);
         tp_newobj = Qnil;
       }
     }
 
-    static VALUE pause(VALUE self) {
-      get(self)->pause();
+    static VALUE drain(VALUE self) {
+      get(self)->drain();
       return self;
     }
 
-    void stop() {
-      pause();
+    void lock() {
+      drain();
       if (RTEST(tp_freeobj)) {
         rb_tracepoint_disable(tp_freeobj);
         tp_freeobj = Qnil;
@@ -131,8 +131,8 @@ class HeapTracker {
       stopped = true;
     }
 
-    static VALUE stop(VALUE self) {
-      get(self)->stop();
+    static VALUE lock(VALUE self) {
+      get(self)->lock();
       return self;
     }
 
@@ -224,9 +224,9 @@ heap_tracker_compact(void *data) {
 void
 Init_heap_tracker() {
   rb_cHeapTracker = rb_define_class_under(rb_mVernier, "HeapTracker", rb_cObject);
-  rb_define_method(rb_cHeapTracker, "start", HeapTracker::start, 0);
-  rb_define_method(rb_cHeapTracker, "pause", HeapTracker::pause, 0);
-  rb_define_method(rb_cHeapTracker, "stop", HeapTracker::stop, 0);
+  rb_define_method(rb_cHeapTracker, "collect", HeapTracker::collect, 0);
+  rb_define_method(rb_cHeapTracker, "drain", HeapTracker::drain, 0);
+  rb_define_method(rb_cHeapTracker, "lock", HeapTracker::lock, 0);
   rb_define_method(rb_cHeapTracker, "data", HeapTracker::data, 0);
   rb_define_method(rb_cHeapTracker, "stack_idx", HeapTracker::stack_idx, 1);
   rb_undef_alloc_func(rb_cHeapTracker);

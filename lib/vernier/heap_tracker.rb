@@ -3,13 +3,13 @@
 module Vernier
   # Plan: The heap tracker can be in a few states:
   #  * Idle
-  #  * Started
+  #  * Collecting
   #    * Watching for new objects
   #    * Watching for freed objects
-  #  * Paused
+  #  * Draining
   #    * Ignoring new objects
   #    * Watching for freed objects
-  #  * Stopped
+  #  * Locked
   #    * Ignoring new objects
   #    * Ignoring freed objects
   #    * Marking all existing objects (not yet implemented)
@@ -32,10 +32,10 @@ module Vernier
     end
 
     def track
-      start
+      collect
       yield self
     ensure
-      stop
+      lock
     end
 
     def stack(obj)
