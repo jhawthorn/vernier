@@ -8,7 +8,8 @@ module Vernier
       detector
     end
 
-    def initialize(collect_time:, drain_time:, **collector_options)
+    def initialize(idle_time: 0, collect_time:, drain_time: 0, **collector_options)
+      @idle_time = idle_time
       @collect_time = collect_time
       @drain_time = drain_time
       @collector_options = collector_options
@@ -17,6 +18,8 @@ module Vernier
 
     def start_thread
       @thread = Thread.new do
+        sleep @idle_time
+
         collector = Collector.new(:retained, @collector_options)
         collector.start
 
