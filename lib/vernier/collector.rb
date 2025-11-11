@@ -57,6 +57,10 @@ module Vernier
         @heap_tracker.collect
       end
 
+      def drain
+        @heap_tracker.drain
+      end
+
       def finish
         @heap_tracker.drain
 
