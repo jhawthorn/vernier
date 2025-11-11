@@ -13,12 +13,13 @@ class TestAllocationTracer < Minitest::Test
     stack1 = allocations.stack(obj1)
     stack2 = allocations.stack(obj2)
 
-    assert_equal "Class#new at <cfunc>", stack1[0].to_s
+    frame1 = first_relevant_frame(stack1)
+    frame2 = first_relevant_frame(stack2)
 
-    assert_equal File.expand_path(__FILE__), stack1[1].filename
-    assert_equal lines[0], stack1[1].lineno
-    assert_equal File.expand_path(__FILE__), stack2[1].filename
-    assert_equal lines[1], stack2[1].lineno
+    assert_equal File.expand_path(__FILE__), frame1.filename
+    assert_equal lines[0], frame1.lineno
+    assert_equal File.expand_path(__FILE__), frame2.filename
+    assert_equal lines[1], frame2.lineno
   end
 
   def test_untraced_object_while_running
@@ -67,11 +68,20 @@ class TestAllocationTracer < Minitest::Test
     GC.verify_compaction_references(toward: :empty, expand_heap: true)
 
     result = retained.map do |obj|
-      allocations.stack(obj)[1].to_s
+      first_relevant_frame(allocations.stack(obj)).to_s
     end.tally
     assert_equal 1, result.size
     expected_file = File.expand_path(__FILE__)
     expected_source = "TestAllocationTracer#test_compaction at #{expected_file}:#{expected_line}"
     assert_equal expected_source, result.keys[0]
+  end
+
+  private
+  def first_relevant_frame(stack)
+    if stack[0].to_s.include?("Class#new")
+      stack[1]
+    else
+      stack[0]
+    end
   end
 end
