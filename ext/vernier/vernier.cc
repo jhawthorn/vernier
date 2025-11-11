@@ -443,8 +443,7 @@ class Thread {
         unique_ptr<MarkerTable> markers;
 
         // FIXME: don't use pthread at start
-        Thread(State state, pthread_t pthread_id, VALUE ruby_thread) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(state), stack_on_suspend_idx(-1) {
-            ruby_thread_id = rb_obj_id(ruby_thread);
+        Thread(State state, pthread_t pthread_id, VALUE ruby_thread, VALUE ruby_thread_id) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(state), stack_on_suspend_idx(-1), ruby_thread_id(ruby_thread_id) {
             //ruby_thread_id = ULL2NUM(ruby_thread);
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
@@ -476,7 +475,7 @@ class Thread {
             markers->record(Marker::Type::MARKER_FIBER_SWITCH, stack_idx, { .fiber_data = { .fiber_id = fiber_id } });
         }
 
-        void set_state(State new_state) {
+        void set_state(State new_state, bool current = true) {
             if (state == Thread::State::STOPPED) {
                 return;
             }
@@ -604,9 +603,43 @@ class ThreadTable {
         }
 
     private:
-        void set_state(Thread::State new_state, VALUE th) {
-            const std::lock_guard<std::mutex> lock(mutex);
+        Thread* find_thread(VALUE th) {
+            // Assumes lock is already held by caller
+            for (auto &threadptr : list) {
+                if (thread_equal(th, threadptr->ruby_thread)) {
+                    return threadptr.get();
+                }
+            }
+            return nullptr;
+        }
 
+        Thread& find_or_create_thread(VALUE th, Thread::State initial_state) {
+            {
+                const std::lock_guard<std::mutex> lock(mutex);
+                Thread* existing = find_thread(th);
+                if (existing) {
+                    return *existing;
+                }
+            }
+
+            // Thread not found, compute ID outside the lock
+            VALUE ruby_thread_id = rb_obj_id(th);
+
+            const std::lock_guard<std::mutex> lock(mutex);
+            // Check again in case another thread created it while we were unlocked
+            Thread* existing = find_thread(th);
+            if (existing) {
+                return *existing;
+            }
+
+            //fprintf(stderr, "NEW THREAD: th: %p, state: %i\n", th, initial_state);
+            auto new_thread = std::make_unique<Thread>(initial_state, pthread_self(), th, ruby_thread_id);
+            Thread& thread_ref = *new_thread;
+            list.push_back(std::move(new_thread));
+            return thread_ref;
+        }
+
+        void set_state(Thread::State new_state, VALUE th) {
             //cerr << "set state=" << new_state << " thread=" << gettid() << endl;
 
             pid_t native_tid = get_native_thread_id();
@@ -614,35 +647,28 @@ class ThreadTable {
 
             //fprintf(stderr, "th %p (tid: %i) from %s to %s\n", (void *)th, native_tid, gvl_event_name(state), gvl_event_name(new_state));
 
-            for (auto &threadptr : list) {
-                auto &thread = *threadptr;
-                if (thread_equal(th, thread.ruby_thread)) {
-                    if (new_state == Thread::State::SUSPENDED || new_state == Thread::State::READY && (thread.state != Thread::State::SUSPENDED)) {
+            Thread& thread = find_or_create_thread(th, new_state);
 
-                        RawSample sample;
-                        sample.sample();
+            const std::lock_guard<std::mutex> lock(mutex);
 
-                        thread.stack_on_suspend_idx = thread.translator.translate(frame_list, sample);
-                        //cerr << gettid() << " suspended! Stack size:" << thread.stack_on_suspend.size() << endl;
-                    }
+            if (new_state == Thread::State::SUSPENDED || new_state == Thread::State::READY && (thread.state != Thread::State::SUSPENDED)) {
 
-                    thread.set_state(new_state);
+                RawSample sample;
+                sample.sample();
 
-                    if (thread.state == Thread::State::RUNNING) {
-                        thread.pthread_id = pthread_self();
-                        thread.native_tid = get_native_thread_id();
-                    } else {
-                        thread.pthread_id = 0;
-                        thread.native_tid = 0;
-                    }
-
-
-                    return;
-                }
+                thread.stack_on_suspend_idx = thread.translator.translate(frame_list, sample);
+                //cerr << gettid() << " suspended! Stack size:" << thread.stack_on_suspend.size() << endl;
             }
 
-            //fprintf(stderr, "NEW THREAD: th: %p, state: %i\n", th, new_state);
-            list.push_back(std::make_unique<Thread>(new_state, pthread_self(), th));
+            thread.set_state(new_state);
+
+            if (thread.state == Thread::State::RUNNING) {
+                thread.pthread_id = pthread_self();
+                thread.native_tid = get_native_thread_id();
+            } else {
+                thread.pthread_id = 0;
+                thread.native_tid = 0;
+            }
         }
 
         bool thread_equal(VALUE a, VALUE b) {
