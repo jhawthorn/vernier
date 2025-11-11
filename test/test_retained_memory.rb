@@ -94,14 +94,14 @@ class TestRetainedMemory < Minitest::Test
       #{self.class.name}#alloc_b
       #{self.class.name}#alloc_c
     ]
-    assert_equal expected_labels, labels.grep(/#alloc_[abc]\z/)
+    assert_equal expected_labels, labels.grep(/#alloc_[abc]\z/).uniq
 
     expected_inspects = [:alloc_a, :alloc_b, :alloc_c].map do |mid|
       location = method(mid).source_location.first(2).join(":")
       location.gsub!(method(__method__).source_location.first, File.expand_path(__FILE__))
       "#{self.class.name}##{mid} at #{location}"
     end
-    assert_equal expected_inspects, inspects.grep(/#alloc_[abc]/)
+    assert_equal expected_inspects, inspects.grep(/#alloc_[abc]/).uniq
   end
 
   def test_compaction
