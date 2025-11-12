@@ -51,6 +51,7 @@ jobs:
           bundler-cache: true
       - name: Run the default task
         run: bundle exec rake
+        timeout-minutes: 5
         env:
           RUBY_YJIT_ENABLE: ${{ matrix.yjit }}
           RUBY_MN_THREADS: ${{ matrix.mn_threads }}
