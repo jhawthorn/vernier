@@ -54,3 +54,4 @@ jobs:
         env:
           RUBY_YJIT_ENABLE: ${{ matrix.yjit }}
           RUBY_MN_THREADS: ${{ matrix.mn_threads }}
+          TESTOPTS: "-v"
