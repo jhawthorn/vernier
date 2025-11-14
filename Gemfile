@@ -6,6 +6,7 @@ source "https://rubygems.org"
 gemspec
 
 gem "rake", "~> 13.0"
+gem "cgi"
 
 gem "rake-compiler"
 gem "benchmark-ips"

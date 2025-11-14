@@ -5,6 +5,110 @@ require_relative "thread_names"
 
 module Vernier
   class Collector
+    class CustomCollector < Collector
+      def initialize(mode, options)
+        @stack_table = StackTable.new
+
+        @samples = []
+        @timestamps = []
+
+        @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
+        super
+      end
+
+      def sample
+        @samples << @stack_table.current_stack
+        @timestamps << Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
+      end
+
+      def start
+      end
+
+      def finish
+        result = Result.new
+        result.instance_variable_set(:@threads, {
+          0 => {
+            tid: 0,
+            name: "custom",
+            started_at: @started_at,
+            samples: @samples,
+            weights: [1] * @samples.size,
+            timestamps: @timestamps,
+            sample_categories: [0] * @samples.size,
+          }
+        })
+        result.instance_variable_set(:@meta, {
+          started_at: @started_at
+        })
+        result
+      end
+    end
+
+    class RetainedCollector < Collector
+      def initialize(mode, options)
+        @stack_table = StackTable.new
+        @heap_tracker = HeapTracker.new(@stack_table)
+
+        @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC, :nanosecond)
+        super
+      end
+
+      def start
+        @heap_tracker.collect
+      end
+
+      def drain
+        @heap_tracker.drain
+      end
+
+      def finish
+        @heap_tracker.drain
+
+        GC.start
+
+        stack_table.finalize
+
+        GC.start
+
+        tracker_data = @heap_tracker.data
+        @heap_tracker.lock
+
+        samples = tracker_data.fetch(:samples)
+        weights = tracker_data.fetch(:weights)
+
+        result = Result.new
+        result.instance_variable_set(:@threads, {
+          0 => {
+            tid: 0,
+            name: "retained memory",
+            started_at: @started_at,
+            samples: samples,
+            weights: weights,
+            sample_categories: [0] * samples.size,
+          }
+        })
+        result.instance_variable_set(:@meta, {
+          started_at: @started_at
+        })
+        result
+      end
+    end
+
+    def self.new(mode, options = {})
+      return super unless Collector.equal?(self)
+
+      case mode
+      when :wall
+        TimeCollector.new(mode, options)
+      when :custom
+        CustomCollector.new(mode, options)
+      when :retained
+        RetainedCollector.new(mode, options)
+      else
+        raise ArgumentError, "invalid mode: #{mode.inspect}"
+      end
+    end
+
     def initialize(mode, options = {})
       @gc = options.fetch(:gc, true) && (mode == :retained)
       GC.start if @gc
@@ -29,6 +133,8 @@ module Vernier
 
       @user_metadata = options[:metadata] || {}
     end
+
+    attr_reader :stack_table
 
     private def add_hook(hook)
       case hook.to_s.to_sym

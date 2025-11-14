@@ -23,15 +23,21 @@ module Vernier
     end
 
     def backtrace(stack_idx)
-      full_stack(stack_idx).map do |stack_idx|
+      last_filename = nil
+      last_lineno = nil
+      full_stack(stack_idx).reverse.map do |stack_idx|
         frame_idx = stack_frame_idx(stack_idx)
         func_idx = frame_func_idx(frame_idx)
         line = frame_line_no(frame_idx)
-        name = func_name(func_idx);
-        filename = func_filename(func_idx);
+        line = last_lineno if line == 0
+        last_lineno = line
+        name = func_name(func_idx)
+        filename = func_path(func_idx)
+        filename = last_filename if filename.empty?
+        last_filename = filename
 
         "#{filename}:#{line}:in '#{name}'"
-      end
+      end.reverse
     end
 
     def full_stack(stack_idx)
@@ -83,9 +89,14 @@ module Vernier
       def line
         stack_table.frame_line_no(idx)
       end
+      alias lineno line
 
       def to_s
-        "#{func}:#{line}"
+        if (line = self.line) == 0
+          func.to_s
+        else
+          "#{func}:#{line}"
+        end
       end
     end
 
@@ -102,14 +113,16 @@ module Vernier
       end
       alias each_frame each
 
-      def [](n)
-        raise RangeError if n < 0
+      def [](offset)
+        raise RangeError if offset < 0
         stack_idx = idx
-        while n > 0
+        while stack_idx && offset > 0
           stack_idx = stack_table.stack_parent_idx(stack_idx)
-          n -= 1
+          offset -= 1
         end
-        Frame.new(stack_table, stack_table.stack_frame_idx(stack_idx))
+        if stack_idx && offset == 0
+          Frame.new(stack_table, stack_table.stack_frame_idx(stack_idx))
+        end
       end
 
       def leaf_frame_idx
@@ -134,6 +147,7 @@ module Vernier
     end
 
     def stack(idx)
+      raise ArgumentError, "invalid index" unless idx
       Stack.new(self, idx)
     end
   end
