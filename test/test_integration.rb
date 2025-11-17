@@ -51,7 +51,7 @@ class IntegrationTest < Minitest::Test
   def vernier_run(*argv)
     result_json = nil
     Tempfile.open('vernier') do |tempfile|
-      system('vernier', 'run', '--output', tempfile.path, *argv, out: '/dev/null', err: '/dev/null')
+      system('vernier', 'run', '--output', tempfile.path, *argv, exception: true, out: '/dev/null', err: '/dev/null')
       tempfile.rewind
       result_json = tempfile.read
     end
