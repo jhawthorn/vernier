@@ -174,7 +174,7 @@ class HeapTracker {
     }
 
     VALUE data() {
-      // TOOD: should this ensure we are paused or stopped?
+      assert(stopped);
       VALUE hash = rb_hash_new();
       VALUE samples = rb_ary_new();
       rb_hash_aset(hash, sym("samples"), samples);
@@ -183,8 +183,8 @@ class HeapTracker {
 
       for (int i = 0; i < object_list.size(); i++) {
         VALUE obj = object_list[i];
-        VALUE stack_index = frame_list[i];
         if (obj == Qfalse) continue;
+        VALUE stack_index = frame_list[i];
 
         rb_ary_push(samples, INT2NUM(stack_index));
         rb_ary_push(weights, INT2NUM(rb_obj_memsize_of(obj)));
