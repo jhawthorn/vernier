@@ -66,12 +66,12 @@ module Vernier
 
         GC.start
 
-        stack_table.finalize
+        @stack_table.finalize
 
         GC.start
 
-        tracker_data = @heap_tracker.data
         @heap_tracker.lock
+        tracker_data = @heap_tracker.data
 
         samples = tracker_data.fetch(:samples)
         weights = tracker_data.fetch(:weights)
