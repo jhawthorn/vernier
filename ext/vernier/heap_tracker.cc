@@ -140,6 +140,9 @@ class HeapTracker {
       if (RTEST(tp_newobj)) {
         rb_tracepoint_disable(tp_newobj);
         tp_newobj = Qnil;
+        if (tombstones * 10 > object_list.size()) {
+          rebuild();
+        }
       }
     }
 
