@@ -226,6 +226,8 @@ class HeapTracker {
         object_list[i] = reloc_obj;
         object_index.emplace(reloc_obj, i);
       }
+      this->tp_newobj = rb_gc_location(tp_newobj);
+      this->tp_freeobj = rb_gc_location(tp_freeobj);
     }
 };
 
