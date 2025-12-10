@@ -1,5 +1,10 @@
 module Vernier
   class Middleware
+    HOOKS = [
+      (:rails if defined?(Rails))
+    ].compact.freeze
+    private_constant :HOOKS
+
     def initialize(app, permit: ->(_env) { true })
       @app = app
       @permit = permit
@@ -15,7 +20,7 @@ module Vernier
       interval = request.GET.fetch("vernier_interval", 200).to_i
       allocation_interval = request.GET.fetch("vernier_allocation_interval", 200).to_i
 
-      result = Vernier.trace(interval:, allocation_interval:, hooks: [:rails]) do
+      result = Vernier.trace(interval:, allocation_interval:, hooks: HOOKS) do
         @app.call(env)
       end
       body = result.to_firefox(gzip: true)
