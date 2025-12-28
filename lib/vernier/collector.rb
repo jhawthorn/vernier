@@ -142,6 +142,8 @@ module Vernier
         @hooks << Vernier::Hooks::ActiveSupport.new(self)
       when :memory_usage
         @hooks << Vernier::Hooks::MemoryUsage.new(self)
+      when :bundler
+        @hooks << Vernier::Hooks::Bundler.new(self)
       else
         if hook.respond_to?(:new)
           @hooks << hook.new(self)
