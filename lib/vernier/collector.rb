@@ -118,6 +118,7 @@ module Vernier
       @mode = mode
       @out = options[:out]
       @format = options[:format]
+      @hide_anonymous_threads = options[:hide_anonymous_threads]
 
       @markers = []
       @hooks = []
@@ -195,6 +196,7 @@ module Vernier
       result.meta[:out] = @out
       result.meta[:gc] = @gc
       result.meta[:user_metadata] = @user_metadata
+      result.meta[:hide_anonymous_threads] = @hide_anonymous_threads
 
       result.stack_table = stack_table
       @thread_names.finish
@@ -205,6 +207,7 @@ module Vernier
 
       result.threads.each do |obj_id, thread|
         thread[:name] ||= @thread_names[obj_id]
+        thread[:anonymous] ||= @thread_names.anonymous?(obj_id)
       end
 
       result.hooks = @hooks

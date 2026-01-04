@@ -201,6 +201,7 @@ See [`examples/custom_hook.rb`](examples/custom_hook.rb) for a complete example.
 | `allocation_interval` | `vernier_allocation_interval` | Allocation sampling interval. Only in `:wall` mode.           | `0` i.e. disabled (`200`)    |
 | `gc`                  | N/A                           | Run full GC cycle before profiling. Only in `:retained` mode. | `true` (N/A)                 |
 | `metadata`            | N/A                           | Metadata key-value pairs to include in the profile.           | `{}` (N/A)                   |
+| `hide_anonymous_threads` | N/A                        | Anonymous threads will be initially hidden in profile output. | `false` (N/A)                |
 
 #### Hook options
 

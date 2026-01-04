@@ -97,6 +97,19 @@ class TestOutputFirefox < Minitest::Test
     assert_valid_firefox_profile(output)
   end
 
+  def test_anonymous_threads_are_hidden
+    result = Vernier.trace(hide_anonymous_threads: true) do
+      th1 = Thread.new { Thread.current.name = "not anonymous"; sleep 0.01 }
+      th2 = Thread.new { sleep 0.02 }
+      th1.join
+      th2.join
+    end
+    assert result.meta[:hide_anonymous_threads]
+
+    output = JSON.parse(Vernier::Output::Firefox.new(result).output)
+    assert_equal 2, output["meta"]["initialVisibleThreads"].length
+  end
+
   def test_threaded_timed_firefox_output
     result = Vernier.trace do
       th1 = Thread.new { sleep 0.01 }
