@@ -20,6 +20,7 @@ module Vernier
       interval = options.fetch(:interval, 500).to_i
       allocation_interval = options.fetch(:allocation_interval, 0).to_i
       hooks = options.fetch(:hooks, "").split(",")
+      hide_anonymous_threads = options[:hide_anonymous_threads] || false
       metadata = if options[:metadata]
         JSON.parse(@options[:metadata].unpack1("m")).to_h { |k, v| [k.to_sym, v] }
       else
@@ -28,7 +29,7 @@ module Vernier
 
       STDERR.puts("starting profiler with interval #{interval} and allocation interval #{allocation_interval}")
 
-      @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, hooks:, metadata:)
+      @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, hooks:, metadata:, hide_anonymous_threads:)
       @collector.start
     end
 
