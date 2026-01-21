@@ -146,7 +146,7 @@ module Vernier
           primary_pct = sort_key == :self ? self_pct : total_pct
           secondary_pct = sort_key == :self ? total_pct : self_pct
           location = format_location(data[:file], data[:line])
-          out << "| #{idx + 1} | #{format("%.1f", primary_pct)}% | #{format("%.1f", secondary_pct)}% | #{format_code_span(name)} | #{escape_table_cell(location)} |\n"
+          out << "| #{idx + 1} | #{format("%.1f", primary_pct)}% | #{format("%.1f", secondary_pct)}% | #{format_code_span(name)} | #{escape_markdown(location)} |\n"
         end
 
         out << "\n"
