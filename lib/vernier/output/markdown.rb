@@ -114,7 +114,7 @@ module Vernier
         sorted.each_with_index do |(name, data), idx|
           pct = 100.0 * data[:weight] / total
           location = format_location(data[:file], data[:line])
-          out << "| #{idx + 1} | #{data[:weight]} | #{format("%.1f", pct)}% | `#{escape_markdown(name)}` | #{escape_markdown(location)} |\n"
+          out << "| #{idx + 1} | #{data[:weight]} | #{format("%.1f", pct)}% | #{format_code_span(name)} | #{format_code_span(location)} |\n"
         end
 
         out << "\n"
@@ -228,7 +228,7 @@ module Vernier
             source_line = read_source_line(filename, line_no)
             code = source_line ? truncate_code(source_line) : "_source unavailable_"
 
-            out << "| #{line_no} | #{format("%.1f", self_pct)}% | #{format("%.1f", total_pct)}% | `#{escape_markdown(code)}` |\n"
+            out << "| #{line_no} | #{format("%.1f", self_pct)}% | #{format("%.1f", total_pct)}% | #{format_code_span(code)} |\n"
           end
 
           out << "\n"
@@ -358,9 +358,27 @@ module Vernier
         end
       end
 
+      def format_code_span(text)
+        content = text.to_s.gsub("|", "\\|")
+
+        # Find longest run of consecutive backticks in content
+        max_run = content.scan(/`+/).map(&:length).max || 0
+        delimiter = "`" * (max_run + 1)
+
+        if delimiter.length > 1
+          "#{delimiter} #{content} #{delimiter}"
+        else
+          "#{delimiter}#{content}#{delimiter}"
+        end
+      end
+
       def escape_markdown(text)
         return "" unless text
-        text.to_s.gsub(/([|`*_\[\]])/, '\\\\\1')
+        text.to_s
+          .gsub("&", "&amp;")
+          .gsub("<", "&lt;")
+          .gsub(">", "&gt;")
+          .gsub(/([|`*_\[\]])/, '\\\\\1')
       end
     end
   end
