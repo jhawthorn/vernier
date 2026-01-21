@@ -100,11 +100,11 @@ module Vernier
           func_idx = stack_table.frame_func_idx(frame_idx)
           name = stack_table.func_name(func_idx)
           filename = stack_table.func_filename(func_idx)
-          line = stack_table.frame_line_no(frame_idx)
+          first_lineno = stack_table.func_first_lineno(func_idx)
 
           top_by_func[name][:self] += weight
           top_by_func[name][:file] ||= filename
-          top_by_func[name][:line] ||= line
+          top_by_func[name][:line] ||= first_lineno
 
           # Total time: walk up the stack
           seen = {}
@@ -118,7 +118,7 @@ module Vernier
               seen[func_name] = true
               top_by_func[func_name][:total] += weight
               top_by_func[func_name][:file] ||= stack_table.func_filename(func_idx)
-              top_by_func[func_name][:line] ||= stack_table.frame_line_no(frame_idx)
+              top_by_func[func_name][:line] ||= stack_table.func_first_lineno(func_idx)
             end
 
             current_stack_idx = stack_table.stack_parent_idx(current_stack_idx)
