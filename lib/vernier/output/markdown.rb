@@ -92,29 +92,61 @@ module Vernier
         total = weights.sum
         return out << "_No samples collected._\n\n" if total == 0
 
-        top_by_self = Hash.new { |h, k| h[k] = { weight: 0, file: nil, line: nil } }
+        top_by_func = Hash.new { |h, k| h[k] = { self: 0, total: 0, file: nil, line: nil } }
 
         samples.zip(weights).each do |stack_idx, weight|
+          # Self time: top frame only
           frame_idx = stack_table.stack_frame_idx(stack_idx)
           func_idx = stack_table.frame_func_idx(frame_idx)
           name = stack_table.func_name(func_idx)
           filename = stack_table.func_filename(func_idx)
           line = stack_table.frame_line_no(frame_idx)
 
-          top_by_self[name][:weight] += weight
-          top_by_self[name][:file] ||= filename
-          top_by_self[name][:line] ||= line
+          top_by_func[name][:self] += weight
+          top_by_func[name][:file] ||= filename
+          top_by_func[name][:line] ||= line
+
+          # Total time: walk up the stack
+          seen = {}
+          current_stack_idx = stack_idx
+          while current_stack_idx
+            frame_idx = stack_table.stack_frame_idx(current_stack_idx)
+            func_idx = stack_table.frame_func_idx(frame_idx)
+            func_name = stack_table.func_name(func_idx)
+
+            unless seen[func_name]
+              seen[func_name] = true
+              top_by_func[func_name][:total] += weight
+              top_by_func[func_name][:file] ||= stack_table.func_filename(func_idx)
+              top_by_func[func_name][:line] ||= stack_table.frame_line_no(frame_idx)
+            end
+
+            current_stack_idx = stack_table.stack_parent_idx(current_stack_idx)
+          end
         end
 
-        sorted = top_by_self.sort_by { |_, v| -v[:weight] }.first(@top_n)
+        out << top_functions_table("By Self Time", top_by_func, total, :self)
+        out << top_functions_table("By Total Time", top_by_func, total, :total)
 
-        out << "| Rank | Self Weight | Self % | Function | Location |\n"
-        out << "|------|-------------|--------|----------|----------|\n"
+        out
+      end
+
+      def top_functions_table(title, funcs, total, sort_key)
+        out = +"### #{title}\n\n"
+        sorted = funcs.sort_by { |_, v| -v[sort_key] }.first(@top_n)
+
+        primary = sort_key == :self ? "Self" : "Total"
+        secondary = sort_key == :self ? "Total" : "Self"
+        out << "| Rank | #{primary} % | #{secondary} % | Function | Location |\n"
+        out << "|------|--------|---------|----------|----------|\n"
 
         sorted.each_with_index do |(name, data), idx|
-          pct = 100.0 * data[:weight] / total
+          self_pct = 100.0 * data[:self] / total
+          total_pct = 100.0 * data[:total] / total
+          primary_pct = sort_key == :self ? self_pct : total_pct
+          secondary_pct = sort_key == :self ? total_pct : self_pct
           location = format_location(data[:file], data[:line])
-          out << "| #{idx + 1} | #{data[:weight]} | #{format("%.1f", pct)}% | #{format_code_span(name)} | #{format_code_span(location)} |\n"
+          out << "| #{idx + 1} | #{format("%.1f", primary_pct)}% | #{format("%.1f", secondary_pct)}% | #{format_code_span(name)} | #{escape_table_cell(location)} |\n"
         end
 
         out << "\n"
@@ -195,14 +227,13 @@ module Vernier
           samples_by_file[filename][line][:total] += data[:total]
         end
 
-        # Filter to relevant files (>1% of total, exclude gem/rubylib/<)
+        # Filter to relevant files (>1% self time, exclude gem/rubylib/<)
         relevant_files = samples_by_file.select do |filename, lines|
           next false if filename.start_with?("gem:")
           next false if filename.start_with?("rubylib:")
           next false if filename.start_with?("<")
 
-          file_total = lines.values.map { |d| d[:total] }.max || 0
-          file_total > total * 0.01
+          lines.values.map { |d| d[:self] }.max > total * 0.01
         end
 
         if relevant_files.empty?

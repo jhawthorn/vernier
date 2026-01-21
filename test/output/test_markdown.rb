@@ -36,11 +36,11 @@ class TestOutputMarkdown < Minitest::Test
     assert_match(/\| Total Samples \|/, output)
     assert_match(/\| Threads \|/, output)
 
-    # Check hotspots contain expected functions (underscores are escaped as \_ in markdown)
-    assert_includes output, "GVLTest.sleep\\_without\\_gvl"
-    assert_includes output, "GVLTest.sleep\\_holding\\_gvl"
+    # Check hotspots contain expected functions
+    assert_includes output, "GVLTest.sleep_without_gvl"
+    assert_includes output, "GVLTest.sleep_holding_gvl"
     assert_includes output, "Kernel#sleep"
-    assert_includes output, "Process.clock\\_gettime"
+    assert_includes output, "Process.clock_gettime"
   end
 
   def test_parsed_profile
@@ -52,10 +52,10 @@ class TestOutputMarkdown < Minitest::Test
     assert_match(/^## Summary/, output)
     assert_match(/^## Top Hotspots/, output)
 
-    # Check hotspots contain expected functions from fixture (underscores escaped as \_)
-    assert_includes output, "GVLTest.sleep\\_holding\\_gvl"
+    # Check hotspots contain expected functions from fixture
+    assert_includes output, "GVLTest.sleep_holding_gvl"
     assert_includes output, "Kernel#sleep"
-    assert_includes output, "GVLTest.sleep\\_without\\_gvl"
+    assert_includes output, "GVLTest.sleep_without_gvl"
   end
 
   def test_output_is_string
