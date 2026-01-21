@@ -30,6 +30,10 @@ module Vernier
       Output::Cpuprofile.new(self).output
     end
 
+    def to_markdown(top_n: 20, lines_per_file: 5)
+      Output::Markdown.new(self, top_n: top_n, lines_per_file: lines_per_file).output
+    end
+
     def write(out:, format: "firefox")
       case format
       when "cpuprofile"
@@ -37,6 +41,12 @@ module Vernier
           out.write(to_cpuprofile)
         else
           File.binwrite(out, to_cpuprofile)
+        end
+      when "markdown", "md"
+        if out.respond_to?(:write)
+          out.write(to_markdown)
+        else
+          File.binwrite(out, to_markdown)
         end
       when "firefox", nil
         if out.respond_to?(:write)

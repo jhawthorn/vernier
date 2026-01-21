@@ -48,8 +48,11 @@ module Vernier
         end
         prefix = "profile-"
         timestamp = Time.now.strftime("%Y%m%d-%H%M%S")
-        suffix = if options[:format] == "cpuprofile"
+        suffix = case options[:format]
+        when "cpuprofile"
           ".vernier.cpuprofile"
+        when "markdown", "md"
+          ".vernier.md"
         else
           ".vernier.json.gz"
         end

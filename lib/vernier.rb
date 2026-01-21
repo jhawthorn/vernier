@@ -14,6 +14,7 @@ require_relative "vernier/output/cpuprofile"
 require_relative "vernier/output/top"
 require_relative "vernier/output/file_listing"
 require_relative "vernier/output/filename_filter"
+require_relative "vernier/output/markdown"
 
 module Vernier
   class Error < StandardError; end
