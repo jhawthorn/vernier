@@ -8,6 +8,7 @@ require_relative "vernier/memory_leak_detector"
 require_relative "vernier/parsed_profile"
 require_relative "vernier/result"
 require_relative "vernier/hooks"
+require_relative "vernier/fork"
 require_relative "vernier/vernier"
 require_relative "vernier/output/firefox"
 require_relative "vernier/output/cpuprofile"
@@ -61,6 +62,11 @@ module Vernier
     @collector = nil
 
     result
+  end
+
+  def self.cancel_profile
+    @collector&.cancel
+    @collector = nil
   end
 
   def self.trace_retained(**profile_options, &block)
