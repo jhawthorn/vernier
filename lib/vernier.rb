@@ -8,13 +8,19 @@ require_relative "vernier/memory_leak_detector"
 require_relative "vernier/parsed_profile"
 require_relative "vernier/result"
 require_relative "vernier/hooks"
-require_relative "vernier/vernier"
 require_relative "vernier/output/firefox"
 require_relative "vernier/output/cpuprofile"
 require_relative "vernier/output/top"
 require_relative "vernier/output/file_listing"
 require_relative "vernier/output/filename_filter"
 require_relative "vernier/output/markdown"
+
+# The built extension may not be installed into this dir.
+begin
+  require_relative "vernier/vernier"
+rescue LoadError
+  require "vernier/vernier"
+end
 
 module Vernier
   class Error < StandardError; end
