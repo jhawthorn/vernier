@@ -29,7 +29,7 @@ module Vernier
         @frame_lines   = thread_data["frameTable"]["line"]
         @func_names    = thread_data["funcTable"]["name"]
         @func_filenames = thread_data["funcTable"]["fileName"]
-        #@func_first_linenos = thread_data["funcTable"]["first"]
+        @func_first_linenos = thread_data["funcTable"]["lineNumber"]
         @strings  = thread_data["stringArray"]
       end
 
@@ -49,7 +49,7 @@ module Vernier
       def func_filename_idx(idx) = @func_filenames[idx]
       def func_name(idx) = @strings[func_name_idx(idx)]
       def func_filename(idx) = @strings[func_filename_idx(idx)]
-      def func_first_lineno(idx) = @func_first_lineno[idx]
+      def func_first_lineno(idx) = @func_first_linenos[idx]
 
       include StackTableHelpers
     end
