@@ -47,8 +47,6 @@ class HeapTracker {
     }
 
     void record_newobj(VALUE obj) {
-      objects_allocated++;
-
       RawSample sample;
       sample.sample();
       if (sample.empty()) {
@@ -59,13 +57,13 @@ class HeapTracker {
       }
       int stack_index = stack_table->stack_index(sample);
 
+      objects_allocated++;
       int idx = object_list.size();
       object_list.push_back(obj);
       frame_list.push_back(stack_index);
       object_index.emplace(obj, idx);
 
-      assert(objects_allocated == frame_list.size());
-      assert(objects_allocated == object_list.size());
+      assert(frame_list.size() == object_list.size());
     }
 
     void rebuild() {
