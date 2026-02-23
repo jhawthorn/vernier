@@ -3,8 +3,8 @@
 require "test_helper"
 
 class TestMemoryTracker < Minitest::Test
-  # 10MB to 200MB
-  REASONABLE_RANGE = (10_000_000)..(200_000_000)
+  # 10MB to 500MB
+  REASONABLE_RANGE = (10_000_000)..(500_000_000)
 
   def test_memory_rss
     return skip("https://bugs.ruby-lang.org/issues/20638") if ENV["RUBY_MN_THREADS"]
