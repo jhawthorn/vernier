@@ -1,26 +1,20 @@
 # frozen_string_literal: true
 
-require_relative "vernier/version"
-require_relative "vernier/collector"
-require_relative "vernier/stack_table"
-require_relative "vernier/heap_tracker"
-require_relative "vernier/memory_leak_detector"
-require_relative "vernier/parsed_profile"
-require_relative "vernier/result"
-require_relative "vernier/hooks"
-require_relative "vernier/output/firefox"
-require_relative "vernier/output/cpuprofile"
-require_relative "vernier/output/top"
-require_relative "vernier/output/file_listing"
-require_relative "vernier/output/filename_filter"
-require_relative "vernier/output/markdown"
-
-# The built extension may not be installed into this dir.
-begin
-  require_relative "vernier/vernier"
-rescue LoadError
-  require "vernier/vernier"
-end
+require "vernier/version"
+require "vernier/collector"
+require "vernier/stack_table"
+require "vernier/heap_tracker"
+require "vernier/memory_leak_detector"
+require "vernier/parsed_profile"
+require "vernier/result"
+require "vernier/hooks"
+require "vernier/output/firefox"
+require "vernier/output/cpuprofile"
+require "vernier/output/top"
+require "vernier/output/file_listing"
+require "vernier/output/filename_filter"
+require "vernier/output/markdown"
+require "vernier/vernier"
 
 module Vernier
   class Error < StandardError; end
