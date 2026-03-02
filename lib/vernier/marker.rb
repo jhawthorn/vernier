@@ -1,10 +1,6 @@
 # frozen_string_literal: true
 
-begin
-  require_relative "vernier" # Make sure constants are loaded
-rescue LoadError
-  require "vernier/vernier"
-end
+require "vernier/vernier"
 
 module Vernier
   module Marker
