@@ -29,7 +29,9 @@
 #undef assert
 #define assert RUBY_ASSERT_ALWAYS
 
+#ifndef PTR2NUM
 # define PTR2NUM(x)   (rb_int2inum((intptr_t)(void *)(x)))
+#endif
 
 // Internal TracePoint events we'll monitor during profiling
 #define RUBY_INTERNAL_EVENTS \
