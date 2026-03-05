@@ -51,6 +51,9 @@ FLAGS:
           options[:metadata] ||= Metadata.new
           options[:metadata] << [key, value]
         end
+        o.on('--hide-anonymous-threads', "Anonymous threads will be initially hidden in profiles") do
+          options[:hide_anonymous_threads] = true
+        end
         o.on('--format [FORMAT]', String, "output format: firefox (default) or cpuprofile") do |output_format|
           options[:format] = output_format
         end

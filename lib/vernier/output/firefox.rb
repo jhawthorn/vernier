@@ -120,7 +120,7 @@ module Vernier
       end
 
       def output(gzip: false)
-        result = ::JSON.generate(data)
+        result = ::JSON.generate(data(profile.meta[:hide_anonymous_threads]))
         if gzip
           require "zlib"
           result = Zlib.gzip(result)
@@ -132,7 +132,7 @@ module Vernier
 
       attr_reader :profile
 
-      def data
+      def data(hide_anonymous_threads)
         #markers_by_thread = profile.markers.group_by { |marker| marker[0] }
 
         threads = profile.threads.map do |ruby_thread_id, thread_info|
@@ -144,6 +144,12 @@ module Vernier
             #markers: markers,
             **thread_info,
           )
+        end
+
+        initially_visible_threads = if hide_anonymous_threads
+          threads.each_index.reject { |i| threads[i].anonymous? && !threads[i].is_main }.to_a
+        else
+          threads.each_index.to_a
         end
 
         {
@@ -171,7 +177,7 @@ module Vernier
               }
             end,
             sourceCodeIsNotOnSearchfox: true,
-            initialVisibleThreads: threads.each_index.to_a,
+            initialVisibleThreads: initially_visible_threads,
             initialSelectedThreads: Array(threads.find_index(&:is_start)),
             vernierUserMetadata: profile.meta[:user_metadata],
             extra: [
@@ -267,15 +273,17 @@ module Vernier
       end
 
       class Thread
-        attr_reader :profile, :is_start
+        attr_reader :profile, :is_start, :anonymous, :is_main
+        alias :anonymous? :anonymous
 
-        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil, allocations: nil, is_main: nil, is_start: nil)
+        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, anonymous:, stopped_at: nil, allocations: nil, is_main: nil, is_start: nil)
           @ruby_thread_id = ruby_thread_id
           @profile = profile
           @categorizer = categorizer
           @tid = tid
           @name = name
           @is_main = is_main
+          @anonymous = anonymous
           if is_main.nil?
             @is_main = @ruby_thread_id == ::Thread.main.object_id
           end
