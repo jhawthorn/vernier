@@ -53,6 +53,10 @@ module FirefoxTestHelpers
         subcategory_idx = thread["stackTable"]["subcategory"][idx]
         assert category_idx < categories.length
         assert subcategory_idx < categories[category_idx]["subcategories"].length
+
+        frame_idx = thread["stackTable"]["frame"][idx]
+        frame_category_idx = thread["frameTable"]["category"][frame_idx]
+        assert_equal category_idx, frame_category_idx
       end
 
       # Check frame table
