@@ -267,6 +267,11 @@ module Vernier
       end
 
       class Thread
+        SAMPLE_CATEGORY_NAMES = {
+          1 => "Idle",
+          2 => "Stalled"
+        }.freeze
+
         attr_reader :profile, :is_start
 
         def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil, allocations: nil, is_main: nil, is_start: nil)
@@ -355,6 +360,31 @@ module Vernier
           @frame_subcategories = @stack_table_hash[:frame_table].fetch(:func).map do |func_idx|
             func_subcategories[func_idx]
           end
+
+          @sample_category_idx = SAMPLE_CATEGORY_NAMES.transform_values do |name|
+            @categorizer.get_category(name).idx
+          end
+
+          @samples.zip(@sample_categories).each do |sample, raw_category|
+            next if raw_category == 0
+
+            @categorized_stacks[[sample, raw_category]]
+          end
+
+          base_stack_frames = @stack_table_hash[:stack_table].fetch(:frame)
+          base_frame_count = @stack_table_hash[:frame_table].fetch(:func).size
+          @extra_frames = []
+          @categorized_frame_map = {}
+
+          @categorized_stacks.each_key do |(stack, raw_category)|
+            original_frame_idx = base_stack_frames[stack]
+            key = [original_frame_idx, raw_category]
+            next if @categorized_frame_map.key?(key)
+
+            new_frame_idx = base_frame_count + @extra_frames.size
+            @categorized_frame_map[key] = new_frame_idx
+            @extra_frames << [original_frame_idx, @sample_category_idx[raw_category]]
+          end
         end
 
         def categorize_filename(filename)
@@ -377,7 +407,7 @@ module Vernier
         def find_category_and_subcategory(filename, categories)
           categories.each do |category_name|
             category = @categorizer.get_category(category_name)
-            subcategory = category.subcategories.detect {|c| c.matches?(filename) }&.idx
+            subcategory = category.subcategories.detect { |c| c.matches?(filename) }&.idx
             return category, subcategory if subcategory
           end
           [nil, nil]
@@ -430,7 +460,7 @@ module Vernier
           categories = []
           data = []
 
-          @markers.each_with_index do |(_, name, start, finish, phase, datum), i|
+          @markers.each do |(_, name, start, finish, phase, datum)|
             string_indexes << @strings[name]
             start_times << (start / 1_000_000.0)
 
@@ -463,12 +493,14 @@ module Vernier
         end
 
         def allocations_table
-          return nil if !@allocations
+          return nil unless @allocations
+
           samples, weights, timestamps = @allocations.values_at(:samples, :weights, :timestamps)
-          return nil if samples.size == 0
+          return nil if samples.empty?
+
           size = samples.size
           timestamps = timestamps.map { _1 / 1_000_000.0 }
-          ret = {
+          {
             "time": timestamps,
             "className": ["Object"]*size,
             "typeName": ["JSObject"]*size,
@@ -478,7 +510,6 @@ module Vernier
             "stack": samples,
             "length": size
           }
-          ret
         end
 
         def samples_table
@@ -518,21 +549,22 @@ module Vernier
         end
 
         def stack_table
-          frames =   @stack_table_hash[:stack_table].fetch(:frame).dup
+          base_frames = @stack_table_hash[:stack_table].fetch(:frame)
+          frames = base_frames.dup
           prefixes = @stack_table_hash[:stack_table].fetch(:parent).dup
-          categories  = frames.map{|idx| @frame_categories[idx].idx }
-          subcategories  = frames.map{|idx| @frame_subcategories[idx] }
+          categories = frames.map { |idx| @frame_categories[idx].idx }
+          subcategories = frames.map { |idx| @frame_subcategories[idx] }
 
-          @categorized_stacks.each_key do |(stack, category)|
-            frames << frames[stack]
+          @categorized_stacks.each_key do |(stack, raw_category)|
+            original_frame_idx = base_frames[stack]
+            frames << @categorized_frame_map[[original_frame_idx, raw_category]]
             prefixes << prefixes[stack]
-            categories << category
+            categories << @sample_category_idx[raw_category]
             subcategories << 0
           end
 
-          size = frames.length
-          raise unless frames.size == size
-          raise unless prefixes.size == size
+          raise unless prefixes.size == frames.size
+
           {
             frame: frames,
             category: categories,
@@ -543,17 +575,26 @@ module Vernier
         end
 
         def frame_table
-          funcs = @stack_table_hash[:frame_table].fetch(:func)
-          lines = @stack_table_hash[:frame_table].fetch(:line)
+          funcs = @stack_table_hash[:frame_table].fetch(:func).dup
+          lines = @stack_table_hash[:frame_table].fetch(:line).dup
           raise unless lines.size == funcs.size
+
+          categories = @frame_categories.map(&:idx)
+          subcategories = @frame_subcategories.dup
+          implementations = @frame_implementations.dup
+
+          @extra_frames.each do |(frame_idx, category_idx)|
+            funcs << funcs[frame_idx]
+            lines << lines[frame_idx]
+            categories << category_idx
+            subcategories << 0
+            implementations << implementations[frame_idx]
+          end
 
           size = funcs.size
           none = [nil] * size
           default = [0] * size
           unidentified = [-1] * size
-
-          categories = @frame_categories.map(&:idx)
-          subcategories = @frame_subcategories
 
           {
             address: unidentified,
@@ -563,7 +604,7 @@ module Vernier
             func: funcs,
             nativeSymbol: none,
             innerWindowID: none,
-            implementation: @frame_implementations,
+            implementation: implementations,
             line: lines,
             column: none,
             length: size
@@ -605,11 +646,8 @@ module Vernier
               else
                 string.scrub
               end
-            elsif string.encoding == Encoding::BINARY
-              # TODO: We might want to guess UTF-8 and escape the binary more explicitly
-              string.dup.force_encoding("UTF-8").scrub
             else
-              # TODO: ideally we should attempt to properly re-encode here, but right now I think this is dead code
+              # TODO: We might want to guess UTF-8 and escape the binary more explicitly
               string.dup.force_encoding("UTF-8").scrub
             end
           end
