@@ -19,6 +19,7 @@ module Vernier
     def self.start
       interval = options.fetch(:interval, 500).to_i
       allocation_interval = options.fetch(:allocation_interval, 0).to_i
+      cpu_time = options[:cpu_time] == "true"
       hooks = options.fetch(:hooks, "").split(",")
       hide_anonymous_threads = options[:hide_anonymous_threads] || false
       embed_sources = options.fetch(:embed_sources, "true") != "false"
@@ -30,7 +31,7 @@ module Vernier
 
       STDERR.puts("starting profiler with interval #{interval} and allocation interval #{allocation_interval}")
 
-      @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, hooks:, metadata:, hide_anonymous_threads:, embed_sources:)
+      @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, cpu_time:, hooks:, metadata:, hide_anonymous_threads:, embed_sources:)
       @collector.start
     end
 

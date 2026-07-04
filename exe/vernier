@@ -37,6 +37,9 @@ FLAGS:
         o.on('--allocation-interval [ALLOCATIONS]', Integer, "allocation sampling interval (default 0 disabled)") do |i|
           options[:allocation_interval] = i
         end
+        o.on('--cpu-time', "record CPU time per sample") do
+          options[:cpu_time] = true
+        end
         o.on('--signal [NAME]', String, "specify a signal to start and stop the profiler") do |s|
           options[:signal] = s
         end

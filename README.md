@@ -89,6 +89,19 @@ some_other_slow_method
 Vernier.stop_profile
 ```
 
+#### CPU utilization
+
+Passing `cpu_time: true` records CPU time consumed between each pair of
+samples. The Firefox profiler renders this as a per-thread CPU utilization
+track, which is useful for distinguishing time spent computing from time
+spent waiting on I/O.
+
+```ruby
+Vernier.profile(cpu_time: true, out: "time_profile.json") do
+  some_slow_method
+end
+```
+
 #### Rack middleware
 
 You can also use `Vernier::Middleware` to profile a Rack application:
@@ -214,6 +227,7 @@ See [`examples/custom_hook.rb`](examples/custom_hook.rb) for a complete example.
 | `out`                    | N/A                           | File to write the profile to.                                 | N/A (Auto-generated)         |
 | `interval`               | `vernier_interval`            | Sampling interval (µs). Only in `:wall` mode.                 | `500` (`200`)                |
 | `allocation_interval`    | `vernier_allocation_interval` | Allocation sampling interval. Only in `:wall` mode.           | `0` i.e. disabled (`200`)    |
+| `cpu_time`               | `vernier_cpu_time`            | Record per-sample CPU time. Only in `:wall` mode.             | `false` (`false`)            |
 | `gc`                     | N/A                           | Run full GC cycle before profiling. Only in `:retained` mode. | `true` (N/A)                 |
 | `metadata`               | N/A                           | Metadata key-value pairs to include in the profile.           | `{}` (N/A)                   |
 | `hide_anonymous_threads` | N/A                           | Anonymous threads will be initially hidden in profile output. | `false` (N/A)                |
