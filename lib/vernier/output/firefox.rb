@@ -277,7 +277,7 @@ module Vernier
 
         attr_reader :profile, :is_start
 
-        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, markers:, started_at:, stopped_at: nil, allocations: nil, is_main: nil, is_start: nil)
+        def initialize(ruby_thread_id, profile, categorizer, name:, tid:, samples:, weights:, timestamps: nil, sample_categories: nil, cpu_delta_ns: nil, markers:, started_at:, stopped_at: nil, allocations: nil, is_main: nil, is_start: nil)
           @ruby_thread_id = ruby_thread_id
           @profile = profile
           @categorizer = categorizer
@@ -307,6 +307,7 @@ module Vernier
           timestamps ||= [0] * samples.size
           @weights, @timestamps = weights, timestamps
           @sample_categories = sample_categories || ([0] * samples.size)
+          @cpu_delta_ns = cpu_delta_ns
           @markers = markers.map do |marker|
             if stack_idx = marker[5]&.dig(:cause, :stack)
               marker = marker.dup
@@ -542,13 +543,19 @@ module Vernier
             end
           end
 
-          {
+          table = {
             stack: samples,
             time: times,
             weight: weights,
             weightType: profile.meta[:mode] == :retained ? "bytes" : "samples",
             length: samples.length
           }
+
+          if @cpu_delta_ns
+            table[:threadCPUDelta] = @cpu_delta_ns.map { |ns| ns / 1_000 }
+          end
+
+          table
         end
 
         def stack_table

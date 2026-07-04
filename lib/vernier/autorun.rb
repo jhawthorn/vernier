@@ -19,6 +19,7 @@ module Vernier
     def self.start
       interval = options.fetch(:interval, 500).to_i
       allocation_interval = options.fetch(:allocation_interval, 0).to_i
+      cpu_time = options[:cpu_time] == "true"
       hooks = options.fetch(:hooks, "").split(",")
       metadata = if options[:metadata]
         JSON.parse(@options[:metadata].unpack1("m")).to_h { |k, v| [k.to_sym, v] }
@@ -28,7 +29,7 @@ module Vernier
 
       STDERR.puts("starting profiler with interval #{interval} and allocation interval #{allocation_interval}")
 
-      @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, hooks:, metadata:)
+      @collector = Vernier::Collector.new(:wall, interval:, allocation_interval:, cpu_time:, hooks:, metadata:)
       @collector.start
     end
 
