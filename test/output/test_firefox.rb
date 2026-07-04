@@ -59,6 +59,31 @@ class TestOutputFirefox < Minitest::Test
     assert_includes names, "GC pause"
   end
 
+  def test_thread_running_markers_have_cpu_time
+    result = Vernier.trace do
+      target = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.02
+      while Process.clock_gettime(Process::CLOCK_MONOTONIC) < target
+      end
+      # force a RUNNING → SUSPENDED transition so a Thread Running marker is emitted
+      sleep 0.01
+    end
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    data = JSON.parse(output)
+    main_thread = data["threads"].find { _1["isMainThread"] }
+    markers = main_thread["markers"]
+
+    cpu_times = markers["length"].times.filter_map do |i|
+      name = main_thread["stringArray"][markers["name"][i]]
+      next unless name == "Thread Running"
+      markers["data"][i]&.dig("cpu_time")
+    end
+
+    refute_empty cpu_times
+    assert cpu_times.any? { _1 > 0 }
+  end
+
   def test_retained_firefox_output
     retained = []
 
@@ -228,6 +253,29 @@ class TestOutputFirefox < Minitest::Test
 
     output = Vernier::Output::Firefox.new(result).output
     assert_valid_firefox_profile(output)
+  end
+
+  def test_cpu_time_firefox_output
+    result = Vernier.trace(cpu_time: true) do
+      sleep 0.01
+      target = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.01
+      while Process.clock_gettime(Process::CLOCK_MONOTONIC) < target
+      end
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    data = JSON.parse(output)
+    assert_equal "µs", data.dig("meta", "sampleUnits", "threadCPUDelta")
+
+    main_thread = data["threads"].find { _1["isMainThread"] }
+    samples = main_thread["samples"]
+    cpu_delta = samples["threadCPUDelta"]
+
+    refute_nil cpu_delta
+    assert_equal samples["length"], cpu_delta.size
+    assert_operator cpu_delta.sum, :>, 0
   end
 
   def test_profile_with_various_encodings

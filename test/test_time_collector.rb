@@ -286,6 +286,7 @@ class TestTimeCollector < Minitest::Test
     assert_equal SAMPLE_SCALE_INTERVAL, result.meta[:interval]
     assert_equal SAMPLE_SCALE_ALLOCATIONS, result.meta[:allocation_interval]
     assert_equal false, result.meta[:gc]
+    assert_equal false, result.meta[:cpu_time]
     assert_equal ({ key1: "val1", key2: "val2" }), result.meta[:user_metadata]
   end
 
