@@ -38,4 +38,25 @@ class TestOutputTop < Minitest::Test
     assert_includes output, "| 1989    | 24.5 | Object#ruby_sleep_gvl"
     assert_includes output, "| 10      | 0.1  | Process.clock_gettime"
   end
+
+  def test_duplicate_stacks_match_reference
+    profile = build_parsed_profile(
+      funcs: [["a", "x.rb"], ["b", "x.rb"], ["c", "y.rb"]],
+      frames: [[0, 10], [1, 20], [2, 30]],
+      stacks: [[nil, 0], [0, 1], [1, 2], [0, 2]],
+      samples: [2, 2, 3, 1, 0, 2],
+      weights: [1, 2, 4, 8, 16, 32],
+    )
+
+    output = Vernier::Output::Top.new(profile, 20).output
+
+    expected = reference_top_by_self(profile)
+    assert_equal({ "c" => 39, "a" => 16, "b" => 8 }, expected)
+
+    expected.each do |name, samples|
+      row = output.lines.find { |line| line.split("|").map(&:strip)[3] == name }
+      assert row, "expected a row for #{name.inspect} in:\n#{output}"
+      assert_equal samples.to_s, row.split("|")[1].strip
+    end
+  end
 end
