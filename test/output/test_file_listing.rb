@@ -81,6 +81,7 @@ TEXT
     def test_unsampled_interior_stacks
       # Stacks 0 and 1 are never sampled directly, but their frames must
       # still carry the total weight propagated from stack 2.
+
       profile = build_parsed_profile(
         funcs: [["a", "x.rb"], ["b", "x.rb"], ["c", "y.rb"]],
         frames: [[0, 10], [1, 20], [2, 30]],
@@ -125,6 +126,31 @@ TEXT
         Vernier::Output::FileListing.new(profile).samples_by_file
       )
       assert_equal reference_samples_by_file(profile), actual
+    end
+
+    def test_serialized_fixture_is_parent_before_child_ordered
+      profile = Vernier::ParsedProfile.read_file(fixture_path("gvl_sleep.vernier.json"))
+      stack_table = profile.main_thread.stack_table
+
+      stack_table.stack_count.times do |idx|
+        parent = stack_table.stack_parent_idx(idx)
+        assert_operator parent, :<, idx if parent
+      end
+    end
+
+    def test_out_of_order_stack_table_raises
+      profile = build_parsed_profile(
+        funcs: [["a", "x.rb"], ["b", "x.rb"]],
+        frames: [[0, 10], [1, 20]],
+        stacks: [[1, 0], [nil, 1]], # invalid: stack 0's parent is stack 1
+        samples: [0, 1],
+        weights: [1, 1],
+      )
+
+      error = assert_raises(RuntimeError) do
+        Vernier::Output::FileListing.new(profile).samples_by_file
+      end
+      assert_match(/parent-before-child/, error.message)
     end
 
     def test_live_retained_profile_matches_reference
