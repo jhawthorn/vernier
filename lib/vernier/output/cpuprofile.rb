@@ -1,8 +1,12 @@
 require "json"
 
+require_relative "../output_helpers"
+
 module Vernier
   module Output
     class Cpuprofile
+      include OutputHelpers
+
       def initialize(profile)
         @profile = profile
       end
@@ -98,7 +102,9 @@ module Vernier
         line = stack_table.frame_line_no(frame_idx) - 1
 
         func_name = stack_table.func_name(func_idx)
+        func_name = sanitize_string(func_name) if func_name
         filename = stack_table.func_filename(func_idx)
+        filename = sanitize_string(filename) if filename
 
         node_id = nodes.length
         node = {
