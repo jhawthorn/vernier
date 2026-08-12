@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "objspace"
 
 class TestRetainedMemory < Minitest::Test
   def test_tracing_retained_objects
@@ -14,8 +15,9 @@ class TestRetainedMemory < Minitest::Test
       }
     end
 
-    assert_operator result.total_bytes, :>, 40 * 100
-    assert_operator result.total_bytes, :<, 40 * 200
+    object_size = ObjectSpace.memsize_of(Object.new)
+    assert_operator result.total_bytes, :>, object_size * 100
+    assert_operator result.total_bytes, :<, object_size * 200
 
     top_stack_tally = result.threads.values.flat_map { _1[:samples] }.tally.max_by(&:last)
     top_stack = result.stack(top_stack_tally.first)
