@@ -12,3 +12,5 @@ gem "rake-compiler"
 gem "benchmark-ips"
 
 gem "minitest", "~> 5.0"
+
+gem "zlib", ">= 3.2.1"
