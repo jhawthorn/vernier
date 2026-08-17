@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
+require_relative "../output_helpers"
+
 module Vernier
   module Output
     class Top
+      include OutputHelpers
+
       def initialize(profile, row_limit)
         @profile = profile
         @row_limit = row_limit
@@ -57,10 +61,10 @@ module Vernier
             @profile._stack_table
           end
 
-        stack_weights = Hash.new(0)
-        thread[:samples].zip(thread[:weights]) do |stack_idx, weight|
-          stack_weights[stack_idx] += weight
-        end
+        samples = thread[:samples]
+        weights = thread[:weights]
+
+        stack_weights = collapse_stack_weights(samples, weights)
 
         total = stack_weights.values.sum
 

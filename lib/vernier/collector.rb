@@ -29,6 +29,7 @@ module Vernier
         result.instance_variable_set(:@threads, {
           0 => {
             tid: 0,
+            is_main: true,
             name: "custom",
             started_at: @started_at,
             samples: @samples,
@@ -80,6 +81,7 @@ module Vernier
         result.instance_variable_set(:@threads, {
           0 => {
             tid: 0,
+            is_main: true,
             name: "retained memory",
             started_at: @started_at,
             samples: samples,

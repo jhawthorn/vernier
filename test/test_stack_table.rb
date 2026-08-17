@@ -164,6 +164,22 @@ class TestStackTable < Minitest::Test
     assert_includes stack[0].to_s, " at "
   end
 
+  # Output::FileListing's bottom-up aggregation relies on this contract:
+  # stacks are interned parent-before-child, so a stack's parent always has
+  # a lower index.
+  def test_parent_indexes_are_always_lower
+    stack_table = Vernier::StackTable.new
+    1000.times do |i|
+      eval("stack_table.current_stack", binding, "(eval)", i)
+    end
+
+    assert_operator stack_table.stack_count, :>, 1000
+    stack_table.stack_count.times do |idx|
+      parent = stack_table.stack_parent_idx(idx)
+      assert_operator parent, :<, idx if parent
+    end
+  end
+
   def test_backtrace
     stack_table = Vernier::StackTable.new
     expected = caller_locations(0); index = stack_table.current_stack

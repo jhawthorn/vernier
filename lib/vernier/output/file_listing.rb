@@ -1,22 +1,18 @@
 # frozen_string_literal: true
 
 require_relative "filename_filter"
+require_relative "../output_helpers"
 require "cgi/escape"
 
 module Vernier
   module Output
     class FileListing
+      include OutputHelpers
+
       class SamplesByLocation
         attr_accessor :self, :total
         def initialize
           @self = @total = 0
-        end
-
-        def +(other)
-          ret = SamplesByLocation.new
-          ret.self = @self + other.self
-          ret.total = @total + other.total
-          ret
         end
       end
 
@@ -25,6 +21,8 @@ module Vernier
       end
 
       def samples_by_file
+        return @samples_by_file if defined?(@samples_by_file)
+
         thread = @profile.main_thread
         if Hash === thread
           # live profile
@@ -38,22 +36,9 @@ module Vernier
         weights = thread[:weights]
         samples = thread[:samples]
 
-        self_samples_by_frame = Hash.new do |h, k|
-          h[k] = SamplesByLocation.new
-        end
+        stack_weights = collapse_stack_weights(samples, weights)
 
-        samples.zip(weights).each do |stack_idx, weight|
-          # self time
-          top_frame_index = stack_table.stack_frame_idx(stack_idx)
-          self_samples_by_frame[top_frame_index].self += weight
-
-          # total time
-          while stack_idx
-            frame_idx = stack_table.stack_frame_idx(stack_idx)
-            self_samples_by_frame[frame_idx].total += weight
-            stack_idx = stack_table.stack_parent_idx(stack_idx)
-          end
-        end
+        self_by_frame, total_by_frame = frame_weights(stack_table, stack_weights)
 
         samples_by_file = Hash.new do |h, k|
           h[k] = Hash.new do |h2, k2|
@@ -61,17 +46,62 @@ module Vernier
           end
         end
 
-        self_samples_by_frame.each do |frame, samples|
+        self_by_frame.each_with_index do |self_weight, frame|
+          total_weight = total_by_frame[frame]
+          next if self_weight == 0 && total_weight == 0
+
           line = stack_table.frame_line_no(frame)
           func_index = stack_table.frame_func_idx(frame)
           filename = stack_table.func_filename(func_index)
 
-          samples_by_file[filename][line] += samples
+          location = samples_by_file[filename][line]
+          location.self += self_weight
+          location.total += total_weight
         end
 
-        samples_by_file.transform_keys! do |filename|
+        @samples_by_file = samples_by_file.transform_keys! do |filename|
           filename_filter.call(filename)
         end
+      end
+
+      # Returns [self_weight, total_weight] arrays indexed by frame, from a
+      # hash of per-stack weights.
+      #
+      # The stack table is a prefix tree whose parent is always interned
+      # before its children (parent idx < child idx), so total weights are
+      # accumulated bottom-up in a single reverse pass.
+      private def frame_weights(stack_table, stack_weights)
+        # Scatter the sparse weights into an array indexed by stack.
+        stack_totals = Array.new(stack_table.stack_count, 0)
+        stack_weights.each do |stack_idx, weight|
+          stack_totals[stack_idx] = weight
+        end
+
+        # Accumulate each stack's total into its parent, children first,
+        # so a single descending pass completes every subtree's total.
+        (stack_totals.length - 1).downto(0) do |stack_idx|
+          parent_idx = stack_table.stack_parent_idx(stack_idx)
+          next unless parent_idx
+
+          if parent_idx >= stack_idx
+            raise "Invalid profile: stack table is not parent-before-child ordered"
+          end
+
+          stack_totals[parent_idx] += stack_totals[stack_idx]
+        end
+
+        self_by_frame = Array.new(stack_table.frame_count, 0)
+        total_by_frame = Array.new(stack_table.frame_count, 0)
+        stack_weights.each do |stack_idx, weight|
+          self_by_frame[stack_table.stack_frame_idx(stack_idx)] += weight
+        end
+        stack_totals.each_with_index do |total, stack_idx|
+          next if total == 0
+
+          total_by_frame[stack_table.stack_frame_idx(stack_idx)] += total
+        end
+
+        [self_by_frame, total_by_frame]
       end
 
       def output(template: nil)
@@ -98,8 +128,7 @@ module Vernier
       end
 
       def total
-        thread = @profile.main_thread
-        thread[:weights].sum
+        @total ||= @profile.main_thread[:weights].sum
       end
 
       def format_file(output, filename, all_samples, total:)

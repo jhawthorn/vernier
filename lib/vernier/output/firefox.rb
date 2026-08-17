@@ -4,6 +4,7 @@ require "json"
 require "rbconfig"
 
 require_relative "filename_filter"
+require_relative "../output_helpers"
 
 module Vernier
   module Output
@@ -267,6 +268,8 @@ module Vernier
       end
 
       class Thread
+        include OutputHelpers
+
         SAMPLE_CATEGORY_NAMES = {
           1 => "Idle",
           2 => "Stalled"
@@ -638,18 +641,7 @@ module Vernier
 
         def string_table
           @strings.keys.map do |string|
-            if string.ascii_only?
-              string
-            elsif string.encoding == Encoding::UTF_8
-              if string.valid_encoding?
-                string
-              else
-                string.scrub
-              end
-            else
-              # TODO: We might want to guess UTF-8 and escape the binary more explicitly
-              string.dup.force_encoding("UTF-8").scrub
-            end
+            sanitize_string(string)
           end
         end
 
