@@ -615,7 +615,7 @@ class ThreadTable {
             return nullptr;
         }
 
-        Thread& find_or_create_thread(VALUE th, Thread::State initial_state) {
+        Thread& find_or_create_thread(VALUE th) {
             {
                 const std::lock_guard<std::mutex> lock(mutex);
                 Thread* existing = find_thread(th);
@@ -634,8 +634,8 @@ class ThreadTable {
                 return *existing;
             }
 
-            //fprintf(stderr, "NEW THREAD: th: %p, state: %i\n", th, initial_state);
-            auto new_thread = std::make_unique<Thread>(initial_state, pthread_self(), th, ruby_thread_id);
+            //fprintf(stderr, "NEW THREAD: th: %p\n", th);
+            auto new_thread = std::make_unique<Thread>(Thread::State::INITIAL, pthread_self(), th, ruby_thread_id);
             Thread& thread_ref = *new_thread;
             list.push_back(std::move(new_thread));
             return thread_ref;
@@ -649,7 +649,7 @@ class ThreadTable {
 
             //fprintf(stderr, "th %p (tid: %i) from %s to %s\n", (void *)th, native_tid, gvl_event_name(state), gvl_event_name(new_state));
 
-            Thread& thread = find_or_create_thread(th, new_state);
+            Thread& thread = find_or_create_thread(th);
 
             const std::lock_guard<std::mutex> lock(mutex);
 
