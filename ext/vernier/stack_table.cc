@@ -215,8 +215,7 @@ StackTable::stack_table_func_filename(VALUE self, VALUE idxval) {
         return Qnil;
     } else {
         const auto &func_info = table[idx];
-        std::string filename = func_info.absolute_path;
-        if (filename.empty()) filename = func_info.path;
+        const std::string &filename = func_info.absolute_path.empty() ? func_info.path : func_info.absolute_path;
 
         // Technically filesystems are binary and then Ruby interprets that as
         // default_external encoding. But to keep things simple for now we are
@@ -235,7 +234,7 @@ StackTable::stack_table_func_path(VALUE self, VALUE idxval) {
         return Qnil;
     } else {
         const auto &func_info = table[idx];
-        std::string filename = func_info.path;
+        const std::string &filename = func_info.path;
 
         // Technically filesystems are binary and then Ruby interprets that as
         // default_external encoding. But to keep things simple for now we are
@@ -254,7 +253,7 @@ StackTable::stack_table_func_absolute_path(VALUE self, VALUE idxval) {
         return Qnil;
     } else {
         const auto &func_info = table[idx];
-        std::string filename = func_info.absolute_path;
+        const std::string &filename = func_info.absolute_path;
 
         // Technically filesystems are binary and then Ruby interprets that as
         // default_external encoding. But to keep things simple for now we are
