@@ -82,12 +82,19 @@ class MemoryTracker : public PeriodicThread {
         }
 };
 
+static void
+memory_tracker_free(void *data) {
+    MemoryTracker *memory_tracker = static_cast<MemoryTracker *>(data);
+    // The sampler thread holds a pointer to the tracker, so it must be
+    // stopped (and joined) before the tracker is destroyed.
+    memory_tracker->stop();
+    delete memory_tracker;
+}
+
 static const rb_data_type_t rb_memory_tracker_type = {
     .wrap_struct_name = "vernier/memory_tracker",
     .function = {
-        //.dmark = memory_tracker_mark,
-        //.dfree = memory_tracker_free,
-        //.dsize = memory_tracker_memsize,
+        .dfree = memory_tracker_free,
     },
 };
 
