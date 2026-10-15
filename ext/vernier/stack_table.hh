@@ -104,18 +104,6 @@ struct FuncInfo {
         return std::string(RSTRING_PTR(rstring), RSTRING_LEN(rstring));
     }
 
-    std::string full_label() const {
-        std::string output;
-        if (!method_name.empty()) {
-            output.append(classpath);
-            output.append(is_singleton ? "." : "#");
-            output.append(method_name);
-        } else {
-            output.append(label);
-        }
-        return output;
-    }
-
     FuncInfo(VALUE frame) :
         label(convert_rstring(rb_profile_frame_label(frame))),
         base_label(convert_rstring(rb_profile_frame_base_label(frame))),
