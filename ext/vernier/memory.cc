@@ -123,9 +123,16 @@ VALUE memory_tracker_record(VALUE self) {
 VALUE memory_tracker_results(VALUE self) {
     MemoryTracker *memory_tracker;
     TypedData_Get_Struct(self, MemoryTracker, &rb_memory_tracker_type, memory_tracker);
+    // Copy under the lock; don't call into Ruby (which can allocate, GC or
+    // raise) while holding it.
+    std::vector<MemoryTracker::Record> results;
+    {
+        const std::lock_guard<std::mutex> lock(memory_tracker->mutex);
+        results = memory_tracker->results;
+    }
     VALUE timestamps = rb_ary_new();
     VALUE memory = rb_ary_new();
-    for (const auto& record: memory_tracker->results) {
+    for (const auto& record: results) {
         rb_ary_push(timestamps, ULL2NUM(record.timestamp.nanoseconds()));
         rb_ary_push(memory, ULL2NUM(record.memory_rss));
     }
