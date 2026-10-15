@@ -289,7 +289,11 @@ class GCMarkerTable: public MarkerTable {
                     .gc_state = gc_state
                 }
             };
-            list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), -1, info });
+            TimeStamp now = TimeStamp::Now();
+
+            // Take the lock only after calling into Ruby above
+            const std::lock_guard<std::mutex> lock(mutex);
+            list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, now, -1, info });
         }
 
         void record_gc_end_mark() {
