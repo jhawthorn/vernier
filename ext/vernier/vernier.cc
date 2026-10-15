@@ -894,7 +894,7 @@ class TimeCollector : public BaseCollector {
         threads.mutex.unlock();
     }
 
-    void write_meta(VALUE meta, VALUE result) {
+    void write_meta(VALUE meta, VALUE result) override {
         BaseCollector::write_meta(meta, result);
         rb_hash_aset(meta, sym("interval"), ULL2NUM(interval.microseconds()));
         rb_hash_aset(meta, sym("allocation_interval"), ULL2NUM(allocation_interval));
@@ -1035,7 +1035,7 @@ class TimeCollector : public BaseCollector {
 
     rb_internal_thread_event_hook_t *thread_hook;
 
-    bool start() {
+    bool start() override {
         if (!BaseCollector::start()) {
             return false;
         }
@@ -1072,7 +1072,7 @@ class TimeCollector : public BaseCollector {
         return true;
     }
 
-    VALUE stop() {
+    VALUE stop() override {
         BaseCollector::stop();
 
         collector_thread.stop();
@@ -1097,7 +1097,7 @@ class TimeCollector : public BaseCollector {
         return result;
     }
 
-    VALUE build_collector_result() {
+    VALUE build_collector_result() override {
         VALUE result = BaseCollector::build_collector_result();
 
         VALUE threads = rb_hash_new();
@@ -1124,7 +1124,7 @@ class TimeCollector : public BaseCollector {
         return result;
     }
 
-    void mark() {
+    void mark() override {
         stack_table->mark_frames();
         rb_gc_mark(stack_table_value);
         threads.mark();
