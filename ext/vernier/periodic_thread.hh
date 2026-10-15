@@ -1,6 +1,7 @@
 #include "ruby.h"
 
 #include <atomic>
+#include <errno.h>
 #include "timestamp.hh"
 
 #ifdef __APPLE__
@@ -99,10 +100,12 @@ class PeriodicThread {
                     auto offset = TimeStamp::NowRealtime() - TimeStamp::Now();
                     struct timespec next_sample_ts = (next_sample_schedule + offset).timespec();
 #endif
+                    // Wait until the deadline passes or we are asked to stop.
+                    // Wakeups may be spurious, so only a timeout ends the wait.
                     int ret;
                     do {
                         ret = pthread_cond_timedwait(&running_cv, &running_mutex, &next_sample_ts);
-                    } while(running && ret == EINTR);
+                    } while (running && ret != ETIMEDOUT);
                 }
                 done = !running;
                 pthread_mutex_unlock(&running_mutex);
