@@ -30,7 +30,11 @@ namespace std {
     {
         std::size_t operator()(Frame const& s) const noexcept
         {
-            return s.frame ^ s.line;
+            // VALUEs are aligned so their low bits carry no entropy; mix in
+            // the line number rather than xoring it into the low bits.
+            std::size_t h = static_cast<std::size_t>(s.frame) >> 3;
+            h ^= static_cast<std::size_t>(s.line) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+            return h;
         }
     };
 }
