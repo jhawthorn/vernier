@@ -468,12 +468,13 @@ class Thread {
             }
         }
 
-        void record_fiber(VALUE fiber, StackTable &frame_list) {
+        // fiber_id must be computed by the caller: rb_obj_id can raise, and we
+        // are called with the thread table mutex held.
+        void record_fiber(VALUE fiber_id, StackTable &frame_list) {
             RawSample sample;
             sample.sample();
 
             int stack_idx = translator.translate(frame_list, sample);
-            VALUE fiber_id = rb_obj_id(fiber);
             markers->record(Marker::Type::MARKER_FIBER_SWITCH, stack_idx, { .fiber_data = { .fiber_id = fiber_id } });
         }
 
@@ -877,11 +878,12 @@ class TimeCollector : public BaseCollector {
     }
 
     void record_fiber(VALUE th, VALUE fiber) {
+        VALUE fiber_id = rb_obj_id(fiber);
         threads.mutex.lock();
         for (auto &threadptr : threads.list) {
             auto &thread = *threadptr;
             if (th == thread.ruby_thread) {
-                thread.record_fiber(fiber, threads.frame_list);
+                thread.record_fiber(fiber_id, threads.frame_list);
                 break;
             }
         }
