@@ -27,6 +27,10 @@ class HeapTracker {
     unsigned long long objects_allocated = 0;
     unsigned long long tombstones = 0;
 
+    HeapTracker() = default;
+    HeapTracker(const HeapTracker &) = delete;
+    HeapTracker &operator=(const HeapTracker &) = delete;
+
     std::unordered_map<VALUE, int> object_index;
     std::vector<VALUE> object_list;
     std::vector<int> frame_list;

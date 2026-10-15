@@ -163,6 +163,10 @@ class IndexMap {
 };
 
 struct StackTable {
+    StackTable() = default;
+    StackTable(const StackTable &) = delete;
+    StackTable &operator=(const StackTable &) = delete;
+
     private:
 
     IndexMap<Frame> frame_map;

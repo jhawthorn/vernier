@@ -76,6 +76,10 @@ static const char *gvl_event_name(rb_event_flag_t event) {
 // This is used for communication between the profiler thread and the signal
 // handlers in the observed thread.
 struct LiveSample {
+    LiveSample() = default;
+    LiveSample(const LiveSample &) = delete;
+    LiveSample &operator=(const LiveSample &) = delete;
+
     RawSample sample;
 
     SignalSafeSemaphore sem_complete;
@@ -244,6 +248,10 @@ class Marker {
 
 class MarkerTable {
     public:
+        MarkerTable() = default;
+        MarkerTable(const MarkerTable &) = delete;
+        MarkerTable &operator=(const MarkerTable &) = delete;
+
         std::mutex mutex;
         std::vector<Marker> list;
 
@@ -578,6 +586,9 @@ class ThreadTable {
         ThreadTable(StackTable &frame_list) : frame_list(frame_list) {
         }
 
+        ThreadTable(const ThreadTable &) = delete;
+        ThreadTable &operator=(const ThreadTable &) = delete;
+
         void mark() {
             for (const auto &thread : list) {
                 thread->mark();
@@ -701,6 +712,9 @@ class BaseCollector {
     }
     virtual ~BaseCollector() {}
 
+    BaseCollector(const BaseCollector &) = delete;
+    BaseCollector &operator=(const BaseCollector &) = delete;
+
     virtual bool start() {
         if (running) {
             return false;
@@ -756,6 +770,9 @@ class GlobalSignalHandler {
     static LiveSample *live_sample;
 
     public:
+        GlobalSignalHandler(const GlobalSignalHandler &) = delete;
+        GlobalSignalHandler &operator=(const GlobalSignalHandler &) = delete;
+
         static GlobalSignalHandler *get_instance() {
             static GlobalSignalHandler instance;
             return &instance;
@@ -794,8 +811,10 @@ class GlobalSignalHandler {
         }
 
     private:
+        GlobalSignalHandler() = default;
+
         std::mutex mutex;
-        int count;
+        int count = 0;
 
         static void signal_handler(int sig, siginfo_t* sinfo, void* ucontext) {
             assert(live_sample);
