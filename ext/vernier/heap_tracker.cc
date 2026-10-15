@@ -224,6 +224,7 @@ class HeapTracker {
       object_index.clear();
       for (int i = 0; i < object_list.size(); i++) {
         VALUE obj = object_list[i];
+        if (obj == Qfalse) continue; // tombstone
         VALUE reloc_obj = rb_gc_location(obj);
 
         object_list[i] = reloc_obj;
