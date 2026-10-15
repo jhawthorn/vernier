@@ -254,8 +254,8 @@ struct StackTable {
                 const auto &stack_node = stack_node_list[i];
                 frame_map.index(stack_node.frame);
                 func_map.index(stack_node.frame.frame);
-                stack_node_list_finalized_idx = i;
             }
+            stack_node_list_finalized_idx = stack_node_list.size();
         }
 
         for (int i = func_info_list.size(); i < func_map.size(); i++) {
