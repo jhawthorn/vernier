@@ -264,7 +264,7 @@ struct StackTable {
     void mark_frames() {
         const std::lock_guard<std::mutex> lock(stack_mutex);
 
-        for (auto stack_node: stack_node_list) {
+        for (const auto &stack_node: stack_node_list) {
             rb_gc_mark(stack_node.frame.frame);
         }
     }
