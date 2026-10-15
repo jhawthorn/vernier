@@ -95,13 +95,13 @@ struct FuncInfo {
         return NIL_P(first_lineno) ? 0 : FIX2INT(first_lineno);
     }
 
+    // Must not raise: this runs while std::string members are under
+    // construction, and a longjmp would skip their destructors.
     static std::string convert_rstring(VALUE rstring) {
-        if (NIL_P(rstring)) {
+        if (!RB_TYPE_P(rstring, T_STRING)) {
             return "";
-        } else {
-            const char *cstring = StringValueCStr(rstring);
-            return cstring;
         }
+        return std::string(RSTRING_PTR(rstring), RSTRING_LEN(rstring));
     }
 
     std::string full_label() const {
