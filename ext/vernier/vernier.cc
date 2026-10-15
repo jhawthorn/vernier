@@ -820,7 +820,7 @@ class TimeCollector : public BaseCollector {
     class TimeCollectorThread : public PeriodicThread {
         TimeCollector &time_collector;
 
-        void run_iteration() {
+        void run_iteration() override {
             time_collector.run_iteration();
         }
 

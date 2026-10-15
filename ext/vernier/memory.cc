@@ -72,7 +72,7 @@ class MemoryTracker : public PeriodicThread {
         MemoryTracker() : PeriodicThread(TimeStamp::from_milliseconds(10)) {
         }
 
-        void run_iteration() {
+        void run_iteration() override {
             record();
         }
 
