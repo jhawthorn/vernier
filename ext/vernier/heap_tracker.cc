@@ -32,9 +32,11 @@ class HeapTracker {
     std::vector<int> frame_list;
 
     static VALUE rb_new(VALUE self, VALUE stack_table_value) {
+      // get_stack_table can raise, so do it before allocating anything
+      StackTable *stack_table = get_stack_table(stack_table_value);
       HeapTracker *heap_tracker = new HeapTracker();
       heap_tracker->stack_table_value = stack_table_value;
-      heap_tracker->stack_table = get_stack_table(stack_table_value);
+      heap_tracker->stack_table = stack_table;
       VALUE obj = TypedData_Wrap_Struct(rb_cHeapTracker, &rb_heap_tracker_type, heap_tracker);
       rb_ivar_set(obj, rb_intern("@stack_table"), stack_table_value);
       return obj;
