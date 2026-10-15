@@ -2,7 +2,7 @@
 #define STACK_TABLE_HH STACK_TABLE_HH
 
 #include <mutex>
-#include <stdexcept>
+#include <algorithm>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -58,7 +58,7 @@ class RawSample {
 
     Frame frame(int i) const {
         int idx = len - i - 1;
-        if (idx < 0) throw std::out_of_range("VERNIER BUG: index out of range");
+        if (idx < 0) rb_bug("VERNIER BUG: index out of range");
         const Frame frame = {frames[idx], lines[idx]};
         return frame;
     }
@@ -218,9 +218,11 @@ struct StackTable {
 
     public:
 
+    // Returns -1 for an empty stack. Never throws, as it may be called from
+    // C callbacks invoked by Ruby.
     int stack_index(const RawSample &stack) {
         if (stack.empty()) {
-            throw std::runtime_error("VERNIER BUG: empty stack");
+            return -1;
         }
 
         const std::lock_guard<std::mutex> lock(stack_mutex);

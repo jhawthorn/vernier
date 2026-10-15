@@ -53,6 +53,9 @@ stack_table_current_stack(int argc, VALUE *argv, VALUE self) {
     RawSample stack;
     stack.sample(offset);
     int stack_index = stack_table->stack_index(stack);
+    if (stack_index < 0) {
+        rb_raise(rb_eArgError, "no stack at the given offset");
+    }
     return INT2NUM(stack_index);
 }
 
