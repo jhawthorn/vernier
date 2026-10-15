@@ -50,7 +50,7 @@ class RawSample {
 
     public:
 
-    RawSample() : len(0), gc(false), offset(0) { }
+    RawSample() : len(0), offset(0), gc(false) { }
 
     int size() const {
         return len - offset;
@@ -120,9 +120,9 @@ struct FuncInfo {
         label(convert_rstring(rb_profile_frame_label(frame))),
         base_label(convert_rstring(rb_profile_frame_base_label(frame))),
         classpath(convert_rstring(rb_profile_frame_classpath(frame))),
+        path(convert_rstring(rb_profile_frame_path(frame))),
         absolute_path(convert_rstring(rb_profile_frame_absolute_path(frame))),
         method_name(convert_rstring(rb_profile_frame_method_name(frame))),
-        path(convert_rstring(rb_profile_frame_path(frame))),
         first_lineno(first_lineno_int(frame)),
         is_singleton(RTEST(rb_profile_frame_singleton_method_p(frame)))
     { }
@@ -184,10 +184,10 @@ struct StackTable {
         int parent;
         int index;
 
-        StackNode(Frame frame, int index, int parent) : frame(frame), index(index), parent(parent) {}
+        StackNode(Frame frame, int index, int parent) : frame(frame), parent(parent), index(index) {}
 
         // root
-        StackNode() : frame(Frame{0, 0}), index(-1), parent(-1) {}
+        StackNode() : frame(Frame{0, 0}), parent(-1), index(-1) {}
     };
 
     // This mutex guards the StackNodes only. The rest of the maps and vectors
