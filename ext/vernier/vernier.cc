@@ -14,6 +14,13 @@
 
 #include <sys/time.h>
 #include <signal.h>
+#include <time.h>
+
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/thread_act.h>
+#include <mach/thread_info.h>
+#endif
 
 #include "vernier.hh"
 #include "timestamp.hh"
@@ -156,6 +163,31 @@ static native_thread_id_t get_native_thread_id() {
     return tid;
 #endif
 }
+
+#if defined(__APPLE__)
+// Returns cumulative CPU nanoseconds for a thread, or 0 if unavailable.
+static uint64_t get_thread_cpu_time_ns(pthread_t pthread_id) {
+    if (!pthread_id) return 0;
+    mach_port_t mach_thread = pthread_mach_thread_np(pthread_id);
+    if (!mach_thread) return 0;
+    thread_basic_info_data_t info;
+    mach_msg_type_number_t count = THREAD_BASIC_INFO_COUNT;
+    kern_return_t kr = thread_info(mach_thread, THREAD_BASIC_INFO, (thread_info_t)&info, &count);
+    if (kr != KERN_SUCCESS) return 0;
+    uint64_t ns = (uint64_t)info.user_time.seconds * 1000000000ULL
+                + (uint64_t)info.user_time.microseconds * 1000ULL
+                + (uint64_t)info.system_time.seconds * 1000000000ULL
+                + (uint64_t)info.system_time.microseconds * 1000ULL;
+    return ns;
+}
+#else
+// Returns cumulative CPU nanoseconds for a thread clock, or 0 if unavailable.
+static uint64_t get_thread_cpu_time_ns(clockid_t clockid) {
+    struct timespec ts;
+    if (clock_gettime(clockid, &ts) != 0) return 0;
+    return (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
+}
+#endif
 
 union MarkerInfo {
     struct {
@@ -361,6 +393,7 @@ class SampleList {
         std::vector<TimeStamp> timestamps;
         std::vector<Category> categories;
         std::vector<int> weights;
+        std::vector<uint64_t> cpu_delta_ns;
 
         size_t size() {
             return stacks.size();
@@ -370,13 +403,15 @@ class SampleList {
             return size() == 0;
         }
 
-        void record_sample(int stack_index, TimeStamp time, Category category) {
+        void record_sample(int stack_index, TimeStamp time, Category category, bool record_cpu_time = false, uint64_t delta_ns = 0) {
           // FIXME: probably better to avoid generating -1 higher up.
           // Currently this happens when we measure an empty stack. Ideally we would have a better representation
           if (stack_index < 0)
             return;
 
-          if (!empty() && stacks.back() == stack_index &&
+          // CPU deltas describe the interval between adjacent timestamps, so
+          // preserve every sample when recording them.
+          if (!record_cpu_time && !empty() && stacks.back() == stack_index &&
               categories.back() == category) {
             // We don't compare timestamps for de-duplication
             weights.back() += 1;
@@ -385,10 +420,11 @@ class SampleList {
                 timestamps.push_back(time);
                 categories.push_back(category);
                 weights.push_back(1);
+                if (record_cpu_time) cpu_delta_ns.push_back(delta_ns);
             }
         }
 
-        void write_result(VALUE result) const {
+        void write_result(VALUE result, bool record_cpu_time) const {
             VALUE samples = rb_ary_new();
             rb_hash_aset(result, sym("samples"), samples);
             for (auto& stack_index: this->stacks) {
@@ -411,6 +447,14 @@ class SampleList {
             rb_hash_aset(result, sym("sample_categories"), sample_categories);
             for (auto& cat: this->categories) {
                 rb_ary_push(sample_categories, INT2NUM(cat));
+            }
+
+            if (record_cpu_time) {
+                VALUE cpu_deltas = rb_ary_new();
+                rb_hash_aset(result, sym("cpu_delta_ns"), cpu_deltas);
+                for (auto& d: this->cpu_delta_ns) {
+                    rb_ary_push(cpu_deltas, ULL2NUM(d));
+                }
             }
         }
 };
@@ -441,6 +485,16 @@ class Thread {
 
         int stack_on_suspend_idx;
         SampleTranslator translator;
+
+        // Native thread this thread last ran on. Unlike pthread_id, this is
+        // kept while the thread is suspended so its CPU time can be read.
+        pthread_t last_pthread_id = 0;
+
+        pthread_t cpu_pthread_id = 0;
+        uint64_t last_cpu_ns = 0;
+#if !defined(__APPLE__)
+        clockid_t cpu_clock_id;
+#endif
 
         unique_ptr<MarkerTable> markers;
 
@@ -662,6 +716,7 @@ class ThreadTable {
 
             if (thread.state == Thread::State::RUNNING) {
                 thread.pthread_id = pthread_self();
+                thread.last_pthread_id = thread.pthread_id;
                 thread.native_tid = get_native_thread_id();
             } else {
                 thread.pthread_id = 0;
@@ -836,6 +891,7 @@ class TimeCollector : public BaseCollector {
     TimeStamp interval;
     unsigned int allocation_interval;
     unsigned int allocation_tick = 0;
+    bool record_cpu_time;
 
     VALUE tp_newobj = Qnil;
 
@@ -850,7 +906,7 @@ class TimeCollector : public BaseCollector {
     TimeCollectorThread collector_thread;
 
     public:
-    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_interval) : BaseCollector(stack_table), interval(interval), allocation_interval(allocation_interval), threads(*get_stack_table(stack_table)), collector_thread(*this, interval) {
+    TimeCollector(VALUE stack_table, TimeStamp interval, unsigned int allocation_interval, bool record_cpu_time) : BaseCollector(stack_table), interval(interval), allocation_interval(allocation_interval), record_cpu_time(record_cpu_time), threads(*get_stack_table(stack_table)), collector_thread(*this, interval) {
     }
 
     void record_newobj(VALUE obj) {
@@ -888,20 +944,49 @@ class TimeCollector : public BaseCollector {
         BaseCollector::write_meta(meta, result);
         rb_hash_aset(meta, sym("interval"), ULL2NUM(interval.microseconds()));
         rb_hash_aset(meta, sym("allocation_interval"), ULL2NUM(allocation_interval));
-
+        rb_hash_aset(meta, sym("cpu_time"), record_cpu_time ? Qtrue : Qfalse);
     }
 
     private:
 
-    void record_sample(const RawSample &sample, TimeStamp time, Thread &thread, Category category) {
+    void record_sample(const RawSample &sample, TimeStamp time, Thread &thread, Category category, uint64_t cpu_delta_ns = 0) {
         if (!sample.empty()) {
             int stack_index = thread.translator.translate(*stack_table, sample);
             thread.samples.record_sample(
                     stack_index,
                     time,
-                    category
+                    category,
+                    record_cpu_time,
+                    cpu_delta_ns
                     );
         }
+    }
+
+    // Advances the CPU baseline and returns delta ns since the previous call.
+    uint64_t take_cpu_delta_ns(Thread &thread) {
+        if (!record_cpu_time || !thread.last_pthread_id) return 0;
+
+        // With M:N threads a Ruby thread can move to another native thread.
+        // Restart the baseline rather than comparing two native threads' clocks.
+        if (thread.cpu_pthread_id != thread.last_pthread_id) {
+#if !defined(__APPLE__)
+            if (pthread_getcpuclockid(thread.last_pthread_id, &thread.cpu_clock_id) != 0) return 0;
+#endif
+            thread.cpu_pthread_id = thread.last_pthread_id;
+            thread.last_cpu_ns = 0;
+        }
+
+#if defined(__APPLE__)
+        uint64_t now = get_thread_cpu_time_ns(thread.cpu_pthread_id);
+#else
+        uint64_t now = get_thread_cpu_time_ns(thread.cpu_clock_id);
+#endif
+        if (now == 0) return 0;
+        uint64_t delta = (thread.last_cpu_ns && now > thread.last_cpu_ns)
+                       ? now - thread.last_cpu_ns
+                       : 0;
+        thread.last_cpu_ns = now;
+        return delta;
     }
 
     void run_iteration() {
@@ -927,18 +1012,22 @@ class TimeCollector : public BaseCollector {
                 } else if (sample.sample.empty()) {
                     // fprintf(stderr, "skipping GC sample\n");
                 } else {
-                    record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL);
+                    record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL, take_cpu_delta_ns(thread));
                 }
             } else if (thread.state == Thread::State::SUSPENDED) {
                 thread.samples.record_sample(
                         thread.stack_on_suspend_idx,
                         sample_start,
-                        CATEGORY_IDLE);
+                        CATEGORY_IDLE,
+                        record_cpu_time,
+                        take_cpu_delta_ns(thread));
             } else if (thread.state == Thread::State::READY) {
                 thread.samples.record_sample(
                         thread.stack_on_suspend_idx,
                         sample_start,
-                        CATEGORY_STALLED);
+                        CATEGORY_STALLED,
+                        record_cpu_time,
+                        take_cpu_delta_ns(thread));
             } else {
             }
         }
@@ -1097,7 +1186,7 @@ class TimeCollector : public BaseCollector {
 
         for (const auto& thread: this->threads.list) {
             VALUE hash = rb_hash_new();
-            thread->samples.write_result(hash);
+            thread->samples.write_result(hash, record_cpu_time);
             thread->allocation_samples.write_result(hash);
             rb_hash_aset(hash, sym("markers"), thread->markers->to_array());
             rb_hash_aset(hash, sym("tid"), ULL2NUM(thread->native_tid));
@@ -1203,7 +1292,10 @@ static VALUE collector_new(VALUE self, VALUE mode, VALUE options) {
         } else {
             allocation_interval = NUM2UINT(allocation_intervalv);
         }
-        collector = new TimeCollector(stack_table, interval, allocation_interval);
+
+        bool record_cpu_time = RTEST(rb_hash_aref(options, sym("cpu_time")));
+
+        collector = new TimeCollector(stack_table, interval, allocation_interval, record_cpu_time);
     } else {
         rb_raise(rb_eArgError, "invalid mode");
     }

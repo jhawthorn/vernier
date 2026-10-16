@@ -19,8 +19,9 @@ module Vernier
 
       interval = request.GET.fetch("vernier_interval", 200).to_i
       allocation_interval = request.GET.fetch("vernier_allocation_interval", 200).to_i
+      cpu_time = request.GET["vernier_cpu_time"] == "true"
 
-      result = Vernier.trace(interval:, allocation_interval:, hooks: HOOKS) do
+      result = Vernier.trace(interval:, allocation_interval:, cpu_time:, hooks: HOOKS) do
         @app.call(env)
       end
       body = result.to_firefox(gzip: true)

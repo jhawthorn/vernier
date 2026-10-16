@@ -134,6 +134,11 @@ module FirefoxTestHelpers
 
       assert_operator samples["stack"].max || -1, :<, thread["stackTable"]["length"]
 
+      if cpu_delta = samples["threadCPUDelta"]
+        assert_equal samples["length"], cpu_delta.size
+        cpu_delta.each { |us| assert_operator us, :>=, 0 }
+      end
+
       if allocations = thread["jsAllocations"]
         assert_equal allocations["length"], allocations["stack"].size
         assert_equal allocations["length"], allocations["weight"].size
