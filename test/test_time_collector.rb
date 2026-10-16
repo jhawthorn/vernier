@@ -78,6 +78,18 @@ class TestTimeCollector < Minitest::Test
     assert_includes result.threads.values.map{ _1[:name] }, "measure me"
   end
 
+  def test_existing_ractor
+    # Run in a subprocess so the test process doesn't switch to multi-Ractor mode
+    script = <<~RUBY
+      ractor = Ractor.new { Ractor.receive }
+      sleep 0.1
+
+      Vernier.profile { ractor.send(1) }
+    RUBY
+
+    assert system(RbConfig.ruby, "-W:no-experimental", "-I", File.expand_path("../lib", __dir__), "-r", "vernier", "-e", script)
+  end
+
   def count_up_to(n)
     i = 0
     while i < n
