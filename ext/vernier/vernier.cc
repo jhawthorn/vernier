@@ -486,10 +486,14 @@ class Thread {
         int stack_on_suspend_idx;
         SampleTranslator translator;
 
+        // Native thread this thread last ran on. Unlike pthread_id, this is
+        // kept while the thread is suspended so its CPU time can be read.
+        pthread_t last_pthread_id = 0;
+
+        pthread_t cpu_pthread_id = 0;
         uint64_t last_cpu_ns = 0;
 #if !defined(__APPLE__)
         clockid_t cpu_clock_id;
-        bool cpu_clock_initialized = false;
 #endif
 
         unique_ptr<MarkerTable> markers;
@@ -712,6 +716,7 @@ class ThreadTable {
 
             if (thread.state == Thread::State::RUNNING) {
                 thread.pthread_id = pthread_self();
+                thread.last_pthread_id = thread.pthread_id;
                 thread.native_tid = get_native_thread_id();
             } else {
                 thread.pthread_id = 0;
@@ -959,13 +964,21 @@ class TimeCollector : public BaseCollector {
 
     // Advances the CPU baseline and returns delta ns since the previous call.
     uint64_t take_cpu_delta_ns(Thread &thread) {
-#if defined(__APPLE__)
-        uint64_t now = get_thread_cpu_time_ns(thread.pthread_id);
-#else
-        if (!thread.cpu_clock_initialized) {
-            if (pthread_getcpuclockid(thread.pthread_id, &thread.cpu_clock_id) != 0) return 0;
-            thread.cpu_clock_initialized = true;
+        if (!record_cpu_time || !thread.last_pthread_id) return 0;
+
+        // With M:N threads a Ruby thread can move to another native thread.
+        // Restart the baseline rather than comparing two native threads' clocks.
+        if (thread.cpu_pthread_id != thread.last_pthread_id) {
+#if !defined(__APPLE__)
+            if (pthread_getcpuclockid(thread.last_pthread_id, &thread.cpu_clock_id) != 0) return 0;
+#endif
+            thread.cpu_pthread_id = thread.last_pthread_id;
+            thread.last_cpu_ns = 0;
         }
+
+#if defined(__APPLE__)
+        uint64_t now = get_thread_cpu_time_ns(thread.cpu_pthread_id);
+#else
         uint64_t now = get_thread_cpu_time_ns(thread.cpu_clock_id);
 #endif
         if (now == 0) return 0;
@@ -999,21 +1012,22 @@ class TimeCollector : public BaseCollector {
                 } else if (sample.sample.empty()) {
                     // fprintf(stderr, "skipping GC sample\n");
                 } else {
-                    uint64_t cpu_delta = record_cpu_time ? take_cpu_delta_ns(thread) : 0;
-                    record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL, cpu_delta);
+                    record_sample(sample.sample, sample_start, thread, CATEGORY_NORMAL, take_cpu_delta_ns(thread));
                 }
             } else if (thread.state == Thread::State::SUSPENDED) {
                 thread.samples.record_sample(
                         thread.stack_on_suspend_idx,
                         sample_start,
                         CATEGORY_IDLE,
-                        record_cpu_time);
+                        record_cpu_time,
+                        take_cpu_delta_ns(thread));
             } else if (thread.state == Thread::State::READY) {
                 thread.samples.record_sample(
                         thread.stack_on_suspend_idx,
                         sample_start,
                         CATEGORY_STALLED,
-                        record_cpu_time);
+                        record_cpu_time,
+                        take_cpu_delta_ns(thread));
             } else {
             }
         }

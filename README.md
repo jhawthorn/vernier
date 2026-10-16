@@ -94,6 +94,10 @@ samples. The Firefox profiler renders this as a per-thread CPU utilization
 track, which is useful for distinguishing time spent computing from time
 spent waiting on I/O.
 
+Samples are not merged while recording CPU time, so profiles are larger.
+CPU time is read per native thread, so it is approximate with M:N threads
+(`RUBY_MN_THREADS=1`).
+
 ```ruby
 Vernier.profile(cpu_time: true, out: "time_profile.json") do
   some_slow_method

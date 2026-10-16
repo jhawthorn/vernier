@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "zlib"
 
 class TestTimeCollector < Minitest::Test
   def test_receives_gc_events
@@ -108,6 +109,25 @@ class TestTimeCollector < Minitest::Test
 
     assert_valid_result result
     # TODO: some assertions on behaviour
+  end
+
+  def test_cpu_time_outside_gvl
+    return skip("CPU time is per native thread, which M:N threads share") if ENV["RUBY_MN_THREADS"] == "1"
+
+    data = Random.new(1).bytes(4_000_000)
+    th = nil
+    result = Vernier.profile(cpu_time: true) do
+      th = Thread.new do
+        # Zlib releases the GVL while compressing
+        Zlib::Deflate.deflate(data, Zlib::BEST_COMPRESSION)
+        Process.clock_gettime(Process::CLOCK_THREAD_CPUTIME_ID, :nanosecond)
+      end
+      th.join
+    end
+
+    assert_valid_result result
+    cpu_delta_ns = result.threads[th.object_id][:cpu_delta_ns]
+    assert_operator cpu_delta_ns.sum, :>, th.value / 2
   end
 
   def test_many_threads
