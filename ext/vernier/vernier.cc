@@ -445,15 +445,11 @@ class Thread {
         unique_ptr<MarkerTable> markers;
 
         // FIXME: don't use pthread at start
-        Thread(State state, pthread_t pthread_id, VALUE ruby_thread, VALUE ruby_thread_id) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(state), stack_on_suspend_idx(-1), ruby_thread_id(ruby_thread_id) {
+        Thread(pthread_t pthread_id, VALUE ruby_thread, VALUE ruby_thread_id) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(State::INITIAL), stack_on_suspend_idx(-1), ruby_thread_id(ruby_thread_id) {
             //ruby_thread_id = ULL2NUM(ruby_thread);
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
             markers = std::make_unique<MarkerTable>();
-
-            if (state == State::STARTED) {
-                markers->record(Marker::Type::MARKER_GVL_THREAD_STARTED);
-            }
         }
 
         void record_newobj(VALUE obj, StackTable &frame_list) {
@@ -615,7 +611,7 @@ class ThreadTable {
             return nullptr;
         }
 
-        Thread& find_or_create_thread(VALUE th, Thread::State initial_state) {
+        Thread& find_or_create_thread(VALUE th) {
             {
                 const std::lock_guard<std::mutex> lock(mutex);
                 Thread* existing = find_thread(th);
@@ -634,8 +630,8 @@ class ThreadTable {
                 return *existing;
             }
 
-            //fprintf(stderr, "NEW THREAD: th: %p, state: %i\n", th, initial_state);
-            auto new_thread = std::make_unique<Thread>(initial_state, pthread_self(), th, ruby_thread_id);
+            //fprintf(stderr, "NEW THREAD: th: %p\n", th);
+            auto new_thread = std::make_unique<Thread>(pthread_self(), th, ruby_thread_id);
             Thread& thread_ref = *new_thread;
             list.push_back(std::move(new_thread));
             return thread_ref;
@@ -649,7 +645,7 @@ class ThreadTable {
 
             //fprintf(stderr, "th %p (tid: %i) from %s to %s\n", (void *)th, native_tid, gvl_event_name(state), gvl_event_name(new_state));
 
-            Thread& thread = find_or_create_thread(th, new_state);
+            Thread& thread = find_or_create_thread(th);
 
             const std::lock_guard<std::mutex> lock(mutex);
 
