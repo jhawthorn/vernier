@@ -230,6 +230,30 @@ class TestOutputFirefox < Minitest::Test
     assert_valid_firefox_profile(output)
   end
 
+  def test_cpu_time_firefox_output
+    result = Vernier.trace(cpu_time: true) do
+      sleep 0.01
+      target = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 0.01
+      while Process.clock_gettime(Process::CLOCK_MONOTONIC) < target
+      end
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    data = JSON.parse(output)
+    assert_equal "µs", data.dig("meta", "sampleUnits", "threadCPUDelta")
+
+    main_thread = data["threads"].find { _1["isMainThread"] }
+    samples = main_thread["samples"]
+    cpu_delta = samples["threadCPUDelta"]
+
+    refute_nil cpu_delta
+    assert_equal samples["length"], cpu_delta.size
+    assert samples["weight"].all?(1)
+    assert_operator cpu_delta.sum, :>, 0
+  end
+
   def test_profile_with_various_encodings
     result = Vernier.trace(mode: :custom) do |profiler|
       sample = -> { profiler.sample }
