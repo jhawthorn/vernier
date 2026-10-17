@@ -51,4 +51,21 @@ class TestActiveSupport < Minitest::Test
     assert_equal 0, markers.size
   end
 
+  def test_firefox_marker_schema
+    schema = Vernier::Hooks::ActiveSupport::FIREFOX_MARKER_SCHEMA
+
+    names = schema.map { _1[:name] }
+    assert_equal names.uniq, names
+
+    schema.each do |marker|
+      keys = marker[:data].map { _1[:key] }
+      refute_includes keys, "type", "#{marker[:name]} would overwrite the marker type"
+
+      marker.values_at(:tooltipLabel, :chartLabel, :tableLabel).compact.each do |label|
+        label.scan(/\{marker\.data\.(\w+)\}/).flatten.each do |key|
+          assert_includes keys, key, "#{marker[:name]} label references #{key}"
+        end
+      end
+    end
+  end
 end
