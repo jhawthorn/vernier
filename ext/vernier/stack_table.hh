@@ -2,7 +2,7 @@
 #define STACK_TABLE_HH STACK_TABLE_HH
 
 #include <mutex>
-#include <stdexcept>
+#include <algorithm>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -30,7 +30,11 @@ namespace std {
     {
         std::size_t operator()(Frame const& s) const noexcept
         {
-            return s.frame ^ s.line;
+            // VALUEs are aligned so their low bits carry no entropy; mix in
+            // the line number rather than xoring it into the low bits.
+            std::size_t h = static_cast<std::size_t>(s.frame) >> 3;
+            h ^= static_cast<std::size_t>(s.line) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+            return h;
         }
     };
 }
@@ -58,7 +62,7 @@ class RawSample {
 
     Frame frame(int i) const {
         int idx = len - i - 1;
-        if (idx < 0) throw std::out_of_range("VERNIER BUG: index out of range");
+        if (idx < 0) rb_bug("VERNIER BUG: index out of range");
         const Frame frame = {frames[idx], lines[idx]};
         return frame;
     }
@@ -95,25 +99,13 @@ struct FuncInfo {
         return NIL_P(first_lineno) ? 0 : FIX2INT(first_lineno);
     }
 
+    // Must not raise: this runs while std::string members are under
+    // construction, and a longjmp would skip their destructors.
     static std::string convert_rstring(VALUE rstring) {
-        if (NIL_P(rstring)) {
+        if (!RB_TYPE_P(rstring, T_STRING)) {
             return "";
-        } else {
-            const char *cstring = StringValueCStr(rstring);
-            return cstring;
         }
-    }
-
-    std::string full_label() const {
-        std::string output;
-        if (!method_name.empty()) {
-            output.append(classpath);
-            output.append(is_singleton ? "." : "#");
-            output.append(method_name);
-        } else {
-            output.append(label);
-        }
-        return output;
+        return std::string(RSTRING_PTR(rstring), RSTRING_LEN(rstring));
     }
 
     FuncInfo(VALUE frame) :
@@ -171,6 +163,10 @@ class IndexMap {
 };
 
 struct StackTable {
+    StackTable() = default;
+    StackTable(const StackTable &) = delete;
+    StackTable &operator=(const StackTable &) = delete;
+
     private:
 
     IndexMap<Frame> frame_map;
@@ -218,9 +214,11 @@ struct StackTable {
 
     public:
 
+    // Returns -1 for an empty stack. Never throws, as it may be called from
+    // C callbacks invoked by Ruby.
     int stack_index(const RawSample &stack) {
         if (stack.empty()) {
-            throw std::runtime_error("VERNIER BUG: empty stack");
+            return -1;
         }
 
         const std::lock_guard<std::mutex> lock(stack_mutex);
@@ -260,8 +258,8 @@ struct StackTable {
                 const auto &stack_node = stack_node_list[i];
                 frame_map.index(stack_node.frame);
                 func_map.index(stack_node.frame.frame);
-                stack_node_list_finalized_idx = i;
             }
+            stack_node_list_finalized_idx = stack_node_list.size();
         }
 
         for (int i = func_info_list.size(); i < func_map.size(); i++) {
@@ -274,7 +272,7 @@ struct StackTable {
     void mark_frames() {
         const std::lock_guard<std::mutex> lock(stack_mutex);
 
-        for (auto stack_node: stack_node_list) {
+        for (const auto &stack_node: stack_node_list) {
             rb_gc_mark(stack_node.frame.frame);
         }
     }

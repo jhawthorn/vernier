@@ -76,6 +76,10 @@ static const char *gvl_event_name(rb_event_flag_t event) {
 // This is used for communication between the profiler thread and the signal
 // handlers in the observed thread.
 struct LiveSample {
+    LiveSample() = default;
+    LiveSample(const LiveSample &) = delete;
+    LiveSample &operator=(const LiveSample &) = delete;
+
     RawSample sample;
 
     SignalSafeSemaphore sem_complete;
@@ -244,6 +248,10 @@ class Marker {
 
 class MarkerTable {
     public:
+        MarkerTable() = default;
+        MarkerTable(const MarkerTable &) = delete;
+        MarkerTable &operator=(const MarkerTable &) = delete;
+
         std::mutex mutex;
         std::vector<Marker> list;
 
@@ -289,7 +297,11 @@ class GCMarkerTable: public MarkerTable {
                     .gc_state = gc_state
                 }
             };
-            list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, TimeStamp::Now(), -1, info });
+            TimeStamp now = TimeStamp::Now();
+
+            // Take the lock only after calling into Ruby above
+            const std::lock_guard<std::mutex> lock(mutex);
+            list.push_back({ Marker::MARKER_GC_PAUSE, Marker::INTERVAL, last_gc_entry, now, -1, info });
         }
 
         void record_gc_end_mark() {
@@ -464,12 +476,13 @@ class Thread {
             }
         }
 
-        void record_fiber(VALUE fiber, StackTable &frame_list) {
+        // fiber_id must be computed by the caller: rb_obj_id can raise, and we
+        // are called with the thread table mutex held.
+        void record_fiber(VALUE fiber_id, StackTable &frame_list) {
             RawSample sample;
             sample.sample();
 
             int stack_idx = translator.translate(frame_list, sample);
-            VALUE fiber_id = rb_obj_id(fiber);
             markers->record(Marker::Type::MARKER_FIBER_SWITCH, stack_idx, { .fiber_data = { .fiber_id = fiber_id } });
         }
 
@@ -568,6 +581,9 @@ class ThreadTable {
 
         ThreadTable(StackTable &frame_list) : frame_list(frame_list) {
         }
+
+        ThreadTable(const ThreadTable &) = delete;
+        ThreadTable &operator=(const ThreadTable &) = delete;
 
         void mark() {
             for (const auto &thread : list) {
@@ -692,6 +708,9 @@ class BaseCollector {
     }
     virtual ~BaseCollector() {}
 
+    BaseCollector(const BaseCollector &) = delete;
+    BaseCollector &operator=(const BaseCollector &) = delete;
+
     virtual bool start() {
         if (running) {
             return false;
@@ -747,6 +766,9 @@ class GlobalSignalHandler {
     static LiveSample *live_sample;
 
     public:
+        GlobalSignalHandler(const GlobalSignalHandler &) = delete;
+        GlobalSignalHandler &operator=(const GlobalSignalHandler &) = delete;
+
         static GlobalSignalHandler *get_instance() {
             static GlobalSignalHandler instance;
             return &instance;
@@ -785,8 +807,10 @@ class GlobalSignalHandler {
         }
 
     private:
+        GlobalSignalHandler() = default;
+
         std::mutex mutex;
-        int count;
+        int count = 0;
 
         static void signal_handler(int sig, siginfo_t* sinfo, void* ucontext) {
             assert(live_sample);
@@ -815,7 +839,7 @@ class TimeCollector : public BaseCollector {
     class TimeCollectorThread : public PeriodicThread {
         TimeCollector &time_collector;
 
-        void run_iteration() {
+        void run_iteration() override {
             time_collector.run_iteration();
         }
 
@@ -873,18 +897,19 @@ class TimeCollector : public BaseCollector {
     }
 
     void record_fiber(VALUE th, VALUE fiber) {
+        VALUE fiber_id = rb_obj_id(fiber);
         threads.mutex.lock();
         for (auto &threadptr : threads.list) {
             auto &thread = *threadptr;
             if (th == thread.ruby_thread) {
-                thread.record_fiber(fiber, threads.frame_list);
+                thread.record_fiber(fiber_id, threads.frame_list);
                 break;
             }
         }
         threads.mutex.unlock();
     }
 
-    void write_meta(VALUE meta, VALUE result) {
+    void write_meta(VALUE meta, VALUE result) override {
         BaseCollector::write_meta(meta, result);
         rb_hash_aset(meta, sym("interval"), ULL2NUM(interval.microseconds()));
         rb_hash_aset(meta, sym("allocation_interval"), ULL2NUM(allocation_interval));
@@ -1025,7 +1050,7 @@ class TimeCollector : public BaseCollector {
 
     rb_internal_thread_event_hook_t *thread_hook;
 
-    bool start() {
+    bool start() override {
         if (!BaseCollector::start()) {
             return false;
         }
@@ -1062,7 +1087,7 @@ class TimeCollector : public BaseCollector {
         return true;
     }
 
-    VALUE stop() {
+    VALUE stop() override {
         BaseCollector::stop();
 
         collector_thread.stop();
@@ -1087,7 +1112,7 @@ class TimeCollector : public BaseCollector {
         return result;
     }
 
-    VALUE build_collector_result() {
+    VALUE build_collector_result() override {
         VALUE result = BaseCollector::build_collector_result();
 
         VALUE threads = rb_hash_new();
@@ -1114,7 +1139,7 @@ class TimeCollector : public BaseCollector {
         return result;
     }
 
-    void mark() {
+    void mark() override {
         stack_table->mark_frames();
         rb_gc_mark(stack_table_value);
         threads.mark();

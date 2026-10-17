@@ -1,6 +1,7 @@
 #include "ruby.h"
 
 #include <atomic>
+#include <errno.h>
 #include "timestamp.hh"
 
 #ifdef __APPLE__
@@ -41,7 +42,7 @@ inline void upgrade_thread_priority(pthread_t pthread) {
 #endif
 
 class PeriodicThread {
-    pthread_t pthread;
+    pthread_t pthread = 0;
     TimeStamp interval;
 
     pthread_mutex_t running_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -56,7 +57,19 @@ class PeriodicThread {
             pthread_condattr_setclock(&attr, CLOCK_MONOTONIC);
 #endif
             pthread_cond_init(&running_cv, &attr);
+            pthread_condattr_destroy(&attr);
         }
+
+        // Deleting through a base pointer must run the derived destructor.
+        // Subclasses must stop() the thread before they are destroyed, as it
+        // calls their virtual run_iteration().
+        virtual ~PeriodicThread() {
+            pthread_cond_destroy(&running_cv);
+            pthread_mutex_destroy(&running_mutex);
+        }
+
+        PeriodicThread(const PeriodicThread &) = delete;
+        PeriodicThread &operator=(const PeriodicThread &) = delete;
 
         void set_interval(TimeStamp timestamp) {
             interval = timestamp;
@@ -99,10 +112,12 @@ class PeriodicThread {
                     auto offset = TimeStamp::NowRealtime() - TimeStamp::Now();
                     struct timespec next_sample_ts = (next_sample_schedule + offset).timespec();
 #endif
+                    // Wait until the deadline passes or we are asked to stop.
+                    // Wakeups may be spurious, so only a timeout ends the wait.
                     int ret;
                     do {
                         ret = pthread_cond_timedwait(&running_cv, &running_mutex, &next_sample_ts);
-                    } while(running && ret == EINTR);
+                    } while (running && ret != ETIMEDOUT);
                 }
                 done = !running;
                 pthread_mutex_unlock(&running_mutex);

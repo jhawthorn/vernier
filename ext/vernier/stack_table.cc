@@ -53,6 +53,9 @@ stack_table_current_stack(int argc, VALUE *argv, VALUE self) {
     RawSample stack;
     stack.sample(offset);
     int stack_index = stack_table->stack_index(stack);
+    if (stack_index < 0) {
+        rb_raise(rb_eArgError, "no stack at the given offset");
+    }
     return INT2NUM(stack_index);
 }
 
@@ -174,7 +177,6 @@ StackTable::stack_table_func_name(VALUE self, VALUE idxval) {
         return Qnil;
     } else {
         const auto &func_info = table[idx];
-        std::string label = func_info.full_label();
 
         // Ruby constants are in an arbitrary (ASCII compatible) encoding and
         // method names are in an arbitrary (ASCII compatible) encoding. These
@@ -188,7 +190,18 @@ StackTable::stack_table_func_name(VALUE self, VALUE idxval) {
         //
         // In the future we might keep class and method name separate for
         // longer, preserve encodings, and defer formatting to the Ruby side.
-        return rb_enc_interned_str(label.c_str(), label.length(), rb_utf8_encoding());
+        //
+        // The label is assembled directly in a Ruby string so that no C++
+        // temporaries are alive across calls that may raise.
+        VALUE str = rb_utf8_str_new("", 0);
+        if (!func_info.method_name.empty()) {
+            rb_str_cat(str, func_info.classpath.data(), func_info.classpath.size());
+            rb_str_cat(str, func_info.is_singleton ? "." : "#", 1);
+            rb_str_cat(str, func_info.method_name.data(), func_info.method_name.size());
+        } else {
+            rb_str_cat(str, func_info.label.data(), func_info.label.size());
+        }
+        return rb_str_to_interned_str(str);
     }
 }
 
@@ -202,8 +215,7 @@ StackTable::stack_table_func_filename(VALUE self, VALUE idxval) {
         return Qnil;
     } else {
         const auto &func_info = table[idx];
-        std::string filename = func_info.absolute_path;
-        if (filename.empty()) filename = func_info.path;
+        const std::string &filename = func_info.absolute_path.empty() ? func_info.path : func_info.absolute_path;
 
         // Technically filesystems are binary and then Ruby interprets that as
         // default_external encoding. But to keep things simple for now we are
@@ -222,7 +234,7 @@ StackTable::stack_table_func_path(VALUE self, VALUE idxval) {
         return Qnil;
     } else {
         const auto &func_info = table[idx];
-        std::string filename = func_info.path;
+        const std::string &filename = func_info.path;
 
         // Technically filesystems are binary and then Ruby interprets that as
         // default_external encoding. But to keep things simple for now we are
@@ -241,7 +253,7 @@ StackTable::stack_table_func_absolute_path(VALUE self, VALUE idxval) {
         return Qnil;
     } else {
         const auto &func_info = table[idx];
-        std::string filename = func_info.absolute_path;
+        const std::string &filename = func_info.absolute_path;
 
         // Technically filesystems are binary and then Ruby interprets that as
         // default_external encoding. But to keep things simple for now we are

@@ -25,6 +25,9 @@ class SignalSafeSemaphore {
 
     public:
 
+    SignalSafeSemaphore(const SignalSafeSemaphore &) = delete;
+    SignalSafeSemaphore &operator=(const SignalSafeSemaphore &) = delete;
+
     SignalSafeSemaphore(unsigned int value = 0) {
 #ifdef __APPLE__
         sem = dispatch_semaphore_create(value);

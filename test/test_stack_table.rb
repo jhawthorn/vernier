@@ -65,6 +65,11 @@ class TestStackTable < Minitest::Test
     assert_equal first, second
   end
 
+  def test_current_stack_with_offset_past_end_raises
+    stack_table = Vernier::StackTable.new
+    assert_raises(ArgumentError) { stack_table.current_stack(100_000) }
+  end
+
   def test_current_sample_with_offset
     stack_table = Vernier::StackTable.new
 

@@ -27,14 +27,20 @@ class HeapTracker {
     unsigned long long objects_allocated = 0;
     unsigned long long tombstones = 0;
 
+    HeapTracker() = default;
+    HeapTracker(const HeapTracker &) = delete;
+    HeapTracker &operator=(const HeapTracker &) = delete;
+
     std::unordered_map<VALUE, int> object_index;
     std::vector<VALUE> object_list;
     std::vector<int> frame_list;
 
     static VALUE rb_new(VALUE self, VALUE stack_table_value) {
+      // get_stack_table can raise, so do it before allocating anything
+      StackTable *stack_table = get_stack_table(stack_table_value);
       HeapTracker *heap_tracker = new HeapTracker();
       heap_tracker->stack_table_value = stack_table_value;
-      heap_tracker->stack_table = get_stack_table(stack_table_value);
+      heap_tracker->stack_table = stack_table;
       VALUE obj = TypedData_Wrap_Struct(rb_cHeapTracker, &rb_heap_tracker_type, heap_tracker);
       rb_ivar_set(obj, rb_intern("@stack_table"), stack_table_value);
       return obj;
@@ -222,6 +228,7 @@ class HeapTracker {
       object_index.clear();
       for (int i = 0; i < object_list.size(); i++) {
         VALUE obj = object_list[i];
+        if (obj == Qfalse) continue; // tombstone
         VALUE reloc_obj = rb_gc_location(obj);
 
         object_list[i] = reloc_obj;
