@@ -169,4 +169,7 @@ class Minitest::Test
   end
 end
 
-GC.auto_compact = true
+# https://bugs.ruby-lang.org/issues/22389
+unless RUBY_PLATFORM.include?("darwin") && Gem::Version.new(RUBY_VERSION) < Gem::Version.new("4.1.0")
+  GC.auto_compact = true
+end
