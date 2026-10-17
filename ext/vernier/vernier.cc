@@ -427,6 +427,23 @@ class SampleList {
         }
 };
 
+static rb_internal_thread_specific_key_t thread_serial_key;
+
+// A number identifying th for as long as it lives, kept in its thread
+// specific storage
+static uintptr_t thread_serial(VALUE th) {
+    static std::mutex mutex;
+    static uintptr_t last_serial = 0;
+
+    const std::lock_guard<std::mutex> lock(mutex);
+    uintptr_t serial = (uintptr_t)rb_internal_thread_specific_get(th, thread_serial_key);
+    if (!serial) {
+        serial = ++last_serial;
+        rb_internal_thread_specific_set(th, thread_serial_key, (void *)serial);
+    }
+    return serial;
+}
+
 class Thread {
     public:
         SampleList samples;
@@ -441,8 +458,10 @@ class Thread {
             INITIAL,
         };
 
-        VALUE ruby_thread;
-        VALUE ruby_thread_id;
+        uintptr_t serial;
+        VALUE ruby_thread_id = Qnil;
+        bool is_main = false;
+        bool is_start = false;
         pthread_t pthread_id;
         native_thread_id_t native_tid;
         State state;
@@ -457,8 +476,7 @@ class Thread {
         unique_ptr<MarkerTable> markers;
 
         // FIXME: don't use pthread at start
-        Thread(pthread_t pthread_id, VALUE ruby_thread, VALUE ruby_thread_id) : pthread_id(pthread_id), ruby_thread(ruby_thread), state(State::INITIAL), stack_on_suspend_idx(-1), ruby_thread_id(ruby_thread_id) {
-            //ruby_thread_id = ULL2NUM(ruby_thread);
+        Thread(pthread_t pthread_id, uintptr_t serial) : serial(serial), pthread_id(pthread_id), state(State::INITIAL), stack_on_suspend_idx(-1) {
             native_tid = get_native_thread_id();
             started_at = state_changed_at = TimeStamp::Now();
             markers = std::make_unique<MarkerTable>();
@@ -556,14 +574,6 @@ class Thread {
             state_changed_at = now;
         }
 
-        bool is_main() {
-            return rb_thread_main() == ruby_thread;
-        }
-
-        bool is_start(VALUE start_thread) {
-            return start_thread == ruby_thread;
-        }
-
         bool running() {
             return state != State::STOPPED;
         }
@@ -591,8 +601,15 @@ class ThreadTable {
             }
         }
 
-        void initial(VALUE th) {
-            set_state(Thread::State::INITIAL, th);
+        // Must hold the GVL, and th must be in this Ractor
+        Thread* add(VALUE th) {
+            // Compute ID outside the lock
+            VALUE ruby_thread_id = rb_obj_id(th);
+
+            const std::lock_guard<std::mutex> lock(mutex);
+            Thread* thread = find_or_create_thread(th);
+            thread->ruby_thread_id = ruby_thread_id;
+            return thread;
         }
 
         void started(VALUE th) {
@@ -616,41 +633,34 @@ class ThreadTable {
             set_state(Thread::State::STOPPED, th);
         }
 
-    private:
         Thread* find_thread(VALUE th) {
             // Assumes lock is already held by caller
-            for (auto &threadptr : list) {
-                if (thread_equal(th, threadptr->ruby_thread)) {
-                    return threadptr.get();
+            uintptr_t serial = (uintptr_t)rb_internal_thread_specific_get(th, thread_serial_key);
+            if (serial) {
+                for (auto &threadptr : list) {
+                    if (threadptr->serial == serial) {
+                        return threadptr.get();
+                    }
                 }
             }
             return nullptr;
         }
 
-        Thread& find_or_create_thread(VALUE th) {
-            {
-                const std::lock_guard<std::mutex> lock(mutex);
-                Thread* existing = find_thread(th);
-                if (existing) {
-                    return *existing;
-                }
-            }
-
-            // Thread not found, compute ID outside the lock
-            VALUE ruby_thread_id = rb_obj_id(th);
-
-            const std::lock_guard<std::mutex> lock(mutex);
-            // Check again in case another thread created it while we were unlocked
+    private:
+        Thread* find_or_create_thread(VALUE th) {
+            // Assumes lock is already held by caller
             Thread* existing = find_thread(th);
             if (existing) {
-                return *existing;
+                return existing;
             }
 
-            //fprintf(stderr, "NEW THREAD: th: %p\n", th);
-            auto new_thread = std::make_unique<Thread>(pthread_self(), th, ruby_thread_id);
-            Thread& thread_ref = *new_thread;
-            list.push_back(std::move(new_thread));
-            return thread_ref;
+            // Not from Ruby's timer thread
+            if (!ruby_native_thread_p()) {
+                return nullptr;
+            }
+
+            list.push_back(std::make_unique<Thread>(pthread_self(), thread_serial(th)));
+            return list.back().get();
         }
 
         void set_state(Thread::State new_state, VALUE th) {
@@ -661,32 +671,31 @@ class ThreadTable {
 
             //fprintf(stderr, "th %p (tid: %i) from %s to %s\n", (void *)th, native_tid, gvl_event_name(state), gvl_event_name(new_state));
 
-            Thread& thread = find_or_create_thread(th);
-
             const std::lock_guard<std::mutex> lock(mutex);
 
-            if (new_state == Thread::State::SUSPENDED || new_state == Thread::State::READY && (thread.state != Thread::State::SUSPENDED)) {
+            Thread* thread = find_or_create_thread(th);
+            if (!thread) {
+                return;
+            }
+
+            if (new_state == Thread::State::SUSPENDED || new_state == Thread::State::READY && (thread->state != Thread::State::SUSPENDED)) {
 
                 RawSample sample;
                 sample.sample();
 
-                thread.stack_on_suspend_idx = thread.translator.translate(frame_list, sample);
-                //cerr << gettid() << " suspended! Stack size:" << thread.stack_on_suspend.size() << endl;
+                thread->stack_on_suspend_idx = thread->translator.translate(frame_list, sample);
+                //cerr << gettid() << " suspended! Stack size:" << thread->stack_on_suspend.size() << endl;
             }
 
-            thread.set_state(new_state);
+            thread->set_state(new_state);
 
-            if (thread.state == Thread::State::RUNNING) {
-                thread.pthread_id = pthread_self();
-                thread.native_tid = get_native_thread_id();
+            if (thread->state == Thread::State::RUNNING) {
+                thread->pthread_id = pthread_self();
+                thread->native_tid = get_native_thread_id();
             } else {
-                thread.pthread_id = 0;
-                thread.native_tid = 0;
+                thread->pthread_id = 0;
+                thread->native_tid = 0;
             }
-        }
-
-        bool thread_equal(VALUE a, VALUE b) {
-            return a == b;
         }
 };
 
@@ -883,14 +892,10 @@ class TimeCollector : public BaseCollector {
         }
         allocation_tick = 0;
 
-        VALUE current_thread = rb_thread_current();
         threads.mutex.lock();
-        for (auto &threadptr : threads.list) {
-            auto &thread = *threadptr;
-            if (current_thread == thread.ruby_thread) {
-                thread.record_newobj(obj, threads.frame_list);
-                break;
-            }
+        Thread *thread = threads.find_thread(rb_thread_current());
+        if (thread) {
+            thread->record_newobj(obj, threads.frame_list);
         }
         threads.mutex.unlock();
 
@@ -899,12 +904,9 @@ class TimeCollector : public BaseCollector {
     void record_fiber(VALUE th, VALUE fiber) {
         VALUE fiber_id = rb_obj_id(fiber);
         threads.mutex.lock();
-        for (auto &threadptr : threads.list) {
-            auto &thread = *threadptr;
-            if (th == thread.ruby_thread) {
-                thread.record_fiber(fiber_id, threads.frame_list);
-                break;
-            }
+        Thread *thread = threads.find_thread(th);
+        if (thread) {
+            thread->record_fiber(fiber_id, threads.frame_list);
         }
         threads.mutex.unlock();
     }
@@ -979,6 +981,7 @@ class TimeCollector : public BaseCollector {
                 collector->record_fiber(rb_thread_current(), rb_fiber_current());
                 break;
             case RUBY_EVENT_THREAD_BEGIN:
+                collector->threads.add(self);
                 collector->threads.started(self);
                 break;
             case RUBY_EVENT_THREAD_END:
@@ -1059,7 +1062,9 @@ class TimeCollector : public BaseCollector {
         VALUE all_threads = rb_funcall(rb_path2class("Thread"), rb_intern("list"), 0);
         for (int i = 0; i < RARRAY_LEN(all_threads); i++) {
             VALUE thread = RARRAY_AREF(all_threads, i);
-            this->threads.initial(thread);
+            Thread *record = this->threads.add(thread);
+            record->is_main = thread == rb_thread_main();
+            record->is_start = thread == start_thread;
         }
 
         if (allocation_interval > 0) {
@@ -1130,10 +1135,16 @@ class TimeCollector : public BaseCollector {
             if (!thread->stopped_at.zero()) {
                 rb_hash_aset(hash, sym("stopped_at"), ULL2NUM(thread->stopped_at.nanoseconds()));
             }
-            rb_hash_aset(hash, sym("is_main"), thread->is_main() ? Qtrue : Qfalse);
-            rb_hash_aset(hash, sym("is_start"), thread->is_start(BaseCollector::start_thread) ? Qtrue : Qfalse);
+            rb_hash_aset(hash, sym("is_main"), thread->is_main ? Qtrue : Qfalse);
+            rb_hash_aset(hash, sym("is_start"), thread->is_start ? Qtrue : Qfalse);
 
-            rb_hash_aset(threads, thread->ruby_thread_id, hash);
+            VALUE ruby_thread_id = thread->ruby_thread_id;
+            if (NIL_P(ruby_thread_id)) {
+                // We only take object_ids of threads in this Ractor
+                ruby_thread_id = LONG2NUM(-(long)thread->serial);
+                rb_hash_aset(hash, sym("name"), rb_sprintf("thread %lu", (unsigned long)thread->serial));
+            }
+            rb_hash_aset(threads, ruby_thread_id, hash);
         }
 
         return result;
@@ -1262,6 +1273,8 @@ Init_vernier(void)
     sym_gc_by = sym("gc_by");
     sym_fiber_id = sym("fiber_id");
     rb_gc_latest_gc_info(sym_state); // HACK: needs to be warmed so that it can be called during GC
+
+    thread_serial_key = rb_internal_thread_specific_key_create();
 
   rb_mVernier = rb_define_module("Vernier");
   rb_cVernierResult = rb_define_class_under(rb_mVernier, "Result", rb_cObject);

@@ -90,6 +90,31 @@ class TestTimeCollector < Minitest::Test
     assert system(RbConfig.ruby, "-W:no-experimental", "-I", File.expand_path("../lib", __dir__), "-r", "vernier", "-e", script)
   end
 
+  def test_existing_ractor_sleeping
+    # Ruby's timer thread sends the READY when the sleep ends
+    script = <<~RUBY
+      ractor = Ractor.new { sleep 0.05; Ractor.receive }
+      sleep 0.01
+
+      Vernier.profile { sleep 0.1; ractor.send(1) }
+    RUBY
+
+    assert system(RbConfig.ruby, "-W:no-experimental", "-I", File.expand_path("../lib", __dir__), "-r", "vernier", "-e", script)
+  end
+
+  def test_new_ractor
+    script = <<~RUBY
+      result = Vernier.profile do
+        ractor = Ractor.new { sleep 0.01 }
+        ractor.respond_to?(:value) ? ractor.value : ractor.take
+      end
+      print result.threads.count
+    RUBY
+
+    out = IO.popen([RbConfig.ruby, "-W:no-experimental", "-I", File.expand_path("../lib", __dir__), "-r", "vernier", "-e", script], &:read)
+    assert_equal "2", out
+  end
+
   def count_up_to(n)
     i = 0
     while i < n
@@ -236,6 +261,22 @@ class TestTimeCollector < Minitest::Test
 
     expected = 5.times.map { "named thread #{_1}" }
     assert_equal expected, thread_names
+  end
+
+  def test_threads_collected_during_profile
+    # New threads can reuse the address of a collected one
+    thread_obj_ids = []
+    result = Vernier.trace do
+      20.times do
+        thread_obj_ids << Thread.new { }.tap(&:join).object_id
+        GC.start
+      end
+    end
+
+    assert_valid_result result
+    thread_obj_ids.each do |id|
+      assert_includes result.threads.keys, id
+    end
   end
 
   def test_process_detach
