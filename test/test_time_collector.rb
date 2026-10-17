@@ -79,6 +79,7 @@ class TestTimeCollector < Minitest::Test
   end
 
   def test_existing_ractor
+    skip("Ractors are unreliable before Ruby 4.0") if RUBY_VERSION < "4.0"
     # Run in a subprocess so the test process doesn't switch to multi-Ractor mode
     script = <<~RUBY
       ractor = Ractor.new { Ractor.receive }
@@ -91,6 +92,7 @@ class TestTimeCollector < Minitest::Test
   end
 
   def test_existing_ractor_sleeping
+    skip("Ractors are unreliable before Ruby 4.0") if RUBY_VERSION < "4.0"
     # Ruby's timer thread sends the READY when the sleep ends
     script = <<~RUBY
       ractor = Ractor.new { sleep 0.05; Ractor.receive }
@@ -103,6 +105,7 @@ class TestTimeCollector < Minitest::Test
   end
 
   def test_new_ractor
+    skip("Ractors are unreliable before Ruby 4.0") if RUBY_VERSION < "4.0"
     script = <<~RUBY
       result = Vernier.profile do
         ractor = Ractor.new { sleep 0.01 }
