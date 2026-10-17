@@ -1011,17 +1011,7 @@ class TimeCollector : public BaseCollector {
 
     static void internal_thread_event_cb(rb_event_flag_t event, const rb_internal_thread_event_data_t *event_data, void *data) {
         TimeCollector *collector = static_cast<TimeCollector *>(data);
-        VALUE thread = Qnil;
-
-#if HAVE_RB_INTERNAL_THREAD_EVENT_DATA_T_THREAD
-        thread = event_data->thread;
-#else
-        // We may arrive here when starting a thread with
-        // RUBY_INTERNAL_THREAD_EVENT_READY before the thread is actually set up.
-        if (!ruby_native_thread_p()) return;
-
-        thread = rb_thread_current();
-#endif
+        VALUE thread = event_data->thread;
 
         auto native_tid = get_native_thread_id();
         //cerr << "internal thread event" << event << " at " << TimeStamp::Now() << endl;
