@@ -3,6 +3,7 @@ module Vernier
   class ThreadNames
     def initialize
       @names = {}
+      @anonymous = {}
       @tp = TracePoint.new(:thread_end) do |e|
         collect_thread(e.self)
       end
@@ -11,6 +12,10 @@ module Vernier
 
     def [](object_id)
       @names[object_id] || "thread obj_id:#{object_id}"
+    end
+
+    def anonymous?(object_id)
+      @anonymous[object_id]
     end
 
     def finish
@@ -27,6 +32,7 @@ module Vernier
     end
 
     def collect_thread(th)
+      @anonymous[th.object_id] = !th.name
       @names[th.object_id] = pretty_name(th)
     end
 

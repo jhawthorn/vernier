@@ -221,6 +221,39 @@ class TestOutputFirefox < Minitest::Test
     assert_equal [spawned_thread_index], meta["initialSelectedThreads"]
   end
 
+  def test_hide_anonymous_threads
+    result = Vernier.trace(hide_anonymous_threads: true) do
+      th1 = Thread.new { Thread.current.name = "not anonymous"; sleep 0.01 }
+      th2 = Thread.new { sleep 0.02 }
+      th1.join
+      th2.join
+    end
+
+    data = JSON.parse(Vernier::Output::Firefox.new(result).output)
+    threads = data["threads"]
+
+    meta = data["meta"]
+    main_thread_index = threads.find_index { |tr| tr["isMainThread"] }
+    named_thread_index = threads.find_index { |tr| tr["name"] == "not anonymous" }
+    assert_equal [main_thread_index, named_thread_index].sort, meta["initialVisibleThreads"]
+  end
+
+  def test_hide_anonymous_threads_with_spawned_thread_start
+    result = nil
+    Thread.new do
+      result = Vernier.trace(hide_anonymous_threads: true) do
+        sleep 0.01
+      end
+    end.join
+
+    data = JSON.parse(Vernier::Output::Firefox.new(result).output)
+    threads = data["threads"]
+
+    meta = data["meta"]
+    spawned_thread_index = threads.find_index { |tr| !tr["isMainThread"] }
+    assert_includes meta["initialVisibleThreads"], spawned_thread_index
+  end
+
   def test_allocation_samples
     result = Vernier.trace(allocation_interval: 1) do
       JSON.parse(%{{ "foo": { "bar": ["baz", 123] } }})
