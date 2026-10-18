@@ -148,7 +148,7 @@ module Vernier
         end
 
         initially_visible_threads = if hide_anonymous_threads
-          threads.each_index.reject { |i| threads[i].anonymous? && !threads[i].is_main }.to_a
+          threads.each_index.reject { |i| threads[i].anonymous? && !threads[i].is_main && !threads[i].is_start }.to_a
         else
           threads.each_index.to_a
         end

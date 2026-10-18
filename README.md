@@ -193,15 +193,15 @@ See [`examples/custom_hook.rb`](examples/custom_hook.rb) for a complete example.
 
 ### Options
 
-| Option                | Middleware Param              | Description                                                   | Default (Middleware Default) |
-|-----------------------|-------------------------------|---------------------------------------------------------------|------------------------------|
-| `mode`                | N/A                           | Sampling mode: `:wall`, `:retained`, or `:custom`.            | `:wall` (`:wall`)            |
-| `out`                 | N/A                           | File to write the profile to.                                 | N/A (Auto-generated)         |
-| `interval`            | `vernier_interval`            | Sampling interval (µs). Only in `:wall` mode.                 | `500` (`200`)                |
-| `allocation_interval` | `vernier_allocation_interval` | Allocation sampling interval. Only in `:wall` mode.           | `0` i.e. disabled (`200`)    |
-| `gc`                  | N/A                           | Run full GC cycle before profiling. Only in `:retained` mode. | `true` (N/A)                 |
-| `metadata`            | N/A                           | Metadata key-value pairs to include in the profile.           | `{}` (N/A)                   |
-| `hide_anonymous_threads` | N/A                        | Anonymous threads will be initially hidden in profile output. | `false` (N/A)                |
+| Option                   | Middleware Param              | Description                                                   | Default (Middleware Default) |
+|--------------------------|-------------------------------|---------------------------------------------------------------|------------------------------|
+| `mode`                   | N/A                           | Sampling mode: `:wall`, `:retained`, or `:custom`.            | `:wall` (`:wall`)            |
+| `out`                    | N/A                           | File to write the profile to.                                 | N/A (Auto-generated)         |
+| `interval`               | `vernier_interval`            | Sampling interval (µs). Only in `:wall` mode.                 | `500` (`200`)                |
+| `allocation_interval`    | `vernier_allocation_interval` | Allocation sampling interval. Only in `:wall` mode.           | `0` i.e. disabled (`200`)    |
+| `gc`                     | N/A                           | Run full GC cycle before profiling. Only in `:retained` mode. | `true` (N/A)                 |
+| `metadata`               | N/A                           | Metadata key-value pairs to include in the profile.           | `{}` (N/A)                   |
+| `hide_anonymous_threads` | N/A                           | Anonymous threads will be initially hidden in profile output. | `false` (N/A)                |
 
 #### Hook options
 
