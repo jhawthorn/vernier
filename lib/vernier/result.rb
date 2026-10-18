@@ -32,6 +32,10 @@ module Vernier
       Output::Cpuprofile.new(self).output
     end
 
+    def to_pprof(gzip: false)
+      Output::Pprof.new(self).output(gzip:)
+    end
+
     def to_markdown(top_n: 20, lines_per_file: 5)
       Output::Markdown.new(self, top_n: top_n, lines_per_file: lines_per_file).output
     end
@@ -49,6 +53,12 @@ module Vernier
           out.write(to_markdown)
         else
           File.binwrite(out, to_markdown)
+        end
+      when "pprof"
+        if out.respond_to?(:write)
+          out.write(to_pprof)
+        else
+          File.binwrite(out, to_pprof(gzip: out.end_with?(".gz")))
         end
       when "firefox", nil
         if out.respond_to?(:write)

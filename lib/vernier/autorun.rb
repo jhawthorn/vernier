@@ -55,6 +55,8 @@ module Vernier
           ".vernier.cpuprofile"
         when "markdown", "md"
           ".vernier.md"
+        when "pprof"
+          ".vernier.pb.gz"
         else
           ".vernier.json.gz"
         end

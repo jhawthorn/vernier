@@ -8,6 +8,7 @@ require "zlib"
 class TestResult < Minitest::Test
   include FirefoxTestHelpers
   include CpuprofileTestHelpers
+  include PprofTestHelpers
 
   def setup
     @result = Vernier.trace do
@@ -30,6 +31,17 @@ class TestResult < Minitest::Test
       tempfile.rewind
       content = tempfile.read
       assert_valid_cpuprofile(content)
+    end
+  end
+
+  def test_write_to_file_pprof_format
+    Tempfile.open(["vernier_test", ".pb.gz"]) do |tempfile|
+      @result.write(out: tempfile.path, format: "pprof")
+      tempfile.binmode
+      tempfile.rewind
+      content = tempfile.read
+      assert content.start_with?("\x1F\x8B".b), "expected gzipped output for a .gz filename"
+      assert_valid_pprof(content)
     end
   end
 
@@ -65,6 +77,14 @@ class TestResult < Minitest::Test
     stringio.rewind
     content = stringio.read
     assert_valid_firefox_profile(content)
+  end
+
+  def test_write_to_stringio_pprof_format
+    stringio = StringIO.new
+    @result.write(out: stringio, format: "pprof")
+    stringio.rewind
+    content = stringio.read
+    assert_valid_pprof(content)
   end
 
   def test_write_with_invalid_format_raises_error
