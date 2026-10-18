@@ -218,6 +218,14 @@ Vernier.profile(out: "time_profile.json", hooks: [:rails, :memory_usage]) do
 end
 ```
 
+### Overhead
+
+Vernier is a sampling profiler, so its overhead is low and depends on the sampling `interval`. Profiling a CPU-bound loop at the default interval runs within a few percent of its unprofiled speed.
+
+Allocation sampling (`allocation_interval`) costs more, since every allocation takes a slower path and sampled allocations record a stack. The cost grows with how often the code allocates and how small the interval is.
+
+See [`examples/measure_overhead.rb`](examples/measure_overhead.rb) to measure it yourself.
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake test` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
