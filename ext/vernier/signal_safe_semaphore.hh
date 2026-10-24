@@ -59,7 +59,6 @@ class SignalSafeSemaphore {
         if (ret != 0) {
             rb_bug("VERNIER: sem_timedwait waited over 5 seconds");
         }
-        assert(ret == 0);
 #endif
     }
 

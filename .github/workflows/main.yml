@@ -53,6 +53,7 @@ jobs:
         run: bundle exec rake
         timeout-minutes: 5
         env:
+          VERNIER_ALWAYS_ASSERT: "1"
           RUBY_YJIT_ENABLE: ${{ matrix.yjit }}
           RUBY_MN_THREADS: ${{ matrix.mn_threads }}
           TESTOPTS: "-v"

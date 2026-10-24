@@ -69,7 +69,7 @@ class HeapTracker {
       frame_list.push_back(stack_index);
       object_index.emplace(obj, idx);
 
-      assert(frame_list.size() == object_list.size());
+      VERNIER_ASSERT(frame_list.size() == object_list.size());
     }
 
     void rebuild() {
@@ -181,7 +181,7 @@ class HeapTracker {
     }
 
     VALUE data() {
-      assert(stopped);
+      VERNIER_ASSERT(stopped);
       VALUE hash = rb_hash_new();
       VALUE samples = rb_ary_new();
       rb_hash_aset(hash, sym("samples"), samples);

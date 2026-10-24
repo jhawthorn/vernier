@@ -8,7 +8,6 @@
 #include <sstream>
 #include <unordered_map>
 #include <unordered_set>
-#include <cassert>
 #include <atomic>
 #include <mutex>
 
@@ -25,9 +24,6 @@
 #include "ruby/encoding.h"
 #include "ruby/debug.h"
 #include "ruby/thread.h"
-
-#undef assert
-#define assert RUBY_ASSERT_ALWAYS
 
 #ifndef PTR2NUM
 # define PTR2NUM(x)   (rb_int2inum((intptr_t)(void *)(x)))
@@ -528,7 +524,7 @@ class Thread {
                     return; // no mutation of current state
                     break;
                 case State::RUNNING:
-                    assert(state == INITIAL || state == State::READY || state == State::RUNNING);
+                    VERNIER_ASSERT(state == INITIAL || state == State::READY || state == State::RUNNING);
                     pthread_id = pthread_self();
                     native_tid = get_native_thread_id();
 
@@ -546,7 +542,7 @@ class Thread {
                     // Threads can be preempted, which means they will have been in "Running"
                     // state, and then the VM was like "no I need to stop you from working,
                     // so I'll put you in the 'ready' (or stalled) state"
-                    assert(state == State::INITIAL || state == State::STARTED || state == State::SUSPENDED || state == State::RUNNING);
+                    VERNIER_ASSERT(state == State::INITIAL || state == State::STARTED || state == State::SUSPENDED || state == State::RUNNING);
                     if (state == State::SUSPENDED) {
                         markers->record_interval(Marker::Type::MARKER_THREAD_SUSPENDED, from, now, stack_on_suspend_idx);
                     }
@@ -556,12 +552,12 @@ class Thread {
                     break;
                 case State::SUSPENDED:
                     // We can go from RUNNING or STARTED to SUSPENDED
-                    assert(state == State::INITIAL || state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
+                    VERNIER_ASSERT(state == State::INITIAL || state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
                     markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
                     break;
                 case State::STOPPED:
                     // We can go from RUNNING or STARTED or SUSPENDED to STOPPED
-                    assert(state == State::INITIAL || state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
+                    VERNIER_ASSERT(state == State::INITIAL || state == State::RUNNING || state == State::STARTED || state == State::SUSPENDED);
                     markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
                     markers->record(Marker::Type::MARKER_GVL_THREAD_EXITED);
 
@@ -800,7 +796,7 @@ class GlobalSignalHandler {
         bool record_sample(LiveSample &sample, pthread_t pthread_id) {
             const std::lock_guard<std::mutex> lock(mutex);
 
-            assert(pthread_id);
+            VERNIER_ASSERT_ALWAYS(pthread_id);
 
             live_sample = &sample;
             int rc = pthread_kill(pthread_id, SIGPROF);
@@ -822,7 +818,7 @@ class GlobalSignalHandler {
         int count = 0;
 
         static void signal_handler(int sig, siginfo_t* sinfo, void* ucontext) {
-            assert(live_sample);
+            VERNIER_ASSERT_ALWAYS(live_sample);
             live_sample->sample_current_thread();
         }
 
