@@ -78,6 +78,22 @@ class TestTimeCollector < Minitest::Test
     assert_includes result.threads.values.map{ _1[:name] }, "measure me"
   end
 
+  def test_woken_thread_samples
+    th = Thread.new { Thread.stop; count_up_to(10_000_000) }
+    Thread.pass until th.stop?
+
+    result = Vernier.trace do
+      th.wakeup
+      count_up_to(10_000_000)
+      th.join
+    end
+
+    samples = result.threads.fetch(th.object_id)[:samples]
+    refute_empty samples
+    labels = samples.flat_map { |idx| result.stack(idx).frames.map(&:label) }
+    refute_includes labels, "Thread#wakeup"
+  end
+
   def test_existing_ractor
     skip("Ractors are unreliable before Ruby 4.0") if RUBY_VERSION < "4.0"
     # Run in a subprocess so the test process doesn't switch to multi-Ractor mode

@@ -674,7 +674,7 @@ class ThreadTable {
                 return;
             }
 
-            if (new_state == Thread::State::SUSPENDED || new_state == Thread::State::READY && (thread->state != Thread::State::SUSPENDED)) {
+            if (new_state == Thread::State::SUSPENDED || new_state == Thread::State::READY && (thread->state == Thread::State::RUNNING)) {
 
                 RawSample sample;
                 sample.sample();
