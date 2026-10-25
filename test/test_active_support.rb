@@ -68,4 +68,18 @@ class TestActiveSupport < Minitest::Test
       end
     end
   end
+
+  def test_firefox_marker_schema_marks_sensitive_fields
+    schema = Vernier::Hooks::ActiveSupport::FIREFOX_MARKER_SCHEMA
+
+    sensitive = schema.flat_map do |marker|
+      marker[:data].select { _1[:format] == "sanitized-string" }.map { [marker[:name], _1[:key]] }
+    end
+
+    assert_includes sensitive, ["sql.active_record", "sql"]
+    assert_includes sensitive, ["sql.active_record", "type_casted_binds"]
+    assert_includes sensitive, ["cache_read.active_support", "key"]
+    assert_includes sensitive, ["cache_write.active_support", "key"]
+    assert_includes sensitive, ["read_fragment.action_controller", "key"]
+  end
 end

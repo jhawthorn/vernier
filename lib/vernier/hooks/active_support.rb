@@ -13,9 +13,9 @@ module Vernier
           chartLabel:   '{marker.data.name}',
           tableLabel:   '{marker.data.sql}',
           data: [
-            { key: "sql", format: "string" },
+            { key: "sql", format: "sanitized-string" },
             { key: "name", format: "string" },
-            { key: "type_casted_binds", label: "binds", format: "string" },
+            { key: "type_casted_binds", label: "binds", format: "sanitized-string" },
             { key: "connection", format: "string" },
             { key: "async", format: "string" }
           ]
@@ -128,7 +128,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Read fragment {marker.data.key}',
           data: [
-            { key: "key", format: "string" }
+            { key: "key", format: "sanitized-string" }
           ]
         },
         {
@@ -138,7 +138,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Write fragment {marker.data.key}',
           data: [
-            { key: "key", format: "string" }
+            { key: "key", format: "sanitized-string" }
           ]
         },
         {
@@ -148,7 +148,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Exist fragment {marker.data.key}',
           data: [
-            { key: "key", format: "string" }
+            { key: "key", format: "sanitized-string" }
           ]
         },
         {
@@ -158,7 +158,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Expire fragment {marker.data.key}',
           data: [
-            { key: "key", format: "string" }
+            { key: "key", format: "sanitized-string" }
           ]
         },
 
@@ -192,7 +192,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache read {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" },
             { key: "hit", format: "string" },
             { key: "super_operation", format: "string" }
@@ -205,7 +205,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache read multi {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" },
             { key: "hits", format: "string" },
             { key: "super_operation", format: "string" }
@@ -218,7 +218,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache fetch hit {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
         },
@@ -229,7 +229,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache write {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
         },
@@ -251,7 +251,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache increment {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" },
             { key: "amount", format: "integer" }
           ]
@@ -263,7 +263,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache decrement {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" },
             { key: "amount", format: "integer" }
           ]
@@ -275,7 +275,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache delete {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
         },
@@ -286,7 +286,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache delete multi {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
         },
@@ -297,7 +297,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache delete matched {marker.data.key}',
           data: [
-            { key: "key", label: "pattern", format: "string" },
+            { key: "key", label: "pattern", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
         },
@@ -308,7 +308,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache exist {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
         },
@@ -319,7 +319,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache generate {marker.data.key}',
           data: [
-            { key: "key", format: "string" },
+            { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
         },
@@ -480,7 +480,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Read fragment {marker.data.key}',
           data: [
-            { key: "key", format: "string" }
+            { key: "key", format: "sanitized-string" }
           ]
         },
         {
@@ -490,7 +490,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Write fragment {marker.data.key}',
           data: [
-            { key: "key", format: "string" }
+            { key: "key", format: "sanitized-string" }
           ]
         },
         {
@@ -500,7 +500,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Exist fragment {marker.data.key}',
           data: [
-            { key: "key", format: "string" }
+            { key: "key", format: "sanitized-string" }
           ]
         },
         {
@@ -510,7 +510,7 @@ module Vernier
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Expire fragment {marker.data.key}',
           data: [
-            { key: "key", format: "string" }
+            { key: "key", format: "sanitized-string" }
           ]
         },
 
