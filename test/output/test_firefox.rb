@@ -34,6 +34,17 @@ class TestOutputFirefox < Minitest::Test
     assert_valid_firefox_profile(output)
   end
 
+  def test_unfinished_threads_have_null_shutdown_times
+    result = Vernier.trace { 1000.times { Object.new } }
+
+    profile = JSON.parse(Vernier::Output::Firefox.new(result).output)
+    profile["threads"].each do |thread|
+      next if thread["unregisterTime"]
+      assert thread.key?("unregisterTime")
+      assert thread.key?("processShutdownTime")
+    end
+  end
+
   def test_gc_events_have_duration
     result = Vernier.trace do
       GC.start

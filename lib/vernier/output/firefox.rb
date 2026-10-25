@@ -449,7 +449,6 @@ module Vernier
             funcTable: func_table,
             nativeSymbols: {},
             samples: samples_table,
-            jsAllocations: allocations_table,
             stackTable: stack_table,
             resourceTable: {
               length: 0,
@@ -460,7 +459,10 @@ module Vernier
             },
             markers: markers_table,
             stringArray: string_table
-          }.compact
+          }.tap do |thread|
+            allocations = allocations_table
+            thread[:jsAllocations] = allocations if allocations
+          end
         end
 
         def markers_table
