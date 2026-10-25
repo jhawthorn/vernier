@@ -57,6 +57,8 @@ starting profiler with interval 100 and allocation interval 10
 written to /tmp/profile20241029-26525-dalmym.vernier.json.gz
 ```
 
+`vernier run` includes the source code of the profiled files in the profile, so the Firefox profiler can show it in its source view even on another machine. Pass `--no-embed-sources` to leave the source code out. When profiling from Ruby, use the `embed_sources: true` option to include it.
+
 #### Block of code
 
 ``` ruby
@@ -215,6 +217,7 @@ See [`examples/custom_hook.rb`](examples/custom_hook.rb) for a complete example.
 | `gc`                     | N/A                           | Run full GC cycle before profiling. Only in `:retained` mode. | `true` (N/A)                 |
 | `metadata`               | N/A                           | Metadata key-value pairs to include in the profile.           | `{}` (N/A)                   |
 | `hide_anonymous_threads` | N/A                           | Anonymous threads will be initially hidden in profile output. | `false` (N/A)                |
+| `embed_sources`          | N/A                           | Include the source code of profiled files in the Firefox output so the profiler can display it. | `false` (N/A)                |
 
 #### Hook options
 

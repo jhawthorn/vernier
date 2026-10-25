@@ -130,9 +130,13 @@ module Vernier
       FUNC_FLAG_HAS_SOURCE = 1 << 3
       FUNC_FLAG_HAS_LINE = 1 << 4
 
-      def initialize(profile)
+      # embed_sources: include the text of each profiled Ruby source file in
+      # the profile so the profiler's source view works without access to the
+      # original files. Defaults to the profile's embed_sources option.
+      def initialize(profile, embed_sources: nil)
         @profile = profile
         @categorizer = Categorizer.new
+        @embed_sources = embed_sources.nil? ? !!profile.meta[:embed_sources] : embed_sources
       end
 
       def output(gzip: false)
@@ -149,7 +153,7 @@ module Vernier
       attr_reader :profile
 
       def data(hide_anonymous_threads)
-        shared = Shared.new(profile, @categorizer)
+        shared = Shared.new(profile, @categorizer, embed_sources: @embed_sources)
 
         threads = profile.threads.map do |ruby_thread_id, thread_info|
           Thread.new(
@@ -290,9 +294,10 @@ module Vernier
 
         attr_reader :categorizer
 
-        def initialize(profile, categorizer)
+        def initialize(profile, categorizer, embed_sources:)
           @profile = profile
           @categorizer = categorizer
+          @embed_sources = embed_sources
 
           @stack_table = Vernier::StackTable.new
           @strings = Hash.new { |h, k| h[k] = h.size }
@@ -498,13 +503,23 @@ module Vernier
               table[:startLine] << 1
               table[:startColumn] << 1
               table[:sourceMapURL] << nil
-              table[:content] << nil
+              table[:content] << (@embed_sources ? read_source(filename) : nil)
               table[:length] += 1
               table[:length] - 1
             end
           end
 
           [table, func_sources]
+        end
+
+        # The text of a Ruby source file, or nil if there is no such file on
+        # disk (cfuncs, eval'd code, -e scripts, files deleted since).
+        def read_source(filename)
+          return nil unless File.file?(filename)
+
+          sanitize_string(File.binread(filename).force_encoding(Encoding::UTF_8))
+        rescue SystemCallError, IOError
+          nil
         end
 
         def string_table

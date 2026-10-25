@@ -57,6 +57,9 @@ FLAGS:
         o.on('--format [FORMAT]', String, "output format: firefox (default) or cpuprofile") do |output_format|
           options[:format] = output_format
         end
+        o.on('--[no-]embed-sources', "include source code in the profile (default enabled)") do |embed|
+          options[:embed_sources] = embed
+        end
       end
     end
 

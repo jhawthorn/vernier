@@ -47,6 +47,58 @@ class IntegrationTest < Minitest::Test
     assert_equal result["meta"]["extra"].first["entries"].detect{ |k| k["label"] == "key2"}["value"], "val2"
   end
 
+  def test_vernier_run_embeds_sources_by_default
+    with_script do |script|
+      result = vernier_run("--", "ruby", script.path)
+      assert_valid_firefox_profile(result.to_json)
+      assert_equal File.read(script.path), firefox_profile_sources(result).fetch(script.path)
+    end
+  end
+
+  def test_vernier_run_without_embedded_sources
+    with_script do |script|
+      result = vernier_run("--no-embed-sources", "--", "ruby", script.path)
+      assert_valid_firefox_profile(result.to_json)
+      sources = firefox_profile_sources(result)
+      assert_includes sources.keys, script.path
+      assert sources.values.all?(&:nil?), "no source content should be embedded"
+    end
+  end
+
+  def test_autorun_embeds_sources_by_default
+    with_script do |script|
+      result = run_vernier({}, script.path)
+      assert_valid_firefox_profile(result.to_json)
+      assert_equal File.read(script.path), firefox_profile_sources(result).fetch(script.path)
+    end
+  end
+
+  def test_autorun_without_embedded_sources
+    with_script do |script|
+      result = run_vernier({embed_sources: false}, script.path)
+      assert_valid_firefox_profile(result.to_json)
+      assert_nil firefox_profile_sources(result).fetch(script.path)
+    end
+  end
+
+  # A script which does enough work to be sampled, in a directory outside of
+  # the project so its path appears unchanged in the profile.
+  def with_script
+    Tempfile.create(["vernier_script", ".rb"], File.realpath(Dir.tmpdir)) do |script|
+      script.write(<<~RUBY)
+        def busy_wait(seconds)
+          target = Process.clock_gettime(Process::CLOCK_MONOTONIC) + seconds
+          while Process.clock_gettime(Process::CLOCK_MONOTONIC) < target
+          end
+        end
+
+        busy_wait(0.05)
+      RUBY
+      script.flush
+      yield script
+    end
+  end
+
   # Explicitly call the "vernier run" executable
   def vernier_run(*argv)
     result_json = nil

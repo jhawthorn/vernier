@@ -219,4 +219,14 @@ module FirefoxTestHelpers
     assert_equal 0, shared["nativeSymbols"]["length"]
     assert_equal 0, shared["sourceLocationTable"]["length"]
   end
+
+  # The embedded source content of each file in the profile, keyed by the
+  # filename as shown in the profiler.
+  def firefox_profile_sources(data)
+    shared = data["shared"]
+    sources = shared["sources"]
+    sources["length"].times.to_h do |idx|
+      [shared["stringArray"][sources["filename"][idx]], sources["content"][idx]]
+    end
+  end
 end

@@ -21,8 +21,10 @@ module Vernier
       (current_time_real_ns - current_time_mono_ns + started_at_mono_ns)
     end
 
-    def to_firefox(gzip: false)
-      Output::Firefox.new(self).output(gzip:)
+    # embed_sources: include the text of profiled source files in the profile.
+    # Defaults to the embed_sources option the profile was recorded with.
+    def to_firefox(gzip: false, embed_sources: nil)
+      Output::Firefox.new(self, embed_sources:).output(gzip:)
     end
     alias_method :to_gecko, :to_firefox
 

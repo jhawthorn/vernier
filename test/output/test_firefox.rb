@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "test_helper"
+require "tempfile"
 
 class TestOutputFirefox < Minitest::Test
   include FirefoxTestHelpers
@@ -232,6 +233,70 @@ class TestOutputFirefox < Minitest::Test
     assert_equal [spawned_thread_index], meta["initialSelectedThreads"]
   end
 
+  def test_sources_not_embedded_by_default
+    result = Vernier.trace do
+      sleep 0.01
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    sources = firefox_profile_sources(JSON.parse(output))
+    assert_includes sources.keys, this_file_source_name
+    assert sources.values.all?(&:nil?), "no source content should be embedded"
+  end
+
+  def test_embed_sources
+    result = Vernier.trace(embed_sources: true) do
+      sleep 0.01
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    sources = firefox_profile_sources(JSON.parse(output))
+    assert_equal File.read(__FILE__), sources.fetch(this_file_source_name)
+    assert_nil sources.fetch("<cfunc>")
+  end
+
+  def test_embed_sources_at_output_time
+    result = Vernier.trace do
+      sleep 0.01
+    end
+
+    output = result.to_firefox(embed_sources: true)
+    assert_valid_firefox_profile(output)
+    sources = firefox_profile_sources(JSON.parse(output))
+    assert_equal File.read(__FILE__), sources.fetch(this_file_source_name)
+
+    output = Vernier::Output::Firefox.new(result, embed_sources: false).output
+    sources = firefox_profile_sources(JSON.parse(output))
+    assert_nil sources.fetch(this_file_source_name)
+  end
+
+  def test_embed_sources_with_missing_file
+    # Code loaded from a file which no longer exists when the profile is written
+    path = nil
+    Tempfile.create(["vernier_missing", ".rb"], File.realpath(Dir.tmpdir)) do |file|
+      file.write("def vernier_test_method_from_deleted_file\n  sleep 0.01\nend\n")
+      file.flush
+      path = file.path
+      load path
+    end
+    refute File.exist?(path)
+
+    result = Vernier.trace(embed_sources: true) do
+      vernier_test_method_from_deleted_file
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    sources = firefox_profile_sources(JSON.parse(output))
+    assert_nil sources.fetch(path)
+    assert_equal File.read(__FILE__), sources.fetch(this_file_source_name)
+  end
+
   def test_shared_stack_table_only_contains_sampled_stacks
     result = Vernier.trace do
       th = Thread.new { sleep 0.01 }
@@ -330,5 +395,12 @@ class TestOutputFirefox < Minitest::Test
 
   def file_lineno
     caller_locations(1, 1).first.yield_self{|loc| "#{loc.path}:#{loc.lineno}"}
+  end
+
+  private
+
+  # The name under which this test file appears in the profile's sources
+  def this_file_source_name
+    Vernier::Output::FilenameFilter.new.call(File.expand_path(__FILE__))
   end
 end
