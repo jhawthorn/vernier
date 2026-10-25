@@ -12,7 +12,7 @@ module Vernier
           tooltipLabel: '{marker.data.name}',
           chartLabel:   '{marker.data.name}',
           tableLabel:   '{marker.data.sql}',
-          data: [
+          fields: [
             { key: "sql", format: "sanitized-string" },
             { key: "name", format: "string" },
             { key: "type_casted_binds", label: "binds", format: "sanitized-string" },
@@ -26,7 +26,7 @@ module Vernier
           tooltipLabel: '{marker.data.record_count} × {marker.data.class_name}',
           chartLabel:   '{marker.data.record_count} × {marker.data.class_name}',
           tableLabel:   'Instantiate {marker.data.record_count} × {marker.data.class_name}',
-          data: [
+          fields: [
             { key: "record_count", format: "integer" },
             { key: "class_name", format: "string" }
           ]
@@ -37,7 +37,7 @@ module Vernier
           tooltipLabel: 'Start transaction',
           chartLabel:   'Start transaction',
           tableLabel:   'Start transaction {marker.data.transaction}',
-          data: [
+          fields: [
             { key: "transaction", format: "string" },
             { key: "connection", format: "string" }
           ]
@@ -48,7 +48,7 @@ module Vernier
           tooltipLabel: '{marker.data.outcome}',
           chartLabel:   '{marker.data.outcome}',
           tableLabel:   'Transaction {marker.data.outcome} {marker.data.transaction}',
-          data: [
+          fields: [
             { key: "outcome", format: "string" },
             { key: "transaction", format: "string" },
             { key: "connection", format: "string" }
@@ -63,7 +63,7 @@ module Vernier
           tooltipLabel: '{marker.data.method} {marker.data.controller}#{marker.data.action}',
           chartLabel:   '{marker.data.method} {marker.data.controller}#{marker.data.action}',
           tableLabel:   'Start processing {marker.data.method} {marker.data.controller}#{marker.data.action}',
-          data: [
+          fields: [
             { key: "controller", format: "string" },
             { key: "action", format: "string" },
             { key: "path", format: "string" },
@@ -77,7 +77,7 @@ module Vernier
           tooltipLabel: '{marker.data.method} {marker.data.controller}#{marker.data.action}',
           chartLabel:   '{marker.data.method} {marker.data.controller}#{marker.data.action}',
           tableLabel:   'Process action {marker.data.method} {marker.data.controller}#{marker.data.action}',
-          data: [
+          fields: [
             { key: "controller", format: "string" },
             { key: "action", format: "string" },
             { key: "path", format: "string" },
@@ -94,7 +94,7 @@ module Vernier
           tooltipLabel: 'Send data',
           chartLabel:   'Send data',
           tableLabel:   'Send data {marker.data.filename}',
-          data: [
+          fields: [
             { key: "filename", format: "string" },
             { key: "disposition", format: "string" },
             { key: "status", format: "integer" }
@@ -106,7 +106,7 @@ module Vernier
           tooltipLabel: '{marker.data.filename}',
           chartLabel:   '{marker.data.filename}',
           tableLabel:   'Send stream {marker.data.filename}',
-          data: [
+          fields: [
             { key: "filename", format: "string" },
             { key: "disposition", format: "string" }
           ]
@@ -117,7 +117,7 @@ module Vernier
           tooltipLabel: '{marker.data.path}',
           chartLabel:   '{marker.data.path}',
           tableLabel:   'Send file {marker.data.path}',
-          data: [
+          fields: [
             { key: "path", format: "string" }
           ]
         },
@@ -127,7 +127,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Read fragment {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" }
           ]
         },
@@ -137,7 +137,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Write fragment {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" }
           ]
         },
@@ -147,7 +147,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Exist fragment {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" }
           ]
         },
@@ -157,7 +157,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Expire fragment {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" }
           ]
         },
@@ -170,7 +170,7 @@ module Vernier
           tooltipLabel: '{marker.data.middleware}',
           chartLabel:   '{marker.data.middleware}',
           tableLabel:   'Process middleware {marker.data.middleware}',
-          data: [
+          fields: [
             { key: "middleware", format: "string" }
           ]
         },
@@ -180,7 +180,7 @@ module Vernier
           tooltipLabel: 'Request',
           chartLabel:   'Request',
           tableLabel:   'Request',
-          data: []
+          fields: []
         },
 
         # Active Support
@@ -191,7 +191,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache read {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" },
             { key: "hit", format: "string" },
@@ -204,7 +204,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache read multi {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" },
             { key: "hits", format: "string" },
@@ -217,7 +217,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache fetch hit {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
@@ -228,7 +228,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache write {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
@@ -240,7 +240,7 @@ module Vernier
           chartLabel:   '{marker.data.store}',
           tableLabel:   'Cache write multi {marker.data.store}',
           # The payload's key also holds the written values, so it isn't recorded
-          data: [
+          fields: [
             { key: "store", format: "string" }
           ]
         },
@@ -250,7 +250,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache increment {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" },
             { key: "amount", format: "integer" }
@@ -262,7 +262,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache decrement {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" },
             { key: "amount", format: "integer" }
@@ -274,7 +274,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache delete {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
@@ -285,7 +285,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache delete multi {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
@@ -296,7 +296,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache delete matched {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", label: "pattern", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
@@ -307,7 +307,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache exist {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
@@ -318,7 +318,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Cache generate {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" },
             { key: "store", format: "string" }
           ]
@@ -329,7 +329,7 @@ module Vernier
           tooltipLabel: '{marker.data.store}',
           chartLabel:   '{marker.data.store}',
           tableLabel:   'Cache cleanup {marker.data.store}',
-          data: [
+          fields: [
             { key: "store", format: "string" },
             { key: "size", format: "integer" }
           ]
@@ -340,7 +340,7 @@ module Vernier
           tooltipLabel: '{marker.data.store}',
           chartLabel:   '{marker.data.store}',
           tableLabel:   'Cache prune {marker.data.store}',
-          data: [
+          fields: [
             { key: "store", format: "string" },
             { key: "key", label: "target size", format: "bytes" },
             { key: "from", format: "bytes" }
@@ -355,7 +355,7 @@ module Vernier
           tooltipLabel: '{marker.data.identifier}',
           chartLabel:   '{marker.data.identifier}',
           tableLabel:   'Render template {marker.data.identifier}',
-          data: [
+          fields: [
             { key: "identifier", format: "string" },
             { key: "layout", format: "string" }
           ]
@@ -366,7 +366,7 @@ module Vernier
           tooltipLabel: '{marker.data.identifier}',
           chartLabel:   '{marker.data.identifier}',
           tableLabel:   'Render layout {marker.data.identifier}',
-          data: [
+          fields: [
             { key: "identifier", format: "string" }
           ]
         },
@@ -376,7 +376,7 @@ module Vernier
           tooltipLabel: '{marker.data.identifier}',
           chartLabel:   '{marker.data.identifier}',
           tableLabel:   'Render partial {marker.data.identifier}',
-          data: [
+          fields: [
             { key: "identifier", format: "string" }
           ]
         },
@@ -386,7 +386,7 @@ module Vernier
           tooltipLabel: '{marker.data.identifier}',
           chartLabel:   '{marker.data.identifier}',
           tableLabel:   'Render collection {marker.data.identifier}',
-          data: [
+          fields: [
             { key: "identifier", format: "string" },
             { key: "count", format: "integer" },
             { key: "cache_hits", format: "integer" }
@@ -401,7 +401,7 @@ module Vernier
           tooltipLabel: '{marker.data.channel_class}#{marker.data.action}',
           chartLabel:   '{marker.data.channel_class}#{marker.data.action}',
           tableLabel:   'Perform action {marker.data.channel_class}#{marker.data.action}',
-          data: [
+          fields: [
             { key: "channel_class", format: "string" },
             { key: "action", format: "string" }
           ]
@@ -412,7 +412,7 @@ module Vernier
           tooltipLabel: '{marker.data.channel_class}',
           chartLabel:   '{marker.data.channel_class}',
           tableLabel:   'Transmit {marker.data.channel_class} {marker.data.via}',
-          data: [
+          fields: [
             { key: "channel_class", format: "string" },
             { key: "via", format: "string" }
           ]
@@ -423,7 +423,7 @@ module Vernier
           tooltipLabel: '{marker.data.channel_class}',
           chartLabel:   '{marker.data.channel_class}',
           tableLabel:   'Transmit subscription confirmation {marker.data.channel_class}',
-          data: [
+          fields: [
             { key: "channel_class", format: "string" }
           ]
         },
@@ -433,7 +433,7 @@ module Vernier
           tooltipLabel: '{marker.data.channel_class}',
           chartLabel:   '{marker.data.channel_class}',
           tableLabel:   'Transmit subscription rejection {marker.data.channel_class}',
-          data: [
+          fields: [
             { key: "channel_class", format: "string" }
           ]
         },
@@ -443,7 +443,7 @@ module Vernier
           tooltipLabel: '{marker.data.broadcasting}',
           chartLabel:   '{marker.data.broadcasting}',
           tableLabel:   'Broadcast {marker.data.broadcasting}',
-          data: [
+          fields: [
             { key: "broadcasting", format: "string" }
           ]
         },
@@ -456,7 +456,7 @@ module Vernier
           tooltipLabel: '{marker.data.mailer}#{marker.data.action}',
           chartLabel:   '{marker.data.mailer}#{marker.data.action}',
           tableLabel:   'Process {marker.data.mailer}#{marker.data.action}',
-          data: [
+          fields: [
             { key: "mailer", format: "string" },
             { key: "action", format: "string" }
           ]
@@ -467,7 +467,7 @@ module Vernier
           tooltipLabel: '{marker.data.mailer}',
           chartLabel:   '{marker.data.mailer}',
           tableLabel:   'Deliver {marker.data.mailer} {marker.data.message_id}',
-          data: [
+          fields: [
             { key: "mailer", format: "string" },
             { key: "message_id", format: "string" },
             { key: "perform_deliveries", format: "string" }
@@ -479,7 +479,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Read fragment {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" }
           ]
         },
@@ -489,7 +489,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Write fragment {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" }
           ]
         },
@@ -499,7 +499,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Exist fragment {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" }
           ]
         },
@@ -509,7 +509,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Expire fragment {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "sanitized-string" }
           ]
         },
@@ -522,7 +522,7 @@ module Vernier
           tooltipLabel: '{marker.data.mailbox}',
           chartLabel:   '{marker.data.mailbox}',
           tableLabel:   'Process {marker.data.mailbox}',
-          data: [
+          fields: [
             { key: "mailbox", format: "string" }
           ]
         },
@@ -535,7 +535,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Enqueue {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" }
           ]
         },
@@ -545,7 +545,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Enqueue at {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" }
           ]
         },
@@ -555,7 +555,7 @@ module Vernier
           tooltipLabel: 'Enqueue all',
           chartLabel:   'Enqueue all',
           tableLabel:   'Enqueue all',
-          data: []
+          fields: []
         },
         {
           name: "perform.active_job",
@@ -563,7 +563,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Perform {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" },
             { key: "db_runtime", format: "milliseconds" }
           ]
@@ -574,7 +574,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Perform start {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" }
           ]
         },
@@ -584,7 +584,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Enqueue retry {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" },
             { key: "error", format: "string" },
             { key: "wait", format: "string" }
@@ -596,7 +596,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Retry stopped {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" },
             { key: "error", format: "string" }
           ]
@@ -607,7 +607,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Discard {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" },
             { key: "error", format: "string" }
           ]
@@ -618,7 +618,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Interrupt {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" },
             { key: "reason", format: "string" },
             { key: "description", format: "string" }
@@ -630,7 +630,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Resume {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" },
             { key: "description", format: "string" }
           ]
@@ -641,7 +641,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Step {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" },
             { key: "interrupted", format: "string" }
           ]
@@ -652,7 +652,7 @@ module Vernier
           tooltipLabel: '{marker.data.job}',
           chartLabel:   '{marker.data.job}',
           tableLabel:   'Step started {marker.data.job}',
-          data: [
+          fields: [
             { key: "job", format: "string" }
           ]
         },
@@ -662,7 +662,7 @@ module Vernier
           tooltipLabel: '{marker.data.step}',
           chartLabel:   '{marker.data.step}',
           tableLabel:   'Step skipped {marker.data.step}',
-          data: [
+          fields: [
             { key: "step", format: "string" },
             { key: "job", format: "string" }
           ]
@@ -676,7 +676,7 @@ module Vernier
           tooltipLabel: '{marker.data.analyzer}',
           chartLabel:   '{marker.data.analyzer}',
           tableLabel:   'Analyze {marker.data.analyzer}',
-          data: [
+          fields: [
             { key: "analyzer", format: "string" }
           ]
         },
@@ -686,7 +686,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Preview {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" }
           ]
@@ -697,7 +697,7 @@ module Vernier
           tooltipLabel: 'Transform',
           chartLabel:   'Transform',
           tableLabel:   'Transform',
-          data: []
+          fields: []
         },
         {
           name: "service_url.active_storage",
@@ -705,7 +705,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Service URL {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" }
           ]
@@ -716,7 +716,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Service upload {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" }
           ]
@@ -727,7 +727,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Service mirror {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" }
           ]
@@ -738,7 +738,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Service download {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" }
           ]
@@ -749,7 +749,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Service download chunk {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" },
             { key: "range", format: "string" }
@@ -761,7 +761,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Service streaming download {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" }
           ]
@@ -772,7 +772,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Service update metadata {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" },
             { key: "content_type", format: "string" }
@@ -784,7 +784,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Service delete {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" }
           ]
@@ -795,7 +795,7 @@ module Vernier
           tooltipLabel: '{marker.data.prefix}',
           chartLabel:   '{marker.data.prefix}',
           tableLabel:   'Service delete prefixed {marker.data.prefix}',
-          data: [
+          fields: [
             { key: "prefix", format: "string" },
             { key: "service", format: "string" }
           ]
@@ -806,7 +806,7 @@ module Vernier
           tooltipLabel: '{marker.data.key}',
           chartLabel:   '{marker.data.key}',
           tableLabel:   'Service exist {marker.data.key}',
-          data: [
+          fields: [
             { key: "key", format: "string" },
             { key: "service", format: "string" },
             { key: "exist", format: "string" }
@@ -821,7 +821,7 @@ module Vernier
           tooltipLabel: '{marker.data.initializer}',
           chartLabel:   '{marker.data.initializer}',
           tableLabel:   'Load config initializer {marker.data.initializer}',
-          data: [
+          fields: [
             { key: "initializer", format: "string" }
           ]
         }
@@ -830,7 +830,7 @@ module Vernier
       SERIALIZED_KEYS = FIREFOX_MARKER_SCHEMA.map do |format|
         [
           format[:name],
-          format[:data].map { _1[:key].to_sym }.freeze
+          format[:fields].map { _1[:key].to_sym }.freeze
         ]
       end.to_h.freeze
 

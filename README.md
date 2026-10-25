@@ -169,7 +169,7 @@ def firefox_marker_schema
     name: "my_event",
     display: ["marker-chart", "marker-table"],
     tooltipLabel: "{marker.data.name}",
-    data: [
+    fields: [
       { key: "name", format: "string" }
     ]
   }]
@@ -186,6 +186,17 @@ def firefox_counters
       time: [0, 1000, 2000],
       count: [10, 20, 30],
       length: 3
+    },
+    display: {
+      graphType: "line-rate",
+      unit: "",
+      color: "grey",
+      markerSchemaLocation: nil,
+      sortWeight: 50,
+      label: "My counter",
+      tooltipRows: [
+        { type: "value", source: "count", format: { unit: "number" }, label: "My counter" }
+      ]
     }
   }
 end

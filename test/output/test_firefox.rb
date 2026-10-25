@@ -64,7 +64,7 @@ class TestOutputFirefox < Minitest::Test
 
     # we should have _some_ intervals from GC
     assert_operator intervals.length, :>, 0
-    names = intervals.map { |record| thread["stringArray"][record.first] }.uniq
+    names = intervals.map { |record| data["shared"]["stringArray"][record.first] }.uniq
 
     # We should have a GC pause in there
     assert_includes names, "GC pause"
@@ -230,6 +230,41 @@ class TestOutputFirefox < Minitest::Test
     meta = data["meta"]
     spawned_thread_index = threads.find_index { |tr| !tr["isMainThread"] }
     assert_equal [spawned_thread_index], meta["initialSelectedThreads"]
+  end
+
+  def test_shared_stack_table_only_contains_sampled_stacks
+    result = Vernier.trace do
+      th = Thread.new { sleep 0.01 }
+      th.join
+    end
+
+    data = JSON.parse(Vernier::Output::Firefox.new(result).output)
+    stack_length = data["shared"]["stackTable"]["length"]
+    assert_operator stack_length, :>, 0
+
+    referenced = data["threads"].flat_map do |thread|
+      thread["samples"]["stack"] + thread["markers"]["data"].filter_map { |d| d&.dig("cause", "stack") }
+    end
+    assert_operator referenced.uniq.size, :<=, stack_length
+    assert_operator referenced.max, :<, stack_length
+  end
+
+  def test_idle_samples_get_idle_category
+    result = Vernier.trace do
+      sleep 0.01
+    end
+
+    data = JSON.parse(Vernier::Output::Firefox.new(result).output)
+    categories = data["meta"]["categories"].map { _1["name"] }
+    idle_category = categories.index("Idle")
+
+    shared = data["shared"]
+    thread = data["threads"].first
+    sample_categories = thread["samples"]["stack"].map do |stack_idx|
+      frame_idx = shared["stackTable"]["frame"][stack_idx]
+      shared["frameTable"]["category"][frame_idx]
+    end
+    assert_includes sample_categories, idle_category
   end
 
   def test_hide_anonymous_threads

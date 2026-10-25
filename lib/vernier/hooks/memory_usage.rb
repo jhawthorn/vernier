@@ -29,6 +29,34 @@ module Vernier
             time: timestamps.map { _1 / 1_000_000.0 },
             count: memory,
             length: timestamps.length
+          },
+          display: {
+            graphType: "line-accumulated",
+            unit: "bytes",
+            color: "orange",
+            markerSchemaLocation: "timeline-memory",
+            sortWeight: 20,
+            label: "Memory",
+            tooltipRows: [
+              {
+                type: "value",
+                source: "accumulated",
+                format: { unit: "bytes" },
+                label: "relative memory at this time"
+              },
+              {
+                type: "value",
+                source: "count-range",
+                format: { unit: "bytes" },
+                label: "memory range in graph"
+              },
+              {
+                type: "value",
+                source: "sample-number",
+                format: { unit: "number" },
+                label: "allocations and deallocations since the previous sample"
+              }
+            ]
           }
         }
       end
