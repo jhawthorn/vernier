@@ -505,7 +505,7 @@ class Thread {
                 return;
             }
             if (new_state == Thread::State::SUSPENDED && state == new_state) {
-                // on Ruby 3.2 (only?) we may see duplicate suspended states
+                // Preserve the original timestamp when Ruby emits duplicate suspended events.
                 return;
             }
 
@@ -535,19 +535,10 @@ class Thread {
                     }
                     break;
                 case State::READY:
-                    // The ready state means "I would like to do some work, but I can't
-                    // do it right now either because I blocked on IO and now I want the GVL back,
-                    // or because the VM timer put me to sleep"
-                    //
-                    // Threads can be preempted, which means they will have been in "Running"
-                    // state, and then the VM was like "no I need to stop you from working,
-                    // so I'll put you in the 'ready' (or stalled) state"
-                    VERNIER_ASSERT(state == State::INITIAL || state == State::STARTED || state == State::SUSPENDED || state == State::RUNNING);
+                    // A ready thread is waiting to acquire the GVL.
+                    VERNIER_ASSERT(state == State::INITIAL || state == State::STARTED || state == State::SUSPENDED);
                     if (state == State::SUSPENDED) {
                         markers->record_interval(Marker::Type::MARKER_THREAD_SUSPENDED, from, now, stack_on_suspend_idx);
-                    }
-                    else if (state == State::RUNNING) {
-                        markers->record_interval(Marker::Type::MARKER_THREAD_RUNNING, from, now);
                     }
                     break;
                 case State::SUSPENDED:
@@ -674,8 +665,7 @@ class ThreadTable {
                 return;
             }
 
-            if (new_state == Thread::State::SUSPENDED || new_state == Thread::State::READY && (thread->state == Thread::State::RUNNING)) {
-
+            if (new_state == Thread::State::SUSPENDED) {
                 RawSample sample;
                 sample.sample();
 

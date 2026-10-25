@@ -12,8 +12,6 @@ $defs << "-DVERNIER_ALWAYS_ASSERT" if ["1", "true"].include?(ENV["VERNIER_ALWAYS
 
 have_header("ruby/thread.h")
 
-have_func("rb_profile_thread_frames", "ruby/debug.h")
-
 have_func("pthread_setname_np")
 have_func("pthread_condattr_setclock")
 
