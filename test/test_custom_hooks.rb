@@ -66,6 +66,8 @@ class TestCustomHooks < Minitest::Test
         name: "test_counter",
         category: "Test",
         description: "Test counter",
+        pid: Process.pid.to_s,
+        mainThreadIndex: 0,
         samples: {
           time: [0, 1000],
           count: [10, 20],

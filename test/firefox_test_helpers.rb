@@ -17,9 +17,15 @@ module FirefoxTestHelpers
     assert_operator threads.size, :>=, 1
     assert_equal threads.size, meta["initialVisibleThreads"].size
     assert_equal 1, meta["initialSelectedThreads"].size
+
+    data["counters"].each do |counter|
+      assert_kind_of String, counter["pid"]
+      assert_kind_of Integer, counter["mainThreadIndex"]
+      assert_operator counter["mainThreadIndex"], :<, threads.size
+    end
     threads.each do |thread|
       assert thread["name"]
-      assert thread["pid"]
+      assert_kind_of String, thread["pid"]
       assert thread["tid"]
       assert thread["registerTime"]
 

@@ -180,6 +180,8 @@ def firefox_counters
     name: "my_counter",
     category: "Custom",
     description: "My custom counter",
+    pid: Process.pid.to_s,
+    mainThreadIndex: 0,
     samples: {
       time: [0, 1000, 2000],
       count: [10, 20, 30],

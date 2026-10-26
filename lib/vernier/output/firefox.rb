@@ -443,7 +443,7 @@ module Vernier
             registerTime: started_at,
             unregisterTime: stopped_at,
             pausedRanges: [],
-            pid: profile.pid || Process.pid,
+            pid: (profile.pid || Process.pid).to_s,
             tid: @tid,
             frameTable: frame_table,
             funcTable: func_table,

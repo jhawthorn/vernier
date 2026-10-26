@@ -23,7 +23,7 @@ module Vernier
           name: "memory",
           category: "Memory",
           description: "Memory usage in bytes",
-          pid: Process.pid,
+          pid: Process.pid.to_s,
           mainThreadIndex: 0,
           samples: {
             time: timestamps.map { _1 / 1_000_000.0 },
