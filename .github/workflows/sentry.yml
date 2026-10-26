@@ -13,12 +13,12 @@ jobs:
     name: Sentry integration test
     steps:
     - name: Checkout sentry
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: getsentry/sentry-ruby
         path: sentry-ruby
     - name: Checkout vernier
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         path: vernier
     - name: Set up Ruby
