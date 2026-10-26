@@ -31,8 +31,15 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
-          bundler-cache: true
           ruby-version: ruby
+      # Install into Ruby's own gem directory rather than setup-ruby's vendored
+      # cache. release-gem preloads RubyGems' push command (and with it the zlib
+      # default gem) before bundler runs, so any default gem the Gemfile
+      # resolves to a newer version must be visible to plain RubyGems or
+      # bundler aborts with "You have already activated zlib X, but your Gemfile
+      # requires zlib Y".
+      - name: Install dependencies
+        run: bundle install
 
       - name: Read gem name and version
         id: gem
