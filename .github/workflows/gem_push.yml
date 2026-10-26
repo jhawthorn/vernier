@@ -2,14 +2,21 @@ name: Push gem to RubyGems.org
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}
 
 jobs:
   push:
+    name: Push gem to RubyGems.org
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
-    environment: 
+    environment:
       name: rubygems.org
-      url: https://rubygems.org/gems/vernier
+      url: https://rubygems.org/gems/${{ steps.gem.outputs.name }}
 
     permissions:
       contents: write
@@ -17,14 +24,35 @@ jobs:
 
     steps:
       # Set up
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
+          persist-credentials: false
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           bundler-cache: true
           ruby-version: ruby
 
+      - name: Read gem name and version
+        id: gem
+        run: |
+          ruby -e '
+            spec = Gem::Specification.load(Dir["*.gemspec"].first)
+            puts "name=#{spec.name}", "version=#{spec.version}"
+          ' | tee -a "$GITHUB_OUTPUT"
+
+      - name: Check release tag matches gem version
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          VERSION: ${{ steps.gem.outputs.version }}
+        run: |
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::Release tag $TAG does not match gem version $VERSION"
+            exit 1
+          fi
+
       # Release
-      - uses: rubygems/release-gem@v1
+      - name: Push gem
+        uses: rubygems/release-gem@v1
