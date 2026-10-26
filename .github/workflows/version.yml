@@ -36,6 +36,8 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: ruby
+      - name: Install bump
+        run: gem install bump
       - name: Set git config
         run: |
           git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
@@ -44,11 +46,11 @@ jobs:
       - name: Bump version
         env:
           LEVEL: ${{ inputs.version }}
-        run: gem exec bump "$LEVEL"
+        run: bump "$LEVEL"
       - name: Push
         run: git push
       - name: Create draft GitHub release
         if: inputs.release
         run: |
-          tag="v$(gem exec bump current --value-only)"
+          tag="v$(bump current --value-only)"
           gh release create "$tag" --draft --generate-notes --title "$tag" --target "$(git rev-parse HEAD)"
