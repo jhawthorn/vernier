@@ -57,3 +57,21 @@ jobs:
           RUBY_YJIT_ENABLE: ${{ matrix.yjit }}
           RUBY_MN_THREADS: ${{ matrix.mn_threads }}
           TESTOPTS: "-v"
+
+  # Loads the output into the Firefox profiler via @firefox-devtools/profiler-cli
+  firefox-profiler:
+    name: Firefox profiler
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm install -g @firefox-devtools/profiler-cli
+      - run: bundle exec rake test TEST=test/test_firefox_profiler_cli.rb
+        env:
+          PROFILER_CLI: profiler-cli
