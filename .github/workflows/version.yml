@@ -12,6 +12,10 @@ on:
           - major
           - minor
           - patch
+      release:
+        description: "Create a draft GitHub release (publishing it pushes the gem)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -43,3 +47,8 @@ jobs:
         run: gem exec bump "$LEVEL"
       - name: Push
         run: git push
+      - name: Create draft GitHub release
+        if: inputs.release
+        run: |
+          tag="v$(gem exec bump current --value-only)"
+          gh release create "$tag" --draft --generate-notes --title "$tag" --target "$(git rev-parse HEAD)"
