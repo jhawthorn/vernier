@@ -16,13 +16,18 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+
 jobs:
   bump:
+    name: Bump version
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -30,10 +35,11 @@ jobs:
       - name: Set git config
         run: |
           git config --global user.email "${GITHUB_ACTOR_ID}+${GITHUB_ACTOR}@users.noreply.github.com"
-          git config --global user.name "$(gh api /users/${GITHUB_ACTOR} | jq .name -r)"
-          git remote set-url origin "https://x-access-token:${{ github.token }}@github.com/$GITHUB_REPOSITORY"
+          git config --global user.name "$(gh api "/users/${GITHUB_ACTOR}" | jq -r '.name // .login')"
         shell: bash
       - name: Bump version
-        run: gem exec bump ${{ github.event.inputs.version }}
-      - name: push
+        env:
+          LEVEL: ${{ inputs.version }}
+        run: gem exec bump "$LEVEL"
+      - name: Push
         run: git push
