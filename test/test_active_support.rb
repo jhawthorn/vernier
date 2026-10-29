@@ -58,7 +58,7 @@ class TestActiveSupport < Minitest::Test
     assert_equal names.uniq, names
 
     schema.each do |marker|
-      keys = marker[:data].map { _1[:key] }
+      keys = marker[:fields].map { _1[:key] }
       refute_includes keys, "type", "#{marker[:name]} would overwrite the marker type"
 
       marker.values_at(:tooltipLabel, :chartLabel, :tableLabel).compact.each do |label|
@@ -73,7 +73,7 @@ class TestActiveSupport < Minitest::Test
     schema = Vernier::Hooks::ActiveSupport::FIREFOX_MARKER_SCHEMA
 
     sensitive = schema.flat_map do |marker|
-      marker[:data].select { _1[:format] == "sanitized-string" }.map { [marker[:name], _1[:key]] }
+      marker[:fields].select { _1[:format] == "sanitized-string" }.map { [marker[:name], _1[:key]] }
     end
 
     assert_includes sensitive, ["sql.active_record", "sql"]

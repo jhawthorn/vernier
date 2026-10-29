@@ -119,6 +119,7 @@ module Vernier
       @out = options[:out]
       @format = options[:format]
       @hide_anonymous_threads = options[:hide_anonymous_threads]
+      @embed_sources = options.fetch(:embed_sources, false)
 
       @markers = []
       @hooks = []
@@ -197,6 +198,7 @@ module Vernier
       result.meta[:gc] = @gc
       result.meta[:user_metadata] = @user_metadata
       result.meta[:hide_anonymous_threads] = @hide_anonymous_threads
+      result.meta[:embed_sources] = @embed_sources
 
       result.stack_table = stack_table
       @thread_names.finish

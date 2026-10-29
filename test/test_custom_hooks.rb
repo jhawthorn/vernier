@@ -45,7 +45,7 @@ class TestCustomHooks < Minitest::Test
       [{
         name: "custom_event",
         display: ["marker-chart", "marker-table"],
-        data: [{ key: "event_name", format: "string" }]
+        fields: [{ key: "event_name", format: "string" }]
       }]
     end
   end
@@ -72,6 +72,17 @@ class TestCustomHooks < Minitest::Test
           time: [0, 1000],
           count: [10, 20],
           length: 2
+        },
+        display: {
+          graphType: "line-rate",
+          unit: "",
+          color: "grey",
+          markerSchemaLocation: nil,
+          sortWeight: 50,
+          label: "Test counter",
+          tooltipRows: [
+            { type: "value", source: "count", format: { unit: "number" }, label: "Test counter" }
+          ]
         }
       }
     end
