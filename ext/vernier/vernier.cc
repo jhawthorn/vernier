@@ -525,8 +525,6 @@ class Thread {
                     break;
                 case State::RUNNING:
                     VERNIER_ASSERT(state == INITIAL || state == State::READY || state == State::RUNNING);
-                    pthread_id = pthread_self();
-                    native_tid = get_native_thread_id();
 
                     // If the GVL is immediately ready, and we measure no times
                     // stalled, skip emitting the interval.
@@ -652,11 +650,6 @@ class ThreadTable {
 
         void set_state(Thread::State new_state, VALUE th) {
             //cerr << "set state=" << new_state << " thread=" << gettid() << endl;
-
-            pid_t native_tid = get_native_thread_id();
-            pthread_t pthread_id = pthread_self();
-
-            //fprintf(stderr, "th %p (tid: %i) from %s to %s\n", (void *)th, native_tid, gvl_event_name(state), gvl_event_name(new_state));
 
             const std::lock_guard<std::mutex> lock(mutex);
 
@@ -1002,9 +995,7 @@ class TimeCollector : public BaseCollector {
         TimeCollector *collector = static_cast<TimeCollector *>(data);
         VALUE thread = event_data->thread;
 
-        auto native_tid = get_native_thread_id();
         //cerr << "internal thread event" << event << " at " << TimeStamp::Now() << endl;
-        //fprintf(stderr, "(%i) th %p to %s\n", native_tid, (void *)thread, gvl_event_name(event));
 
 
         switch (event) {
