@@ -4,7 +4,7 @@ require "mkmf"
 
 $CXXFLAGS += " -fvisibility=hidden "
 $CXXFLAGS += " -std=c++14 "
-$CXXFLAGS += " -ggdb3 -Og "
+$CXXFLAGS += " -ggdb3 -O2 "
 
 # Make VERNIER_ASSERT always check, even if Ruby wasn't built with RUBY_DEBUG.
 # Set by our CI; gem installs get RUBY_ASSERT (compiled out) by default.
