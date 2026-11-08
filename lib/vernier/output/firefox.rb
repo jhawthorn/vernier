@@ -190,6 +190,11 @@ module Vernier
             version: 28,
             preprocessedProfileVersion: PROCESSED_PROFILE_VERSION,
             symbolicated: true,
+            # The Firefox Profiler treats a missing or unrecognized update
+            # channel like a Nightly or local Firefox build: the publish panel
+            # says "This profile is from Firefox Nightly" and nothing is
+            # sanitized by default. "release" makes it sanitize by default.
+            updateChannel: "release",
             markerSchema: marker_schema,
             sampleUnits: {
               time: "ms",

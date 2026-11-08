@@ -233,6 +233,18 @@ class TestOutputFirefox < Minitest::Test
     assert_equal [spawned_thread_index], meta["initialSelectedThreads"]
   end
 
+  def test_update_channel_is_release
+    result = Vernier.trace do
+      sleep 0.01
+    end
+
+    output = Vernier::Output::Firefox.new(result).output
+    assert_valid_firefox_profile(output)
+
+    # Anything other than release, beta or esr is treated as Nightly
+    assert_equal "release", JSON.parse(output)["meta"]["updateChannel"]
+  end
+
   def test_sources_not_embedded_by_default
     result = Vernier.trace do
       sleep 0.01
