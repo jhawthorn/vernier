@@ -4,6 +4,7 @@ require "test_helper"
 
 class IntegrationTest < Minitest::Test
   include FirefoxTestHelpers
+  include PprofTestHelpers
 
   LIB_DIR = File.expand_path("../lib", __dir__)
 
@@ -81,6 +82,27 @@ class IntegrationTest < Minitest::Test
     end
   end
 
+  def test_pprof_format
+    output = run_vernier_raw({format: "pprof"}, "-e", "sleep 0.01")
+    refute output.start_with?("\x1F\x8B".b), "an explicit output path without .gz is not gzipped"
+    profile = assert_valid_pprof(output)
+    assert_equal [["samples", "count"], ["wall", "nanoseconds"]], pprof_sample_types(profile)
+    names = profile[:function].map { |f| profile[:string_table][f[:name]] }
+    assert_includes names, "Kernel#sleep"
+  end
+
+  def test_pprof_format_default_filename
+    Dir.mktmpdir do |dir|
+      run_vernier_raw({format: "pprof", output_dir: dir}, "-e", "sleep 0.01")
+      files = Dir.children(dir)
+      assert_equal 1, files.size
+      assert_match(/\Aprofile-.*\.vernier\.pb\.gz\z/, files.first)
+      content = File.binread(File.join(dir, files.first))
+      assert content.start_with?("\x1F\x8B".b), "default pprof output should be gzipped"
+      assert_valid_pprof(content)
+    end
+  end
+
   # A script which does enough work to be sampled, in a directory outside of
   # the project so its path appears unchanged in the profile.
   def with_script
@@ -113,20 +135,25 @@ class IntegrationTest < Minitest::Test
 
   # Directly call autoload, mimicking the behaviour of vernier run
   def run_vernier(options, *argv)
-    result_json = nil
+    JSON.parse(run_vernier_raw(options, *argv))
+  end
+
+  def run_vernier_raw(options, *argv)
+    output = nil
     Tempfile.open('vernier') do |tempfile|
       options = {
         quiet: true,
         output: tempfile.path,
       }.merge(options)
+      options.delete(:output) if options.key?(:output_dir)
       env = options.map do |k, v|
         ["VERNIER_#{k.to_s.upcase}", v.to_s]
       end.to_h
       system(env, RbConfig.ruby, "-I", LIB_DIR, "-r", "vernier/autorun", *argv, exception: true, out: '/dev/null', err: '/dev/null')
+      tempfile.binmode
       tempfile.rewind
-      result_json = tempfile.read
+      output = tempfile.read
     end
-    result = JSON.parse(result_json)
-    result
+    output
   end
 end
