@@ -16,7 +16,7 @@ module Vernier
         File.read filename
       end
 
-      info = JSON.load json
+      info = JSON.parse json
 
       new(info)
     end
